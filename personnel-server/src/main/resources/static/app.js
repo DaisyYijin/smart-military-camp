@@ -88,6 +88,29 @@ function badge(text) {
   return '<span class="' + cls + '">' + esc(t || '-') + '</span>';
 }
 
+/* ================= 扁平线性图标 ================= */
+
+var ICON_PATHS = {
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  truck: '<rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  building: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><line x1="9" y1="10" x2="9" y2="13"/><line x1="15" y1="10" x2="15" y2="13"/><line x1="10" y1="14" x2="14" y2="14"/><line x1="9" y1="17" x2="9" y2="17.01"/><line x1="15" y1="17" x2="15" y2="17.01"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+  chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+};
+
+/** 生成扁平线性 SVG 图标(继承文字颜色) */
+function iconSvg(key) {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + (ICON_PATHS[key] || '') + '</svg>';
+}
+
 /* ================= API 层 ================= */
 
 var TOKEN = localStorage.getItem('tk') || '';
@@ -540,7 +563,7 @@ function statusOptions() {
 }
 
 var personnelCfg = {
-  key: 'personnel', title: '人员管理', icon: '👥',
+  key: 'personnel', title: '人员管理', icon: 'users',
   endpoint: '/api/personnel', wide: true,
   filters: [
     { key: 'keyword', label: '检索' },
@@ -583,9 +606,9 @@ var personnelCfg = {
       }).catch(function (e) { toast(e.message, 'err'); });
     });
     bar.appendChild(fileInput);
-    bar.appendChild(h('button', { class: 'btn btn-ghost', text: '📥 导入Excel', onclick: function () { fileInput.click(); } }));
+    bar.appendChild(h('button', { class: 'btn btn-ghost', text: '导入 Excel', onclick: function () { fileInput.click(); } }));
     bar.appendChild(h('button', {
-      class: 'btn btn-ghost', text: '📤 导出Excel',
+      class: 'btn btn-ghost', text: '导出 Excel',
       onclick: function () {
         var q = act.getFilters();
         var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
@@ -689,7 +712,7 @@ function personnelPhotoBlock(row) {
 }
 
 var equipmentCfg = {
-  key: 'equipment', title: '装备管理', icon: '🎖', endpoint: '/api/equipment',
+  key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
@@ -719,7 +742,7 @@ var equipmentCfg = {
 };
 
 var materialCfg = {
-  key: 'material', title: '物资管理', icon: '📦', endpoint: '/api/material',
+  key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
@@ -754,7 +777,7 @@ var materialCfg = {
 };
 
 var vehicleCfg = {
-  key: 'vehicle', title: '车辆管理', icon: '🚙', endpoint: '/api/vehicle',
+  key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
@@ -782,7 +805,7 @@ var vehicleCfg = {
 };
 
 var leaveCfg = {
-  key: 'leave', title: '休假管理', icon: '🗓', endpoint: '/api/leave',
+  key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
   filters: [{ key: 'keyword', label: '检索' }],
   columns: [
     { key: 'personnelName', label: '姓名' },
@@ -806,7 +829,7 @@ var leaveCfg = {
 };
 
 var fitnessCfg = {
-  key: 'fitness', title: '体能考核', icon: '💪', endpoint: '/api/fitness',
+  key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'item', label: '项目', type: 'select', options: function () { return dictLabels('fitness_item'); } }
@@ -1073,9 +1096,9 @@ function statsView() {
       root.className = '';
       root.innerHTML =
         '<div class="stats-cards">' +
-        '<div class="stat-card"><span class="ic">👥</span><div class="num">' + (s.total || 0) + '</div><div class="lbl">人员总数</div></div>' +
-        '<div class="stat-card"><span class="ic">🏢</span><div class="num">' + ((s.department || []).length) + '</div><div class="lbl">有人员的部门数</div></div>' +
-        '<div class="stat-card"><span class="ic">✅</span><div class="num">' + onDuty + '</div><div class="lbl">在职人数</div></div>' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('users') + '</span><div class="num">' + (s.total || 0) + '</div><div class="lbl">人员总数</div></div>' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('building') + '</span><div class="num">' + ((s.department || []).length) + '</div><div class="lbl">有人员的部门数</div></div>' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('check') + '</span><div class="num">' + onDuty + '</div><div class="lbl">在职人数</div></div>' +
         '</div>' +
         '<div class="chart-panel"><h3>各部门人数</h3>' + barList(s.department || [], '') + '</div>' +
         '<div class="chart-panel"><h3>性别分布</h3>' + barList(s.gender || [], 'green') + '</div>' +
@@ -1284,7 +1307,7 @@ function backupView() {
             h('button', { class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () { manualGroup.setAll(true); } }),
             h('button', { class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () { manualGroup.setAll(false); } }),
             h('button', {
-              class: 'btn btn-primary', text: '⚡ 立即备份',
+              class: 'btn btn-primary', text: '立即备份',
               onclick: function () {
                 var mods = manualGroup.get();
                 if (!mods.length) { toast('请至少选择一个要备份的模块', 'err'); return; }
@@ -1422,15 +1445,15 @@ function renderShell() {
   var menu = h('div', { class: 'menu' });
   function addMenu(key, icon, label) {
     var item = h('div', { class: 'menu-item', onclick: function () { navigate(key); } },
-      h('span', { class: 'ic', text: icon }), h('span', { class: 'txt', text: label }));
+      h('span', { class: 'ic', html: iconSvg(icon) }), h('span', { class: 'txt', text: label }));
     menu.appendChild(item);
     menuItems[key] = item;
   }
   MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
-  addMenu('department', '🏢', '部门管理');
-  addMenu('dict', '📚', '数据字典');
-  addMenu('backup', '💾', '备份恢复');
-  addMenu('stats', '📊', '统计报表');
+  addMenu('department', 'building', '部门管理');
+  addMenu('dict', 'book', '数据字典');
+  addMenu('backup', 'database', '备份恢复');
+  addMenu('stats', 'chart', '统计报表');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
   var topbar = h('div', { class: 'topbar' },

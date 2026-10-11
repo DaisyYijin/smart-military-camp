@@ -39,7 +39,7 @@ textarea { resize: vertical; }
 /* ---------- 登录页 ---------- */
 .login-wrap {
   height: 100%; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #14325f 0%, #1d5bb5 55%, #2f80d8 100%);
+  background: #1a4a8f;
 }
 .login-card {
   width: 380px; background: #fff; border-radius: 10px; padding: 38px 36px 30px;
@@ -63,7 +63,7 @@ textarea { resize: vertical; }
 /* ---------- 主布局 ---------- */
 .layout { display: flex; height: 100%; }
 .sidebar {
-  width: 208px; flex: none; background: linear-gradient(180deg, #14325f, #102949);
+  width: 208px; flex: none; background: #132d52;
   color: #cdd9ea; display: flex; flex-direction: column;
 }
 .sidebar-logo {
@@ -243,18 +243,24 @@ table.grid td.actions { white-space: nowrap; }
 }
 .stat-card .num { font-size: 30px; font-weight: 700; color: #16437e; }
 .stat-card .lbl { color: #8a97a8; margin-top: 4px; font-size: 13px; }
-.stat-card .ic { float: right; font-size: 26px; opacity: .5; }
+.stat-card .ic { float: right; color: #2f6fd6; opacity: .8; }
 .chart-panel { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(23,43,77,.08); padding: 18px 20px; margin-bottom: 16px; }
 .chart-panel h3 { font-size: 15px; margin-bottom: 14px; color: #1d2c40; }
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .bar-row .bn { width: 130px; text-align: right; color: #445262; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
 .bar-row .bt { flex: 1; background: #eef2f7; border-radius: 4px; height: 20px; overflow: hidden; }
-.bar-row .bf { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #2f6fd6, #5b9bff); min-width: 2px; }
-.bar-row.green .bf { background: linear-gradient(90deg, #2f9e5b, #6cc28a); }
-.bar-row.orange .bf { background: linear-gradient(90deg, #e8960e, #f5b942); }
+.bar-row .bf { height: 100%; border-radius: 3px; background: #2f6fd6; min-width: 2px; }
+.bar-row.green .bf { background: #2f9e5b; }
+.bar-row.orange .bf { background: #e8960e; }
 .bar-row .bv { width: 60px; flex: none; color: #445262; font-size: 13px; }
 
 .loading-inline { color: #97a4b5; padding: 40px 0; text-align: center; }
+
+/* ---------- 图标(扁平线性 SVG) ---------- */
+.ic { display: inline-flex; align-items: center; justify-content: center; }
+.ic svg { width: 17px; height: 17px; display: block; }
+.stat-card .ic { float: right; color: #2f6fd6; opacity: .8; }
+.stat-card .ic svg { width: 28px; height: 28px; }
 
 /* ---------- 备份页 ---------- */
 .chk-list { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 6px 0 2px; }
