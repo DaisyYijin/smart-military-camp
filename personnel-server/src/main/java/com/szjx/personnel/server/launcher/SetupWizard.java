@@ -57,6 +57,7 @@ public class SetupWizard extends JDialog {
         super((JFrame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
                 : "数智军营人员管理系统 - 启动设置", true);
         this.firstRun = firstRun;
+        setIconImage(AppIcons.appIcon());
         buildUi(initialPort, occupier, initialUsername);
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {

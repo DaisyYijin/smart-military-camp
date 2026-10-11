@@ -1147,8 +1147,7 @@ var subUid = 0;
  */
 function subRecordsPanel(kind, personnelId, opt) {
   var box = h('div', { style: 'grid-column: 1 / -1; padding: 2px 0 6px;' });
-  var table = h('table', { class: 'grid' });
-  table.style.minWidth = '520px';
+  var table = h('table', { class: 'grid sub-grid' });
   var localMode = !personnelId; // 新建人员:全部暂存,随人员一并入库
   var serverMode = !localMode;
   var rows = [];
@@ -1211,12 +1210,15 @@ function subRecordsPanel(kind, personnelId, opt) {
 
   function render() {
     var head = '<thead><tr>'
-      + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
+      + opt.columns.map(function (c) {
+        return '<th' + (c.w ? ' style="width:' + c.w + 'px"' : '') + '>' + esc(c.label) + '</th>';
+      }).join('')
       + '<th style="width:56px">操作</th></tr></thead>';
     var body = rows.map(function (r) {
       var cls = r.__pending ? ' class="pending-row"' : '';
       var tds = opt.columns.map(function (c) {
-        return '<td data-row="' + r.__id + '" data-col="' + c.key + '" title="双击编辑">'
+        var tip = String(r[c.key] || '').trim() || '双击编辑';
+        return '<td data-row="' + r.__id + '" data-col="' + c.key + '" title="' + esc(tip) + '">'
           + fmtCell(r, c) + '</td>';
       }).join('');
       return '<tr' + cls + '>' + tds
@@ -1388,22 +1390,22 @@ function subRecordsPanel(kind, personnelId, opt) {
 var POSITION_SUB = {
   name: '任职经历', kind: 'position-history',
   columns: [
-    { key: 'start_date', label: '开始日期', type: 'date', required: true },
-    { key: 'end_date', label: '结束日期', type: 'date' },
+    { key: 'start_date', label: '开始日期', type: 'date', required: true, w: 105 },
+    { key: 'end_date', label: '结束日期', type: 'date', w: 105 },
     { key: 'place', label: '任职地点', required: true },
     { key: 'post', label: '担任职务', required: true },
-    { key: 'remark', label: '备注' }
+    { key: 'remark', label: '备注', w: 130 }
   ]
 };
 
 var REWARD_SUB = {
   name: '奖惩记录', kind: 'reward-punish',
   columns: [
-    { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true, render: function (r) { return badge(r.kind); } },
-    { key: 'occur_date', label: '日期', type: 'date', required: true },
+    { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true, w: 85, render: function (r) { return badge(r.kind); } },
+    { key: 'occur_date', label: '日期', type: 'date', required: true, w: 105 },
     { key: 'reason', label: '事由', required: true },
     { key: 'content', label: '内容', required: true },
-    { key: 'remark', label: '备注' }
+    { key: 'remark', label: '备注', w: 130 }
   ]
 };
 
