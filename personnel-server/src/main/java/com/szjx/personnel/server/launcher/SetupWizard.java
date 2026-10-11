@@ -362,8 +362,8 @@ public class SetupWizard extends JDialog {
      * 须在创建任何界面组件之前调用。
      */
     public static void applyGlobalFontSize() {
-        float scale = 1.35f;
-        int minSize = 15;
+        float scale = 1.7f;
+        int minSize = 19;
         List<Object[]> toSet = new ArrayList<Object[]>();
         for (Map.Entry<Object, Object> e : UIManager.getLookAndFeelDefaults().entrySet()) {
             Object key = e.getKey();

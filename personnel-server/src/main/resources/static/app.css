@@ -38,7 +38,7 @@ textarea { resize: vertical; }
   display: inline-flex; align-items: center; gap: 5px; justify-content: center;
   border: 1px solid transparent; border-radius: 4px; cursor: pointer;
   height: 34px; padding: 0 18px; font-size: 14px; line-height: 1; user-select: none;
-  white-space: nowrap; transition: background .15s, border-color .15s;
+  white-space: nowrap;
   vertical-align: middle;
 }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -130,7 +130,6 @@ table.grid th, table.grid td {
 }
 table.grid th {
   background: #f6f8fb; color: #5a6b80; font-weight: 600; font-size: 13px;
-  position: sticky; top: 0; z-index: 1;
 }
 table.grid tbody tr:hover { background: #f4f8ff; }
 table.grid td.actions { white-space: nowrap; }
@@ -176,10 +175,12 @@ table.grid td.empty-row { text-align: center; }
   position: fixed; inset: 0; background: rgba(15, 30, 55, .45);
   display: flex; align-items: flex-start; justify-content: center;
   z-index: 100; overflow: auto; padding: 60px 0 40px;
+  /* 提前告诉浏览器这层会变化,弹层时避免整页重绘 */
+  will-change: contents;
 }
 .dialog {
   background: #fff; border-radius: 8px; width: 560px; max-width: 94vw;
-  box-shadow: 0 16px 46px rgba(10, 25, 50, .35);
+  box-shadow: 0 2px 10px rgba(10, 25, 50, .22);
 }
 .dialog.wide { width: 760px; }
 .dialog-head {

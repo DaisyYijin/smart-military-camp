@@ -338,9 +338,9 @@ function buildForm(fields, values) {
         syncEmpty();
       });
       el.addEventListener('click', function (e) {
-        // 点右侧日历图标时浏览器自己会弹,避免重复弹出造成闪烁
+        // 点右侧日历图标:浏览器原生弹出,不再调用 showPicker(重复触发会闪)
         var r = el.getBoundingClientRect();
-        if (e.clientX > r.right - 28) {
+        if (e.clientX > r.right - 30) {
           return;
         }
         try { el.showPicker(); } catch (err) { /* 旧浏览器忽略 */ }
