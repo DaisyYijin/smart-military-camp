@@ -14,11 +14,16 @@ input, select, textarea {
   padding: 7px 10px; outline: none; background: #fff;
 }
 input:focus, select:focus, textarea:focus { border-color: #2f6fd6; box-shadow: 0 0 0 2px rgba(47,111,214,.15); }
-input[type="date"] { padding: 0 8px; }
-select { height: 36px; }
+/* 表单控件统一高度 */
+input[type="text"], input[type="number"], input[type="password"], input[type="date"], select {
+  height: 36px; padding: 0 10px;
+}
 select option { font-family: inherit; font-size: 14px; }
 /* 日期框空值占位:盖住 Chrome 的"yyyy/mm/日"半翻译文字,用覆盖层显示纯中文 */
 input[type="date"].date-empty::-webkit-datetime-edit { color: transparent; }
+/* 聚焦时(JS 加 focused 类):恢复输入文字可见 + 撤掉覆盖层,立即可打字/点日历 */
+.date-wrap.focused input[type="date"].date-empty::-webkit-datetime-edit { color: #26313d; }
+.date-wrap.focused .date-ph { display: none !important; }
 .date-wrap { position: relative; }
 .date-wrap .date-ph {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);

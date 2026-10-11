@@ -319,15 +319,21 @@ function buildForm(fields, values) {
     }
     inputs[f.key] = el;
     if (f.type === 'date') {
-      // 空值时用覆盖层显示"年/月/日"(比伪元素方案在各类浏览器上都可靠)
+      // 空值且未聚焦时用覆盖层显示"年/月/日";聚焦后立即可输入、可点日历
+      var box = h('div', { class: 'date-wrap' });
       var syncEmpty = function () {
         el.classList.toggle('date-empty', !el.value);
       };
       el.addEventListener('input', syncEmpty);
       el.addEventListener('change', syncEmpty);
+      el.addEventListener('focus', function () { box.classList.add('focused'); });
+      el.addEventListener('blur', function () {
+        box.classList.remove('focused');
+        syncEmpty();
+      });
       syncEmpty();
-      var box = h('div', { class: 'date-wrap' }, el,
-        h('span', { class: 'date-ph', text: '年/月/日' }));
+      box.appendChild(el);
+      box.appendChild(h('span', { class: 'date-ph', text: '年/月/日' }));
       wrap.appendChild(box);
     } else {
       wrap.appendChild(el);
@@ -783,7 +789,7 @@ var personnelCfg = {
     { key: 'birthday', label: '出生日期', type: 'date' },
     { key: 'phone', label: '手机号' },
     { key: 'departmentId', label: '部门', type: 'dept' },
-    { key: 'rank', label: '军衔/职级', datalist: function () { return dictLabels('rank'); } },
+    { key: 'rank', label: '军衔/职级', type: 'select', options: function () { return dictLabels('rank'); } },
     { key: 'post', label: '职务/岗位' },
     { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
     { key: 'entryDate', label: '入伍/入职日期', type: 'date' },
@@ -791,7 +797,7 @@ var personnelCfg = {
     { key: 'nation', label: '民族' },
     { key: 'nativePlace', label: '籍贯' },
     { key: 'bloodType', label: '血型' },
-    { key: 'politicalStatus', label: '政治面貌', datalist: ['党员', '团员', '群众'] },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'partyJoinDate', label: '入党/入团日期', type: 'date' },
     { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: ['未婚', '已婚', '离异', '丧偶'] },
     { key: 'education', label: '学历', type: 'select', options: ['高中', '中专', '大专', '本科', '硕士', '博士'] },
@@ -888,7 +894,7 @@ var equipmentCfg = {
   form: [
     { key: 'name', label: '装备名称', required: true },
     { key: 'code', label: '装备编号' },
-    { key: 'category', label: '类别', datalist: function () { return dictLabels('equipment_category'); } },
+    { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
     { key: 'model', label: '型号' },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('equipment_status'); } },
     { key: 'keeperId', label: '保管人', type: 'personnel' },
@@ -923,7 +929,7 @@ var materialCfg = {
   rowTitle: function (r) { return r.name; },
   form: [
     { key: 'name', label: '物资名称', required: true },
-    { key: 'category', label: '分类', datalist: function () { return dictLabels('material_category'); } },
+    { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } },
     { key: 'spec', label: '规格' },
     { key: 'unit', label: '单位', placeholder: '个/箱/件…' },
     { key: 'quantity', label: '数量', type: 'number', step: '0.01' },
@@ -954,7 +960,7 @@ var vehicleCfg = {
   form: [
     { key: 'plateNo', label: '车牌号', required: true },
     { key: 'brand', label: '品牌型号' },
-    { key: 'type', label: '车型', datalist: function () { return dictLabels('vehicle_type'); } },
+    { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('vehicle_status'); } },
     { key: 'driverId', label: '驾驶员', type: 'personnel' },
     { key: 'seats', label: '核定人数', type: 'number', step: '1' },
@@ -1006,7 +1012,7 @@ var fitnessCfg = {
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
   form: [
     { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
-    { key: 'item', label: '考核项目', datalist: function () { return dictLabels('fitness_item'); }, required: true },
+    { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
     { key: 'score', label: '成绩', placeholder: '如 12\'30 或 45 次' },
     {
       key: 'grade', label: '评定等级', type: 'select', required: true,
