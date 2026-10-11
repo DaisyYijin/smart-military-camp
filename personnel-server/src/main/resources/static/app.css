@@ -415,3 +415,8 @@ input.bad, textarea.bad { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217,
 /* 进度条 */
 .pg-bar { height: 8px; background: #eef2f7; border-radius: 4px; overflow: hidden; }
 .pg-fill { height: 100%; background: #2f6fd6; transition: width .2s; }
+
+/* 子记录行内编辑 */
+tr.pending-row { background: #fffbe8; }
+tr.pending-row:hover { background: #fdf3d0 !important; }
+.cell-empty-hint { color: #c9b458; font-size: 12px; }

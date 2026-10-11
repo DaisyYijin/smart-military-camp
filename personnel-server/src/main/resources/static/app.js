@@ -232,6 +232,7 @@ function makeDateField() {
       wrap.dispatchEvent(new CustomEvent('change'));
     });
     panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    panel.addEventListener('mousedown', function (e) { e.preventDefault(); });
   }
 
   function openPanel() {
@@ -354,6 +355,7 @@ function makeDropdown(opts, placeholder) {
     list.style.top = (below ? r.bottom + 5 : Math.max(6, r.top - lh - 5)) + 'px';
   });
   list.addEventListener('click', function (e) { e.stopPropagation(); });
+  list.addEventListener('mousedown', function (e) { e.preventDefault(); });
 
   return wrap;
 }
@@ -1138,189 +1140,270 @@ function openDetailModal(cfg, row, act) {
 /** 人员子记录面板:表单标签页内的可编辑列表(任职经历/奖惩情况) */
 var subUid = 0;
 
+/**
+ * 人员子记录面板:电子表格式行内编辑。
+ * 双击单元格原地编辑(文本/日期/下拉),失焦即保存;
+ * "添加"直接插入黄色空行,必填填完后自动入库(服务端模式)。
+ */
 function subRecordsPanel(kind, personnelId, opt) {
   var box = h('div', { style: 'grid-column: 1 / -1; padding: 2px 0 6px;' });
   var table = h('table', { class: 'grid' });
-  table.style.minWidth = '480px';
-  var lastRows = [];
-  var localMode = !personnelId; // 新建人员:先暂存,保存人员时一并入库
-  var staged = [];
+  table.style.minWidth = '520px';
+  var localMode = !personnelId; // 新建人员:全部暂存,随人员一并入库
+  var serverMode = !localMode;
+  var rows = [];
+  var renderTimer = null;
 
-  function reload() {
+  function colByKey(k) {
+    for (var i = 0; i < opt.columns.length; i++) {
+      if (opt.columns[i].key === k) {
+        return opt.columns[i];
+      }
+    }
+    return null;
+  }
+
+  function rowValid(r) {
+    for (var i = 0; i < opt.columns.length; i++) {
+      var c = opt.columns[i];
+      if (c.required && !String(r[c.key] || '').trim()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function snapshot(r) {
+    var o = {};
+    for (var k in r) {
+      if (k.indexOf('__') !== 0) {
+        o[k] = r[k];
+      }
+    }
+    return o;
+  }
+
+  function load() {
     if (localMode) {
-      renderRows(staged);
+      render();
       return;
     }
     GET('/api/sub/' + kind + '?personnelId=' + personnelId).then(function (list) {
-      lastRows = list || [];
-      renderRows(lastRows);
+      rows = (list || []).map(function (r) {
+        r.__id = 's' + r.id;
+        r.__pending = false;
+        return r;
+      });
+      render();
     }).catch(function (e) { toast(e.message, 'err'); });
   }
 
-  function renderRows(rows) {
-    table.innerHTML = '<thead><tr>'
-      + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
-      + '<th style="width:100px">操作</th></tr></thead><tbody>'
-      + (rows.length ? rows.map(function (r) {
-          var rid = r.__id !== undefined ? r.__id : r.id;
-          return '<tr>' + opt.columns.map(function (c) {
-            var raw = r[c.key] === null || r[c.key] === undefined ? '' : r[c.key];
-            var inner = c.render ? c.render(r) : esc(raw);
-            return '<td>' + inner + '</td>';
-          }).join('')
-            + '<td class="actions">'
-            + '<button class="btn-link" data-edit="' + rid + '">编辑</button>'
-            + '<button class="btn-link danger" data-del="' + rid + '">删除</button></td></tr>';
-        }).join('') : '<tr><td colspan="' + (opt.columns.length + 1) + '" class="empty-row">暂无记录</td></tr>')
-      + '</tbody>';
+  function fmtCell(r, c) {
+    var v = r[c.key] || '';
+    if (!String(v).trim()) {
+      return c.required ? '<span class="cell-empty-hint">双击填写</span>' : '<span style="color:#c6cfda">—</span>';
+    }
+    if (c.render) {
+      return c.render(r);
+    }
+    return esc(v);
   }
 
-  table.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-edit],button[data-del]');
-    if (!b) return;
-    var id = b.getAttribute('data-edit') || b.getAttribute('data-del');
-    var pool = localMode ? staged : lastRows;
-    var rec = pool.filter(function (r) {
-      return String(localMode ? r.__id : r.id) === String(id);
-    })[0];
-    if (!rec) return;
-    if (b.hasAttribute('data-del')) {
-      if (localMode) {
-        staged = staged.filter(function (r) { return r !== rec; });
-        renderRows(staged);
-        return;
-      }
-      confirmBox('确定删除这条' + opt.name + '吗?', true).then(function (yes) {
-        if (!yes) return;
-        DEL('/api/sub/' + kind + '/' + id).then(function () { toast('已删除'); reload(); })
-          .catch(function (err) { toast(err.message, 'err'); });
-      });
-    } else {
-      openSubForm(rec);
+  function render() {
+    var head = '<thead><tr>'
+      + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
+      + '<th style="width:56px">操作</th></tr></thead>';
+    var body = rows.map(function (r) {
+      var cls = r.__pending ? ' class="pending-row"' : '';
+      var tds = opt.columns.map(function (c) {
+        return '<td data-row="' + r.__id + '" data-col="' + c.key + '" title="双击编辑">'
+          + fmtCell(r, c) + '</td>';
+      }).join('');
+      return '<tr' + cls + '>' + tds
+        + '<td class="actions"><button class="btn-link danger" data-del="' + r.__id + '">删除</button></td></tr>';
+    }).join('');
+    if (!rows.length) {
+      body = '<tr><td colspan="' + (opt.columns.length + 1) + '" class="empty-row">暂无记录,点上方按钮添加</td></tr>';
     }
-  });
+    table.innerHTML = head + '<tbody>' + body + '</tbody>';
+  }
 
-  // 双击行直接进入编辑
-  table.addEventListener('dblclick', function (e) {
-    var tr = e.target.closest('tr');
-    if (!tr) {
+  function deferredRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(render, 0);
+  }
+
+  function openEditor(r, c) {
+    var td = table.querySelector('td[data-row="' + r.__id + '"][data-col="' + c.key + '"]');
+    if (!td) {
       return;
     }
-    var editBtn = tr.querySelector('button[data-edit]');
-    if (!editBtn) {
-      return; // 表头或空行
+    td.innerHTML = '';
+    var editor;
+    if (c.type === 'date') {
+      editor = makeDateField();
+      if (r[c.key]) {
+        editor.value = r[c.key];
+      }
+      editor.addEventListener('change', function () { commit(r, c, editor.value); });
+    } else if (c.type === 'select') {
+      editor = makeDropdown(c.options || [], '请选择');
+      if (r[c.key]) {
+        editor.value = r[c.key];
+      }
+      editor.addEventListener('change', function () { commit(r, c, editor.value); });
+      var btn = editor.querySelector('.dd-btn');
+      if (btn) {
+        btn.addEventListener('blur', function () {
+          setTimeout(function () { commit(r, c, r[c.key]); }, 150);
+        });
+      }
+    } else {
+      editor = h('input', { type: 'text', style: 'width:100%' });
+      editor.value = r[c.key] || '';
+      editor.addEventListener('blur', function () { commit(r, c, editor.value); });
+      editor.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          editor.blur();
+        }
+      });
     }
-    var id = editBtn.getAttribute('data-edit');
-    var pool = localMode ? staged : lastRows;
-    var rec = pool.filter(function (r) {
-      return String(localMode ? r.__id : r.id) === String(id);
-    })[0];
-    if (rec) {
-      openSubForm(rec);
+    td.appendChild(editor);
+    var focusEl = editor.tagName === 'INPUT' ? editor : editor.querySelector('input,.dd-btn');
+    if (focusEl) {
+      setTimeout(function () { focusEl.focus(); }, 0);
     }
-  });
-
-  function openSubForm(rec) {
-    var form = buildForm(opt.fields, rec || {});
-    var m = openModal({
-      title: (rec ? '编辑' : '添加') + opt.name,
-      body: form.el,
-      footer: [
-        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
-        h('button', {
-          class: 'btn btn-primary', text: '保存',
-          onclick: function () {
-            var data = form.get();
-            if (!data) return;
-            if (localMode) {
-              if (rec) {
-                data.__id = rec.__id;
-                staged = staged.map(function (r) { return r === rec ? data : r; });
-              } else {
-                data.__id = --subUid;
-                staged.push(data);
-              }
-              m.close();
-              toast('已填写,保存人员时将一并保存');
-              renderRows(staged);
-              return;
-            }
-            data.personnelId = personnelId;
-            var done = rec ? PUT('/api/sub/' + kind + '/' + rec.id, data)
-                           : POST('/api/sub/' + kind, data);
-            done.then(function () {
-              m.close();
-              toast('保存成功');
-              reload();
-            }).catch(function (err) { form.setError(err.message); });
-          }
-        })
-      ]
-    });
   }
 
-  box.appendChild(h('div', { style: 'margin-bottom:10px' },
+  function commit(r, c, value) {
+    value = String(value == null ? '' : value).trim();
+    if (String(r[c.key] || '') === value) {
+      deferredRender();
+      return;
+    }
+    r[c.key] = value;
+    saveRow(r);
+  }
+
+  function saveRow(r) {
+    if (localMode) {
+      deferredRender();
+      return;
+    }
+    var body = snapshot(r);
+    if (r.__pending) {
+      if (!rowValid(r)) {
+        deferredRender(); // 必填未填完,黄色行挂着,填完自动入库
+        return;
+      }
+      body.personnelId = personnelId;
+      POST('/api/sub/' + kind, body).then(function (saved) {
+        if (saved && saved.id) {
+          r.id = saved.id;
+          r.__id = 's' + saved.id;
+        }
+        r.__pending = false;
+        deferredRender();
+      }).catch(function (e) {
+        toast(e.message, 'err');
+        deferredRender();
+      });
+    } else {
+      var backup = r.__backup || body;
+      r.__backup = snapshot(r);
+      PUT('/api/sub/' + kind + '/' + r.id, body).then(function () {
+        r.__backup = null;
+        deferredRender();
+      }).catch(function (e) {
+        toast(e.message, 'err');
+        for (var k in backup) {
+          r[k] = backup[k];
+        }
+        deferredRender();
+      });
+    }
+  }
+
+  table.addEventListener('dblclick', function (e) {
+    var td = e.target.closest('td[data-row][data-col]');
+    if (!td) {
+      return;
+    }
+    var r = rows.filter(function (x) { return x.__id === td.getAttribute('data-row'); })[0];
+    var c = colByKey(td.getAttribute('data-col'));
+    if (r && c) {
+      openEditor(r, c);
+    }
+  });
+
+  table.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-del]');
+    if (!b) {
+      return;
+    }
+    var rid = b.getAttribute('data-del');
+    var r = rows.filter(function (x) { return x.__id === rid; })[0];
+    if (!r) {
+      return;
+    }
+    if (r.__pending || localMode) {
+      rows = rows.filter(function (x) { return x !== r; });
+      render();
+      return;
+    }
+    confirmBox('确定删除这条' + opt.name + '吗?', true).then(function (yes) {
+      if (!yes) {
+        return;
+      }
+      DEL('/api/sub/' + kind + '/' + r.id).then(function () {
+        rows = rows.filter(function (x) { return x !== r; });
+        render();
+        toast('已删除');
+      }).catch(function (err) { toast(err.message, 'err'); });
+    });
+  });
+
+  box.appendChild(h('div', { style: 'margin-bottom:10px;display:flex;align-items:center;gap:12px' },
     h('button', {
       class: 'btn btn-ghost btn-sm', text: '＋ 添加' + opt.name,
-      onclick: function () { openSubForm(null); }
-    })));
-  box.appendChild(h('div', { class: 'table-wrap' }, table));
-  // 供人员保存流程读取暂存记录(剥离内部 __id)
-  box.__staged = function () {
-    return staged.map(function (r) {
-      var o = {};
-      for (var k in r) {
-        if (k !== '__id') {
-          o[k] = r[k];
-        }
+      onclick: function () {
+        var r = { __id: 'l' + (--subUid), __pending: serverMode };
+        opt.columns.forEach(function (c) { r[c.key] = ''; });
+        rows.push(r);
+        render();
+        var firstReq = opt.columns.filter(function (c) { return c.required; })[0] || opt.columns[0];
+        setTimeout(function () { openEditor(r, firstReq); }, 30);
       }
-      return o;
-    });
-  };
-  reload();
-  return box;
-}
+    }),
+    h('span', { style: 'color:#a6b3c4;font-size:12px', text: '双击单元格编辑,失焦保存;黄色行=必填未填完' })));
+  box.appendChild(h('div', { class: 'table-wrap' }, table));
 
-function subHintPanel(text) {
-  return h('div', {
-    style: 'grid-column:1/-1;color:#97a4b5;padding:34px 0;text-align:center;font-size:14px',
-    text: text
-  });
+  box.__staged = function () {
+    return rows.map(function (r) { return snapshot(r); });
+  };
+  load();
+  return box;
 }
 
 var POSITION_SUB = {
   name: '任职经历', kind: 'position-history',
   columns: [
-    { key: 'start_date', label: '开始日期' },
-    { key: 'end_date', label: '结束日期' },
-    { key: 'place', label: '任职地点' },
-    { key: 'post', label: '担任职务' },
-    { key: 'remark', label: '备注' }
-  ],
-  fields: [
     { key: 'start_date', label: '开始日期', type: 'date', required: true },
-    { key: 'end_date', label: '结束日期', type: 'date', placeholder: '留空表示至今' },
-    { key: 'place', label: '任职地点', required: true, placeholder: '如:XX部队XX营' },
-    { key: 'post', label: '担任职务', required: true, placeholder: '如:参谋、连长' },
-    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+    { key: 'end_date', label: '结束日期', type: 'date' },
+    { key: 'place', label: '任职地点', required: true },
+    { key: 'post', label: '担任职务', required: true },
+    { key: 'remark', label: '备注' }
   ]
 };
 
 var REWARD_SUB = {
   name: '奖惩记录', kind: 'reward-punish',
   columns: [
-    { key: 'kind', label: '类型', render: function (r) { return badge(r.kind); } },
-    { key: 'occur_date', label: '日期' },
-    { key: 'reason', label: '事由' },
-    { key: 'content', label: '内容' },
-    { key: 'remark', label: '备注' }
-  ],
-  fields: [
-    { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true },
+    { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true, render: function (r) { return badge(r.kind); } },
     { key: 'occur_date', label: '日期', type: 'date', required: true },
-    { key: 'reason', label: '事由', required: true, placeholder: '因某某情况', span: 'full' },
-    { key: 'content', label: '表彰/处分内容', required: true, placeholder: '如:记三等功一次 / 警告处分', span: 'full' },
-    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+    { key: 'reason', label: '事由', required: true },
+    { key: 'content', label: '内容', required: true },
+    { key: 'remark', label: '备注' }
   ]
 };
 
