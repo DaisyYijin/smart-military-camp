@@ -374,6 +374,17 @@ function renderPager(state, onChange) {
 
 function crudView(cfg) {
   var state = { page: 1, size: 20, total: 0, rows: [], filters: {}, loading: false, selected: {} };
+
+  function syncHeaderCheck() {
+    var head = $('.cb-all', root);
+    if (!head) return;
+    var boxes = $all('.cb-row', root);
+    var allOn = boxes.length > 0;
+    for (var i = 0; i < boxes.length; i++) {
+      if (!state.selected[boxes[i].getAttribute('data-id')]) { allOn = false; break; }
+    }
+    head.checked = allOn;
+  }
   var root = h('div');
   var pagerBox = h('div');
 
@@ -429,7 +440,14 @@ function crudView(cfg) {
     tb.innerHTML = state.rows.map(function (row) {
       var tds = cfg.columns.map(function (c) {
         var raw = row[c.key] === null || row[c.key] === undefined ? '' : row[c.key];
-        var inner = c.render ? c.render(row) : esc(raw);
+        var inner;
+        if (c.render) {
+          inner = c.render(row);
+        } else if (cfg.clickKey && c.key === cfg.clickKey) {
+          inner = '<span class="view-detail" data-view-id="' + row.id + '" title="点击查看详情"><b>' + esc(raw) + '</b></span>';
+        } else {
+          inner = esc(raw);
+        }
         return '<td title="' + esc(raw) + '">' + inner + '</td>';
       }).join('');
       return '<tr><td class="cb-cell"><input type="checkbox" class="cb-row" data-id="' + row.id + '"'
@@ -439,15 +457,7 @@ function crudView(cfg) {
         '<button class="btn-link danger" data-act="del" data-id="' + row.id + '">删除</button>' +
         '</td></tr>';
     }).join('');
-    var head = $('.cb-all', root);
-    if (head) {
-      var boxes = $all('.cb-row', tb);
-      var allOn = boxes.length > 0;
-      for (var i = 0; i < boxes.length; i++) {
-        if (!state.selected[boxes[i].getAttribute('data-id')]) { allOn = false; break; }
-      }
-      head.checked = allOn;
-    }
+    syncHeaderCheck();
   }
 
   function openForm(row) {
@@ -581,6 +591,7 @@ function crudView(cfg) {
         var id = t.getAttribute('data-id');
         if (t.checked) state.selected[id] = true; else delete state.selected[id];
         syncBatchBtn();
+        syncHeaderCheck();
       } else if (t.classList.contains('cb-all')) {
         $all('.cb-row', table).forEach(function (b) {
           var bid = b.getAttribute('data-id');
@@ -592,10 +603,13 @@ function crudView(cfg) {
     });
     table.addEventListener('click', function (e) {
       var viewEl = e.target.closest('[data-view-id]');
-      if (viewEl && cfg.onView) {
+      if (viewEl) {
         var vid = viewEl.getAttribute('data-view-id');
         var vrow = state.rows.filter(function (r) { return String(r.id) === String(vid); })[0];
-        if (vrow) cfg.onView(vrow, { edit: function () { openForm(vrow); } });
+        if (vrow) {
+          var onView = cfg.onView || function (rw, at) { openDetailModal(cfg, rw, at); };
+          onView(vrow, { edit: function () { openForm(vrow); } });
+        }
         return;
       }
       var btnEl = e.target.closest('button[data-act]');
@@ -632,17 +646,10 @@ function crudView(cfg) {
 
 /* ================= 各模块配置 ================= */
 
-/** 人员详情弹窗:照片 + 全部字段分栏展示 */
-function openPersonnelDetail(row, act) {
-  var photo = h('div', { class: 'detail-photo', text: '无照片' });
-  if (row.photo) {
-    apiBlob('/api/personnel/' + row.id + '/photo').then(function (r) {
-      photo.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
-      photo.textContent = '';
-    }).catch(function () { /* 无照片保持占位 */ });
-  }
+/** 通用详情弹窗:按模块表单定义分栏展示全部字段(人员模块附带照片) */
+function openDetailModal(cfg, row, act) {
   var grid = h('div', { class: 'detail-grid' });
-  personnelCfg.form.forEach(function (f) {
+  (cfg.form || []).forEach(function (f) {
     if (f.section) {
       grid.appendChild(h('div', { class: 'form-section', text: f.section }));
       return;
@@ -655,9 +662,24 @@ function openPersonnelDetail(row, act) {
         text: (v === null || v === undefined || v === '') ? '—' : String(v)
       })));
   });
+
+  var body;
+  if (cfg.key === 'personnel') {
+    var photo = h('div', { class: 'detail-photo', text: '无照片' });
+    if (row.photo) {
+      apiBlob('/api/personnel/' + row.id + '/photo').then(function (r) {
+        photo.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
+        photo.textContent = '';
+      }).catch(function () { /* 无照片保持占位 */ });
+    }
+    body = h('div', { class: 'detail-wrap' }, photo, grid);
+  } else {
+    body = grid;
+  }
+
   var m = openModal({
-    title: '人员详情 - ' + row.name,
-    body: h('div', { class: 'detail-wrap' }, photo, grid),
+    title: (cfg.title.replace(/管理$/, '').replace(/考核$/, '考核')) + '详情 - ' + (cfg.rowTitle ? cfg.rowTitle(row) : row.id),
+    body: body,
     wide: true,
     footer: [
       h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } }),
@@ -700,7 +722,7 @@ var personnelCfg = {
     { key: 'entryDate', label: '入伍日期' }
   ],
   rowTitle: function (r) { return r.name; },
-  onView: function (row, act) { openPersonnelDetail(row, act); },
+  onView: function (row, act) { openDetailModal(personnelCfg, row, act); },
   delTip: function (r) { return '确定删除人员「' + r.name + '」吗?相关休假、体能、装备保管记录将一并解除关联,删除后不可恢复。'; },
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
@@ -826,6 +848,7 @@ function personnelPhotoBlock(row) {
 
 var equipmentCfg = {
   key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
+  clickKey: 'name',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
@@ -856,6 +879,7 @@ var equipmentCfg = {
 
 var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
+  clickKey: 'name',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
@@ -891,6 +915,7 @@ var materialCfg = {
 
 var vehicleCfg = {
   key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
+  clickKey: 'plateNo',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
@@ -919,6 +944,7 @@ var vehicleCfg = {
 
 var leaveCfg = {
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
+  clickKey: 'personnelName',
   filters: [{ key: 'keyword', label: '检索' }],
   columns: [
     { key: 'personnelName', label: '姓名' },
@@ -943,6 +969,7 @@ var leaveCfg = {
 
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
+  clickKey: 'personnelName',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'item', label: '项目', type: 'select', options: function () { return dictLabels('fitness_item'); } }

@@ -313,7 +313,7 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 
 /* ---------- 人员详情 ---------- */
 .view-detail { cursor: pointer; }
-.cell-person.view-detail:hover b { color: #2f6fd6; }
+.cell-person.view-detail:hover b, .view-detail:hover b { color: #2f6fd6; }
 .detail-wrap { display: flex; gap: 22px; }
 .detail-photo {
   width: 140px; height: 180px; border-radius: 6px; flex: none;
