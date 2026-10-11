@@ -101,7 +101,9 @@ var ICON_PATHS = {
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
   chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-  check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+  check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  chevronL: '<polyline points="15 18 9 12 15 6"/>',
+  chevronR: '<polyline points="9 18 15 12 9 6"/>'
 };
 
 /** 生成扁平线性 SVG 图标(继承文字颜色) */
@@ -371,7 +373,7 @@ function renderPager(state, onChange) {
 /* ================= 通用 CRUD 视图 ================= */
 
 function crudView(cfg) {
-  var state = { page: 1, size: 20, total: 0, rows: [], filters: {}, loading: false };
+  var state = { page: 1, size: 20, total: 0, rows: [], filters: {}, loading: false, selected: {} };
   var root = h('div');
   var pagerBox = h('div');
 
@@ -415,7 +417,7 @@ function crudView(cfg) {
   function renderTable() {
     var tb = $('.grid tbody', root);
     if (!tb) return;
-    var cols = cfg.columns.length + 1;
+    var cols = cfg.columns.length + 2;
     if (state.loading) {
       tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">加载中…</td></tr>';
       return;
@@ -430,12 +432,22 @@ function crudView(cfg) {
         var inner = c.render ? c.render(row) : esc(raw);
         return '<td title="' + esc(raw) + '">' + inner + '</td>';
       }).join('');
-      return '<tr>' + tds +
+      return '<tr><td class="cb-cell"><input type="checkbox" class="cb-row" data-id="' + row.id + '"'
+        + (state.selected[row.id] ? ' checked' : '') + '></td>' + tds +
         '<td class="actions">' +
         '<button class="btn-link" data-act="edit" data-id="' + row.id + '">编辑</button>' +
         '<button class="btn-link danger" data-act="del" data-id="' + row.id + '">删除</button>' +
         '</td></tr>';
     }).join('');
+    var head = $('.cb-all', root);
+    if (head) {
+      var boxes = $all('.cb-row', tb);
+      var allOn = boxes.length > 0;
+      for (var i = 0; i < boxes.length; i++) {
+        if (!state.selected[boxes[i].getAttribute('data-id')]) { allOn = false; break; }
+      }
+      head.checked = allOn;
+    }
   }
 
   function openForm(row) {
@@ -507,23 +519,85 @@ function crudView(cfg) {
       }));
     }
     toolbar.appendChild(h('div', { class: 'spacer' }));
-    if (cfg.toolbar) {
-      cfg.toolbar(toolbar, {
-        load: load,
-        openNew: function () { openForm(null); },
-        getFilters: function () {
-          var f = collectFilters();
-          Object.keys(f).forEach(function (k) { if (f[k] === '') delete f[k]; });
-          return f;
-        }
+    var batchBtn = h('button', {
+      class: 'btn btn-ghost', text: '删除所选', disabled: true,
+      onclick: function () { batchDelete(); }
+    });
+    toolbar.appendChild(batchBtn);
+    function syncBatchBtn() {
+      var n = Object.keys(state.selected).length;
+      batchBtn.disabled = n === 0;
+      batchBtn.textContent = n ? '删除所选(' + n + ')' : '删除所选';
+    }
+    function batchDelete() {
+      var ids = Object.keys(state.selected);
+      if (!ids.length) return;
+      confirmBox('确定删除选中的 ' + ids.length + ' 条记录吗?删除后不可恢复。', true).then(function (yes) {
+        if (!yes) return;
+        var okCount = 0, failCount = 0;
+        var chain = Promise.resolve();
+        ids.forEach(function (id) {
+          chain = chain.then(function () {
+            return DEL(cfg.endpoint + '/' + id)
+              .then(function () { okCount++; })
+              .catch(function () { failCount++; });
+          });
+        });
+        chain.then(function () {
+          state.selected = {};
+          toast('批量删除完成:成功 ' + okCount + ' 条' + (failCount ? ',失败 ' + failCount + ' 条' : ''),
+            failCount ? 'info' : 'ok');
+          afterChange();
+        });
       });
+    }
+    var actions = {
+      load: load,
+      openNew: function () { openForm(null); },
+      getFilters: function () {
+        var f = collectFilters();
+        Object.keys(f).forEach(function (k) { if (f[k] === '') delete f[k]; });
+        return f;
+      }
+    };
+    if (cfg.toolbar) {
+      cfg.toolbar(toolbar, actions);
+    } else {
+      toolbar.appendChild(h('button', {
+        class: 'btn btn-primary',
+        text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
+        onclick: function () { openForm(null); }
+      }));
     }
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +
+      '<th class="cb-cell"><input type="checkbox" class="cb-all" title="全选本页"/></th>' +
       cfg.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') +
       '<th style="width:110px">操作</th></tr></thead><tbody></tbody>';
+    table.addEventListener('change', function (e) {
+      var t = e.target;
+      if (t.classList.contains('cb-row')) {
+        var id = t.getAttribute('data-id');
+        if (t.checked) state.selected[id] = true; else delete state.selected[id];
+        syncBatchBtn();
+      } else if (t.classList.contains('cb-all')) {
+        $all('.cb-row', table).forEach(function (b) {
+          var bid = b.getAttribute('data-id');
+          b.checked = t.checked;
+          if (t.checked) state.selected[bid] = true; else delete state.selected[bid];
+        });
+        syncBatchBtn();
+      }
+    });
     table.addEventListener('click', function (e) {
+      var viewEl = e.target.closest('[data-view-id]');
+      if (viewEl && cfg.onView) {
+        var vid = viewEl.getAttribute('data-view-id');
+        var vrow = state.rows.filter(function (r) { return String(r.id) === String(vid); })[0];
+        if (vrow) cfg.onView(vrow, { edit: function () { openForm(vrow); } });
+        return;
+      }
       var btnEl = e.target.closest('button[data-act]');
       if (!btnEl) return;
       var id = btnEl.getAttribute('data-id');
@@ -549,6 +623,7 @@ function crudView(cfg) {
     root.appendChild(h('div', { style: 'height:12px' }));
     root.appendChild(panel);
     container.appendChild(root);
+    syncBatchBtn();
     load();
   }
 
@@ -556,6 +631,43 @@ function crudView(cfg) {
 }
 
 /* ================= 各模块配置 ================= */
+
+/** 人员详情弹窗:照片 + 全部字段分栏展示 */
+function openPersonnelDetail(row, act) {
+  var photo = h('div', { class: 'detail-photo', text: '无照片' });
+  if (row.photo) {
+    apiBlob('/api/personnel/' + row.id + '/photo').then(function (r) {
+      photo.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
+      photo.textContent = '';
+    }).catch(function () { /* 无照片保持占位 */ });
+  }
+  var grid = h('div', { class: 'detail-grid' });
+  personnelCfg.form.forEach(function (f) {
+    if (f.section) {
+      grid.appendChild(h('div', { class: 'form-section', text: f.section }));
+      return;
+    }
+    var v = row[f.key];
+    grid.appendChild(h('div', { class: 'detail-item' },
+      h('div', { class: 'dl', text: f.label }),
+      h('div', {
+        class: 'dv',
+        text: (v === null || v === undefined || v === '') ? '—' : String(v)
+      })));
+  });
+  var m = openModal({
+    title: '人员详情 - ' + row.name,
+    body: h('div', { class: 'detail-wrap' }, photo, grid),
+    wide: true,
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } }),
+      h('button', {
+        class: 'btn btn-primary', text: '编辑',
+        onclick: function () { m.close(); if (act && act.edit) act.edit(); }
+      })
+    ]
+  });
+}
 
 function statusOptions() {
   var l = dictLabels('personnel_status');
@@ -573,9 +685,9 @@ var personnelCfg = {
     {
       label: '姓名', render: function (r) {
         if (r.photo) {
-          return '<div class="cell-person"><img class="avatar" data-pid="' + r.id + '" alt=""/><b>' + esc(r.name) + '</b></div>';
+          return '<div class="cell-person view-detail" data-view-id="' + r.id + '" title="点击查看详情"><img class="avatar" data-pid="' + r.id + '" alt=""/><b>' + esc(r.name) + '</b></div>';
         }
-        return '<div class="cell-person"><span class="avatar missing">' + esc((r.name || '?').charAt(0)) + '</span><b>' + esc(r.name) + '</b></div>';
+        return '<div class="cell-person view-detail" data-view-id="' + r.id + '" title="点击查看详情"><span class="avatar missing">' + esc((r.name || '?').charAt(0)) + '</span><b>' + esc(r.name) + '</b></div>';
       }
     },
     { key: 'gender', label: '性别' },
@@ -588,6 +700,7 @@ var personnelCfg = {
     { key: 'entryDate', label: '入伍日期' }
   ],
   rowTitle: function (r) { return r.name; },
+  onView: function (row, act) { openPersonnelDetail(row, act); },
   delTip: function (r) { return '确定删除人员「' + r.name + '」吗?相关休假、体能、装备保管记录将一并解除关联,删除后不可恢复。'; },
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
@@ -1450,7 +1563,10 @@ function renderShell() {
 
   var menu = h('div', { class: 'menu' });
   function addMenu(key, icon, label) {
-    var item = h('div', { class: 'menu-item', onclick: function () { navigate(key); } },
+    var item = h('div', {
+      class: 'menu-item', 'data-tip': label,
+      onclick: function () { navigate(key); }
+    },
       h('span', { class: 'ic', html: iconSvg(icon) }), h('span', { class: 'txt', text: label }));
     menu.appendChild(item);
     menuItems[key] = item;
@@ -1476,14 +1592,33 @@ function renderShell() {
         }
       })));
 
+  var toggleIcon = h('span', { class: 'ic' });
+  var toggleTxt = h('span', { class: 'txt', text: '收起菜单' });
+  var toggleBtn = h('div', {
+    class: 'menu-item toggle', 'data-tip': '展开菜单',
+    onclick: function () { setCollapsed(!sideEl.classList.contains('collapsed')); }
+  }, toggleIcon, toggleTxt);
+
+  var sideEl = h('div', { class: 'sidebar' },
+    h('div', { class: 'sidebar-logo' },
+      h('span', { class: 'star', text: '★' }),
+      h('div', {},
+        h('div', { class: 't1', text: '数智军营' }),
+        h('div', { class: 't2', text: '人员管理系统' }))),
+    menu,
+    h('div', { class: 'sidebar-toggle' }, toggleBtn));
+
+  function setCollapsed(collapsed) {
+    sideEl.classList.toggle('collapsed', collapsed);
+    localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+    toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronR' : 'chevronL');
+    toggleTxt.textContent = collapsed ? '展开菜单' : '收起菜单';
+    toggleBtn.setAttribute('data-tip', collapsed ? '展开菜单' : '收起菜单');
+  }
+  setCollapsed(localStorage.getItem('sidebarCollapsed') === '1');
+
   app.appendChild(h('div', { class: 'layout' },
-    h('div', { class: 'sidebar' },
-      h('div', { class: 'sidebar-logo' },
-        h('span', { class: 'star', text: '★' }),
-        h('div', {},
-          h('div', { class: 't1', text: '数智军营' }),
-          h('div', { class: 't2', text: '人员管理系统' }))),
-      menu),
+    sideEl,
     h('div', { class: 'main' }, topbar, content)));
 
   // 浏览器前进/后退键切换模块

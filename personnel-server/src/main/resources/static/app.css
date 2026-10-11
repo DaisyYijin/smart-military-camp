@@ -288,3 +288,39 @@ table.grid td.empty-row { text-align: center; }
   .dict-layout { flex-direction: column; }
   .dict-types { width: 100%; display: flex; flex-wrap: wrap; }
 }
+
+/* ---------- 侧边栏收起 ---------- */
+.sidebar { transition: width .18s ease; }
+.sidebar.collapsed { width: 64px; }
+.sidebar.collapsed .sidebar-logo .t1,
+.sidebar.collapsed .sidebar-logo .t2,
+.sidebar.collapsed .menu-item span.txt { display: none; }
+.sidebar.collapsed .menu-item { justify-content: center; }
+.sidebar-toggle { border-top: 1px solid rgba(255,255,255,.08); padding: 6px 0; }
+.menu-item { position: relative; }
+.menu-item.toggle { color: #8fa6c6; }
+.sidebar.collapsed .menu-item:hover::after {
+  content: attr(data-tip);
+  position: absolute; left: 66px; top: 50%; transform: translateY(-50%);
+  background: #1d2c40; color: #fff; padding: 5px 12px; border-radius: 4px;
+  font-size: 13px; white-space: nowrap; z-index: 60;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+
+/* ---------- 表格复选框列 ---------- */
+table.grid th.cb-cell, table.grid td.cb-cell { text-align: center; width: 36px; padding-left: 12px; }
+table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; vertical-align: middle; }
+
+/* ---------- 人员详情 ---------- */
+.view-detail { cursor: pointer; }
+.cell-person.view-detail:hover b { color: #2f6fd6; }
+.detail-wrap { display: flex; gap: 22px; }
+.detail-photo {
+  width: 140px; height: 180px; border-radius: 6px; flex: none;
+  background: #dde5f0 center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  color: #a6b3c4; font-size: 12px;
+}
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; flex: 1; min-width: 0; }
+.detail-item .dl { font-size: 12px; color: #8a97a8; margin-bottom: 3px; }
+.detail-item .dv { font-size: 14px; color: #26313d; word-break: break-all; }
