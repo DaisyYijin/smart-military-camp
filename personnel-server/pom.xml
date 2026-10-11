@@ -23,6 +23,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
+        <!-- DevTools:开发模式下改完 Java 自动快速重启(打包时自动排除) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
         <!-- FlatLaf:启动向导/托盘弹窗的现代扁平外观 -->
         <dependency>
             <groupId>com.formdev</groupId>
