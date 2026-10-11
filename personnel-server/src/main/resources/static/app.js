@@ -630,7 +630,7 @@ function buildForm(fields, values, extraPanels) {
       addField(panel, f);
       sectionOf[f.key] = gi;
     });
-    if (!g.fields.length && extraPanels[g.title]) {
+    if (extraPanels[g.title]) {
       panel.appendChild(extraPanels[g.title]);
     }
     panels.push(panel);
@@ -1075,7 +1075,7 @@ function crudView(cfg) {
 /** 通用详情弹窗:按模块表单定义分栏展示全部字段(人员模块附带照片) */
 function openDetailModal(cfg, row, act) {
   var grid = h('div', { class: 'detail-grid' });
-  var SUB_KINDS = { '任职经历': 'position-history', '奖惩情况': 'reward-punish' };
+  var SUB_KINDS = { '任职经历': 'position-history', '奖惩情况': 'reward-punish', '家庭信息': 'children' };
   (cfg.form || []).forEach(function (f) {
     if (f.section) {
       grid.appendChild(h('div', { class: 'form-section', text: f.section }));
@@ -1085,11 +1085,17 @@ function openDetailModal(cfg, row, act) {
         (function (title, kind) {
           GET('/api/sub/' + kind + '?personnelId=' + row.id).then(function (list) {
             (list || []).forEach(function (r) {
-              var line = title === '任职经历'
-                ? esc((r.start_date || '—') + ' 至 ' + (r.end_date || '今') + '　'
-                  + r.place + '　任 ' + r.post)
-                : esc((r.occur_date || '—') + '　') + badge(r.kind)
+              var line;
+              if (title === '任职经历') {
+                line = esc((r.start_date || '—') + ' 至 ' + (r.end_date || '今') + '　'
+                  + r.place + '　任 ' + r.post);
+              } else if (title === '家庭信息') {
+                line = esc('子女:' + r.name + (r.gender ? '(' + r.gender + ')' : '')
+                  + (r.birth_date ? '　' + r.birth_date : ''));
+              } else {
+                line = esc((r.occur_date || '—') + '　') + badge(r.kind)
                   + esc('　' + r.reason + '　' + r.content);
+              }
               holder.appendChild(h('div', { class: 'detail-sub-line', html: line }));
             });
             if (!list || !list.length) {
@@ -1399,6 +1405,16 @@ var POSITION_SUB = {
   ]
 };
 
+var CHILD_SUB = {
+  name: '子女', kind: 'children',
+  columns: [
+    { key: 'name', label: '姓名', required: true, w: 100 },
+    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'], w: 70 },
+    { key: 'birth_date', label: '出生日期', type: 'date', w: 105 },
+    { key: 'remark', label: '备注' }
+  ]
+};
+
 var REWARD_SUB = {
   name: '奖惩记录', kind: 'reward-punish',
   columns: [
@@ -1602,7 +1618,7 @@ var personnelCfg = {
     { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
     { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
     { key: 'address', label: '家庭住址', span: 'full' },
-    { section: '家庭信息(配偶)' },
+    { section: '家庭信息' },
     { key: 'spouseName', label: '配偶姓名' },
     { key: 'spousePhone', label: '配偶电话' },
     { key: 'spouseJob', label: '配偶职业' },
@@ -1618,15 +1634,17 @@ var personnelCfg = {
       return {
         panels: {
           '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
-          '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB)
+          '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB),
+          '家庭信息': subRecordsPanel(CHILD_SUB.kind, row.id, CHILD_SUB)
         }
       };
     }
     var pos = subRecordsPanel(POSITION_SUB.kind, null, POSITION_SUB);
     var rew = subRecordsPanel(REWARD_SUB.kind, null, REWARD_SUB);
+    var child = subRecordsPanel(CHILD_SUB.kind, null, CHILD_SUB);
     return {
-      panels: { '任职经历': pos, '奖惩情况': rew },
-      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged }
+      panels: { '任职经历': pos, '奖惩情况': rew, '家庭信息': child },
+      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged, 'children': child.__staged }
     };
   }
 };

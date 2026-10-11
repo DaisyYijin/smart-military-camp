@@ -151,6 +151,7 @@ public class PersonnelService {
             personnelDao.delete(id);
             jdbc.update("DELETE FROM position_history WHERE personnel_id=?", id);
             jdbc.update("DELETE FROM reward_punish WHERE personnel_id=?", id);
+            jdbc.update("DELETE FROM child_info WHERE personnel_id=?", id);
             if (photo != null && !photo.isEmpty()) {
                 deletePhotoAfterCommit(photo);
             }

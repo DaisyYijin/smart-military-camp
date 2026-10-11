@@ -206,6 +206,19 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_reward_punish_person ON reward_punish(personnel_id)");
 
+        // 子女信息(人员的子记录)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS child_info (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "name TEXT DEFAULT ''," +
+                "gender TEXT DEFAULT ''," +
+                "birth_date TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_child_info_person ON child_info(personnel_id)");
+
         // 操作日志:谁、何时、从哪个 IP、做了什么
         jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

@@ -35,7 +35,12 @@ public class SubRecordController {
 
         TABLES.put("reward-punish", "reward_punish");
         ORDER.put("reward-punish", "occur_date");
-        COLS.put("reward-punish", new String[]{"kind", "occur_date", "reason", "content", "remark"});
+
+        TABLES.put("children", "child_info");
+                COLS.put("reward-punish", new String[]{"kind", "occur_date", "reason", "content", "remark"});
+
+        ORDER.put("children", "birth_date");
+        COLS.put("children", new String[]{"name", "gender", "birth_date", "remark"});
     }
 
     private final SubRecordDao dao;
@@ -117,6 +122,14 @@ public class SubRecordController {
             if (f.get("post").isEmpty()) {
                 return "请填写担任职务";
             }
+        } else if ("children".equals(kind)) {
+            if (f.get("name").isEmpty()) {
+                return "请填写子女姓名";
+            }
+            if (!f.get("gender").isEmpty() && !"男".equals(f.get("gender")) && !"女".equals(f.get("gender"))) {
+                return "性别只能是 男 或 女";
+            }
+            return null;
         } else {
             if (f.get("kind").isEmpty()) {
                 return "请选择类型(奖励/处分)";
