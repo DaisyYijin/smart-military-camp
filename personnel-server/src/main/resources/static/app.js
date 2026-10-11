@@ -1421,8 +1421,15 @@ function renderShell() {
   var content = h('div', { class: 'content' });
   var titleEl = h('div', { class: 'topbar-title' });
   var menuItems = {};
+  var currentView = 'personnel';
 
   function navigate(view) {
+    currentView = view;
+    // 记住当前页面:URL 锚点(刷新/分享/前进后退)+ localStorage 兜底
+    if (('#' + view) !== location.hash) {
+      try { history.replaceState(null, '', '#' + view); } catch (e) { location.hash = view; }
+    }
+    localStorage.setItem('lastView', view);
     Object.keys(menuItems).forEach(function (k) { menuItems[k].classList.remove('active'); });
     if (menuItems[view]) menuItems[view].classList.add('active');
 
@@ -1481,7 +1488,22 @@ function renderShell() {
       h('div', { class: 'sidebar-foot', text: '内网离线运行' })),
     h('div', { class: 'main' }, topbar, content)));
 
-  navigate('personnel');
+  // 浏览器前进/后退键切换模块
+  window.addEventListener('hashchange', function () {
+    var v = (location.hash || '').replace('#', '');
+    if (menuItems[v] && v !== currentView) navigate(v);
+  });
+
+  // 恢复上次所在页面:优先 URL 锚点,其次 localStorage
+  var initialView = (location.hash || '').replace('#', '');
+  var validViews = Object.keys(menuItems);
+  if (validViews.indexOf(initialView) < 0) {
+    initialView = localStorage.getItem('lastView') || 'personnel';
+  }
+  if (validViews.indexOf(initialView) < 0) {
+    initialView = 'personnel';
+  }
+  navigate(initialView);
 }
 
 /* ================= 启动 ================= */
