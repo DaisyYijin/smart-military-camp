@@ -531,15 +531,34 @@ function loadRowPhotos(root) {
 
 function buildForm(fields, values) {
   values = values || {};
-  var grid = h('div', { class: 'form-grid' });
   var inputs = {};
+  var sectionOf = {};
   var datalistSeq = 0;
 
+  // 按 section 分组;两组及以上渲染为标签页(切页仅隐藏面板,已填数据不丢失)
+  var groups = [];
   fields.forEach(function (f) {
     if (f.section) {
-      grid.appendChild(h('div', { class: 'form-section', text: f.section }));
-      return;
+      groups.push({ title: f.section, fields: [] });
+    } else {
+      if (!groups.length) {
+        groups.push({ title: '', fields: [] });
+      }
+      groups[groups.length - 1].fields.push(f);
     }
+  });
+  var useTabs = groups.length >= 2;
+
+  var tabsBar = h('div', { class: 'tabs' });
+  var panels = [];
+  var tabEls = [];
+
+  function activateTab(idx) {
+    tabEls.forEach(function (t, i) { t.classList.toggle('active', i === idx); });
+    panels.forEach(function (p, i) { p.classList.toggle('active', i === idx); });
+  }
+
+  function addField(panel, f) {
     var wrap = h('div', { class: 'form-item' + (f.span === 'full' ? ' full' : '') });
     wrap.appendChild(h('label', { html: esc(f.label) + (f.required ? '<span class="req">*</span>' : '') }));
 
@@ -560,6 +579,9 @@ function buildForm(fields, values) {
       }
       el = makeDropdown(ddOpts, f.type === 'dept' && !f.required ? '(不指定)' : '请选择');
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
+    } else if (f.type === 'date') {
+      el = makeDateField();
+      if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else if (f.type === 'textarea') {
       el = h('textarea', { placeholder: f.placeholder || '' });
       el.value = val || '';
@@ -569,11 +591,8 @@ function buildForm(fields, values) {
       var labels = (typeof f.datalist === 'function' ? f.datalist() : f.datalist) || [];
       labels.forEach(function (l) { list.appendChild(h('option', { value: l })); });
       wrap.appendChild(list);
-      el = h('input', { type: 'text', list: listId, placeholder: f.placeholder || '可输入或从列表选择' });
+      el = h('input', { type: 'text', list: listId, placeholder: f.placeholder || '' });
       el.value = val || '';
-    } else if (f.type === 'date') {
-      el = makeDateField();
-      if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else {
       var type = f.type === 'number' ? 'number' : 'text';
       el = h('input', { type: type, placeholder: f.placeholder || '' });
@@ -582,19 +601,72 @@ function buildForm(fields, values) {
     }
     inputs[f.key] = el;
     wrap.appendChild(el);
-    grid.appendChild(wrap);
+    panel.appendChild(wrap);
+  }
+
+  groups.forEach(function (g, gi) {
+    var panel = h('div', { class: 'form-grid tab-panel' });
+    if (!useTabs) {
+      panel.classList.add('active');
+    } else {
+      var tab = h('div', {
+        class: 'tab' + (gi === 0 ? ' active' : ''),
+        text: g.title,
+        onclick: (function (i) { return function () { activateTab(i); }; })(gi)
+      });
+      tabsBar.appendChild(tab);
+      tabEls.push(tab);
+      if (gi === 0) {
+        panel.classList.add('active');
+      }
+    }
+    g.fields.forEach(function (f) {
+      addField(panel, f);
+      sectionOf[f.key] = gi;
+    });
+    panels.push(panel);
   });
 
   var err = h('div', { class: 'form-err' });
 
+  /** 校验失败定位:跳到字段所在标签页,红框 + 滚动 + 聚焦 */
+  function markBad(el) {
+    el.classList.add('bad');
+    var focusEl = el;
+    if (el.classList.contains('dd')) {
+      focusEl = el.querySelector('.dd-btn');
+    } else if (el.classList.contains('cal')) {
+      focusEl = el.querySelector('input');
+    }
+    if (focusEl) {
+      var clear = function () {
+        el.classList.remove('bad');
+        focusEl.removeEventListener('focus', clear);
+      };
+      focusEl.addEventListener('focus', clear);
+      try { focusEl.focus({ preventScroll: true }); } catch (e) { focusEl.focus(); }
+    }
+    el.scrollIntoView({ block: 'center' });
+  }
+
+  var container = h('div', {});
+  if (useTabs) {
+    container.appendChild(tabsBar);
+  }
+  panels.forEach(function (p) { container.appendChild(p); });
+  container.appendChild(err);
+
   return {
-    el: h('div', {}, grid, err),
+    el: container,
     setError: function (msg) { err.textContent = msg || ''; },
     get: function () {
       var out = {};
       var missing = [];
+      var firstBadKey = null;
       fields.forEach(function (f) {
-        if (f.section) return;
+        if (f.section) {
+          return;
+        }
         var el = inputs[f.key];
         if (f.type === 'number') {
           out[f.key] = el.value === '' ? null : Number(el.value);
@@ -602,9 +674,20 @@ function buildForm(fields, values) {
         }
         var v = String(el.value || '').trim();
         out[f.key] = v;
-        if (f.required && v === '') missing.push(f.label);
+        if (f.required && v === '') {
+          missing.push(f.label);
+          if (!firstBadKey) {
+            firstBadKey = f.key;
+          }
+        }
       });
       if (missing.length) {
+        if (firstBadKey) {
+          if (useTabs) {
+            activateTab(sectionOf[firstBadKey]);
+          }
+          markBad(inputs[firstBadKey]);
+        }
         this.setError('请填写:' + missing.join('、'));
         return null;
       }

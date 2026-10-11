@@ -393,3 +393,18 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 }
 .cal-foot-btn:hover { border-color: #2f6fd6; color: #2f6fd6; }
 .cal-foot-btn.cal-clear:hover { border-color: #d9463e; color: #d9463e; }
+
+/* ---------- 表单标签页 ---------- */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid #e2e8f0; margin-bottom: 14px; }
+.tab {
+  padding: 9px 18px; cursor: pointer; color: #5a6b80; font-size: 14px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none;
+}
+.tab:hover { color: #2f6fd6; }
+.tab.active { color: #2f6fd6; border-bottom-color: #2f6fd6; font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: grid; }
+
+/* 校验失败红框 */
+input.bad, textarea.bad { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217, 70, 62, .15); }
+.dd.bad .dd-btn, .cal.bad input { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217, 70, 62, .15); }
