@@ -55,7 +55,7 @@ public class SetupWizard extends JDialog {
 
     private SetupWizard(boolean firstRun, int initialPort, String occupier, String initialUsername) {
         super((JFrame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
-                : "数智军营人员管理系统 - 设置", true);
+                : "数智军营人员管理系统 - 启动设置", true);
         this.firstRun = firstRun;
         buildUi(initialPort, occupier, initialUsername);
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -79,9 +79,12 @@ public class SetupWizard extends JDialog {
         gc.fill = GridBagConstraints.HORIZONTAL;
         int row = 0;
 
-        banner = new JLabel(occupier == null
-                ? "欢迎使用!首次运行需要进行简单设置。"
-                : "端口 " + initialPort + " 已被 " + occupier + " 占用,请换一个端口。");
+        banner = new JLabel(
+                occupier != null
+                        ? "端口 " + initialPort + " 已被 " + occupier + " 占用,请换一个端口。"
+                        : firstRun
+                        ? "欢迎使用!首次运行需要进行简单设置。"
+                        : "启动前可在此调整端口与管理员账号;密码留空表示不修改。");
         banner.setForeground(occupier == null ? new Color(0, 102, 153) : new Color(200, 40, 40));
         banner.setFont(banner.getFont().deriveFont(Font.BOLD, 18f));
         gc.gridx = 0;
@@ -176,7 +179,7 @@ public class SetupWizard extends JDialog {
         root.add(tip, gc);
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        JButton ok = new JButton(firstRun ? "保存并启动" : "保存设置");
+        JButton ok = new JButton(firstRun ? "保存并启动" : "启动系统");
         ok.setPreferredSize(new Dimension(140, 38));
         ok.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {

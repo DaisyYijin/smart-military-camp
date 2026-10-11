@@ -23,9 +23,9 @@ import java.util.List;
  * 启动流程:
  *  1. 读取 data/config.json 里用户选定的端口(首次默认 8080)
  *  2. 端口被本程序已运行实例占用 → 提示后直接打开浏览器,本次退出
- *  3. 端口被其他程序占用 → 弹出向导:显示占用进程,用户从空闲端口列表挑选或手动输入
- *  4. 首次运行(--setup 可强制) → 弹出向导:设置端口 + 管理员初始密码
- *  5. 启动 Spring Boot → 就绪后自动打开浏览器 → 挂载系统托盘(打开系统/改密码/退出)
+ *  3. 有界面模式:每次启动都弹出设置页(可改端口/账号;密码留空不改,
+ *     端口被其他程序占用时显示占用进程并给出可选空闲端口)
+ *  4. 启动 Spring Boot → 就绪后自动打开浏览器 → 挂载系统托盘(打开系统/改密码/退出)
  *
  * 命令行参数(其余参数原样传给 Spring Boot):
  *  --no-ui        无界面模式(无显示器的 Linux 服务器),全部提示走控制台
@@ -62,33 +62,26 @@ public class Launcher {
         char[] pendingPassword = null;
         boolean firstRun = !config.isSetupDone() || hasFlag(args, "--setup");
 
-        // ---- 端口决策 ----
-        if (!PortProbe.isFree(port)) {
-            if (PortProbe.isOurApp(port)) {
-                // 已有实例在跑:不重复启动,直接带用户进系统
-                String url = "http://127.0.0.1:" + port;
-                if (ui) {
-                    JOptionPane.showMessageDialog(null,
-                            "程序已经在运行(端口 " + port + "),即将在浏览器中打开系统。",
-                            "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
-                    TrayManager.openBrowser(url);
-                } else {
-                    System.out.println("[启动] 程序已在运行: " + url + " (端口被本程序占用,本次启动直接退出)");
-                }
-                System.exit(0);
-                return;
+        // ---- 端口决策与设置 ----
+        if (!PortProbe.isFree(port) && PortProbe.isOurApp(port)) {
+            // 已有实例在跑:不重复启动,直接带用户进系统
+            String url = "http://127.0.0.1:" + port;
+            if (ui) {
+                JOptionPane.showMessageDialog(null,
+                        "程序已经在运行(端口 " + port + "),即将在浏览器中打开系统。",
+                        "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
+                TrayManager.openBrowser(url);
+            } else {
+                System.out.println("[启动] 程序已在运行: " + url + " (端口被本程序占用,本次启动直接退出)");
             }
-            // 被其他程序占用
-            String occupier = PortProbe.describeOccupier(port);
-            if (!ui) {
-                System.err.println("[启动失败] 端口 " + port + " 被其他程序占用"
-                        + (occupier == null ? "" : ": " + occupier));
-                System.err.println("[建议] 可用端口: " + PortProbe.findFreePorts(port, 5));
-                System.err.println("[建议] 修改 data/config.json 中的 port,或用 --port=xxxx 指定端口后重试。");
-                System.exit(1);
-                return;
-            }
-            SetupWizard.Result r = SetupWizard.show(false, port, occupier, config.getAdminUser());
+            System.exit(0);
+            return;
+        }
+
+        if (ui) {
+            // 每次启动都显示设置页:端口冲突随时可改,忘记密码每次启动都能重置
+            String occupier = PortProbe.isFree(port) ? null : PortProbe.describeOccupier(port);
+            SetupWizard.Result r = SetupWizard.show(firstRun, port, occupier, config.getAdminUser());
             if (!r.confirmed) {
                 System.exit(0);
                 return;
@@ -100,22 +93,18 @@ public class Launcher {
             config.setAdminUser(r.username);
             config.setSetupDone(true);
             config.save();
-        } else if (firstRun) {
-            if (ui) {
-                SetupWizard.Result r = SetupWizard.show(true, port, null, config.getAdminUser());
-                if (!r.confirmed) {
-                    System.exit(0);
-                    return;
-                }
-                port = r.port;
-                pendingUsername = r.username;
-                pendingPassword = r.newPassword;
-                config.setPort(port);
-                config.setAdminUser(r.username);
-                config.setSetupDone(true);
-                config.save();
-            } else {
-                // 无界面模式无法弹向导:按默认管理员启动并明确提示
+        } else {
+            if (!PortProbe.isFree(port)) {
+                String occupier = PortProbe.describeOccupier(port);
+                System.err.println("[启动失败] 端口 " + port + " 被其他程序占用"
+                        + (occupier == null ? "" : ": " + occupier));
+                System.err.println("[建议] 可用端口: " + PortProbe.findFreePorts(port, 5));
+                System.err.println("[建议] 修改 data/config.json 中的 port,或用 --port=xxxx 指定端口后重试。");
+                System.exit(1);
+                return;
+            }
+            if (firstRun) {
+                // 无界面模式无法弹设置页:按默认管理员启动并明确提示
                 System.out.println("[提示] 无界面模式首次运行,未做初始设置。默认管理员 admin/admin123,请登录后尽快修改!");
                 config.setSetupDone(true);
                 config.save();
