@@ -127,7 +127,7 @@ function makeDateField() {
     return d;
   }
 
-  var input = h('input', { type: 'text', placeholder: '年/月/日,可点选或输入', autocomplete: 'off' });
+  var input = h('input', { type: 'text', placeholder: '年/月/日', autocomplete: 'off' });
   var iconBtn = h('button', {
     type: 'button', class: 'cal-icon', html: iconSvg('calendar'), title: '选择日期'
   });
