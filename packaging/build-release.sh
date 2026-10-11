@@ -44,7 +44,9 @@ if [ -d "$ZULU8/jre" ]; then
   W="$STAGE/数智军营-win64"
   mkdir -p "$W"
   cp "$JAR" "$W/"
-  cp "$PKG/templates/win/启动系统.bat" "$PKG/templates/win/使用说明.txt" "$W/"
+  cp "$PKG/templates/win/启动系统.bat" "$W/"
+  # 说明文本转 GBK:中文 Windows 记事本的默认编码,Win7/Win10 均正常显示
+  iconv -f UTF-8 -t GBK "$PKG/templates/win/使用说明.txt" > "$W/使用说明.txt" 2>/dev/null || cp "$PKG/templates/win/使用说明.txt" "$W/"
   cp -r "$ZULU8/jre" "$W/jre"
   zip_one "$W" "$DIST/数智军营-win64.zip"
   echo "    -> packaging/dist/数智军营-win64.zip"
