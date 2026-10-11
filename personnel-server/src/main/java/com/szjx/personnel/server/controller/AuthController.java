@@ -3,6 +3,8 @@ package com.szjx.personnel.server.controller;
 import com.szjx.personnel.server.auth.AuthInterceptor;
 import com.szjx.personnel.server.dao.AdminUserDao;
 import com.szjx.personnel.server.model.ApiResponse;
+import com.szjx.personnel.server.auth.OpLogInterceptor;
+import com.szjx.personnel.server.service.LogService;
 import com.szjx.personnel.server.service.LoginGuard;
 import com.szjx.personnel.server.service.PasswordUtil;
 import com.szjx.personnel.server.service.TokenManager;
@@ -28,18 +30,22 @@ public class AuthController {
     private final AdminUserDao adminUserDao;
     private final TokenManager tokenManager;
     private final LoginGuard loginGuard;
+    private final LogService logService;
 
     @Value("${app.auth.token-expire-hours:24}")
     private int tokenExpireHours;
 
-    public AuthController(AdminUserDao adminUserDao, TokenManager tokenManager, LoginGuard loginGuard) {
+    public AuthController(AdminUserDao adminUserDao, TokenManager tokenManager,
+                          LoginGuard loginGuard, LogService logService) {
         this.adminUserDao = adminUserDao;
         this.tokenManager = tokenManager;
         this.loginGuard = loginGuard;
+        this.logService = logService;
     }
 
     @PostMapping("/login")
-    public ApiResponse login(@RequestBody(required = false) Map<String, String> body) {
+    public ApiResponse login(@RequestBody(required = false) Map<String, String> body,
+                             javax.servlet.http.HttpServletRequest request) {
         if (body == null) {
             return ApiResponse.error(400, "请求体不能为空");
         }
@@ -56,6 +62,8 @@ public class AuthController {
         String hash = adminUserDao.findPasswordHash(key);
         if (hash == null || !PasswordUtil.verify(password, hash)) {
             loginGuard.recordFailure(key);
+            logService.record(key, "登录失败", "密码错误或账号不存在",
+                    OpLogInterceptor.clientIp(request));
             return ApiResponse.error("用户名或密码错误");
         }
         loginGuard.clear(key);
@@ -65,12 +73,17 @@ public class AuthController {
         data.put("token", token);
         data.put("displayName", adminUserDao.findDisplayName(key));
         data.put("username", key);
+        logService.record(key, "登录成功", "网页登录",
+                OpLogInterceptor.clientIp(request));
         return ApiResponse.ok(data);
     }
 
     @PostMapping("/logout")
-    public ApiResponse logout(@RequestHeader(value = AuthInterceptor.HEADER_TOKEN, required = false) String token) {
+    public ApiResponse logout(@RequestHeader(value = AuthInterceptor.HEADER_TOKEN, required = false) String token,
+                              javax.servlet.http.HttpServletRequest request) {
+        String username = tokenManager.validate(token);
         tokenManager.remove(token);
+        logService.record(username, "退出登录", "", OpLogInterceptor.clientIp(request));
         return ApiResponse.ok();
     }
 

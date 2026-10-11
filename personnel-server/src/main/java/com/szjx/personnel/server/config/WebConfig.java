@@ -1,6 +1,7 @@
 package com.szjx.personnel.server.config;
 
 import com.szjx.personnel.server.auth.AuthInterceptor;
+import com.szjx.personnel.server.auth.OpLogInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -14,9 +15,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
+    private final OpLogInterceptor opLogInterceptor;
 
-    public WebConfig(AuthInterceptor authInterceptor) {
+    public WebConfig(AuthInterceptor authInterceptor, OpLogInterceptor opLogInterceptor) {
         this.authInterceptor = authInterceptor;
+        this.opLogInterceptor = opLogInterceptor;
     }
 
     @Override
@@ -24,5 +27,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns("/api/auth/login", "/api/ping");
+        registry.addInterceptor(opLogInterceptor)
+                .addPathPatterns("/api/**")
+                .excludePathPatterns("/api/auth/**", "/api/ping", "/api/log");
     }
 }

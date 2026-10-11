@@ -178,6 +178,17 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
 
+        // 操作日志:谁、何时、从哪个 IP、做了什么
+        jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "username TEXT DEFAULT ''," +
+                "action TEXT DEFAULT ''," +
+                "detail TEXT DEFAULT ''," +
+                "ip TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_oplog_time ON op_log(created_at)");
+
         jdbc.execute("CREATE TABLE IF NOT EXISTS sys_dict (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "dict_type TEXT NOT NULL," +

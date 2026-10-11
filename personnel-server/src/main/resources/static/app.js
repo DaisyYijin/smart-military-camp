@@ -102,6 +102,7 @@ var ICON_PATHS = {
   database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
   chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
   chevronL: '<polyline points="15 18 9 12 15 6"/>',
   chevronR: '<polyline points="9 18 15 12 9 6"/>'
 };
@@ -561,24 +562,49 @@ function crudView(cfg) {
         });
       });
     }
-    var actions = {
-      load: load,
-      openNew: function () { openForm(null); },
-      getFilters: function () {
-        var f = collectFilters();
-        Object.keys(f).forEach(function (k) { if (f[k] === '') delete f[k]; });
-        return f;
+    // 导入:上传 xlsx(存在则更新,不存在则新增)
+    var importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
+    importInput.addEventListener('change', function () {
+      var f = importInput.files[0];
+      importInput.value = '';
+      if (!f) return;
+      var fd = new FormData();
+      fd.append('file', f);
+      toast('正在导入…', 'info');
+      POST(cfg.endpoint + '/import-excel', fd).then(function (r) {
+        var msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
+        if (r.errors && r.errors.length) {
+          msg += ';失败明细:' + r.errors.join('、');
+        }
+        toast(msg, r.failed ? 'info' : 'ok');
+        load();
+      }).catch(function (e) { toast(e.message, 'err'); });
+    });
+    toolbar.appendChild(importInput);
+    toolbar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '导入 Excel',
+      title: '导入 Excel(第一行为列头,建议用导出的文件作模板)',
+      onclick: function () { importInput.click(); }
+    }));
+    // 导出:仅导出勾选的记录;未勾选时提示
+    toolbar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '导出 Excel',
+      onclick: function () {
+        var ids = Object.keys(state.selected);
+        if (!ids.length) {
+          toast('请先勾选要导出的数据(可点表格左上角全选本页)', 'err');
+          return;
+        }
+        apiBlob(cfg.endpoint + '/export?ids=' + ids.join(',')).then(function (r) {
+          downloadBlob(r.blob, r.filename);
+        }).catch(function (e) { toast(e.message, 'err'); });
       }
-    };
-    if (cfg.toolbar) {
-      cfg.toolbar(toolbar, actions);
-    } else {
-      toolbar.appendChild(h('button', {
-        class: 'btn btn-primary',
-        text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
-        onclick: function () { openForm(null); }
-      }));
-    }
+    }));
+    toolbar.appendChild(h('button', {
+      class: 'btn btn-primary',
+      text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
+      onclick: function () { openForm(null); }
+    }));
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +
@@ -726,34 +752,7 @@ var personnelCfg = {
   delTip: function (r) { return '确定删除人员「' + r.name + '」吗?相关休假、体能、装备保管记录将一并解除关联,删除后不可恢复。'; },
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
-  toolbar: function (bar, act) {
-    var fileInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
-    fileInput.addEventListener('change', function () {
-      var f = fileInput.files[0];
-      fileInput.value = '';
-      if (!f) return;
-      var fd = new FormData();
-      fd.append('file', f);
-      toast('正在导入…', 'info');
-      POST('/api/personnel/import-excel', fd).then(function (r) {
-        toast('导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条', r.failed ? 'info' : 'ok');
-        act.load();
-      }).catch(function (e) { toast(e.message, 'err'); });
-    });
-    bar.appendChild(fileInput);
-    bar.appendChild(h('button', { class: 'btn btn-ghost', text: '导入 Excel', onclick: function () { fileInput.click(); } }));
-    bar.appendChild(h('button', {
-      class: 'btn btn-ghost', text: '导出 Excel',
-      onclick: function () {
-        var q = act.getFilters();
-        var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
-        apiBlob('/api/personnel/export' + (qs ? '?' + qs : '')).then(function (r) {
-          downloadBlob(r.blob, r.filename);
-        }).catch(function (e) { toast(e.message, 'err'); });
-      }
-    }));
-    bar.appendChild(h('button', { class: 'btn btn-primary', text: '＋ 新增人员', onclick: function () { act.openNew(); } }));
-  },
+  addLabel: '新增人员',
   form: [
     { section: '基本信息' },
     { key: 'name', label: '姓名', required: true },
@@ -848,7 +847,7 @@ function personnelPhotoBlock(row) {
 
 var equipmentCfg = {
   key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
-  clickKey: 'name',
+  clickKey: 'name', addLabel: '新增装备',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
@@ -879,7 +878,7 @@ var equipmentCfg = {
 
 var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
-  clickKey: 'name',
+  clickKey: 'name', addLabel: '新增物资',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
@@ -915,7 +914,7 @@ var materialCfg = {
 
 var vehicleCfg = {
   key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
-  clickKey: 'plateNo',
+  clickKey: 'plateNo', addLabel: '新增车辆',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
@@ -944,7 +943,7 @@ var vehicleCfg = {
 
 var leaveCfg = {
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
-  clickKey: 'personnelName',
+  clickKey: 'personnelName', addLabel: '新增休假',
   filters: [{ key: 'keyword', label: '检索' }],
   columns: [
     { key: 'personnelName', label: '姓名' },
@@ -969,7 +968,7 @@ var leaveCfg = {
 
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
-  clickKey: 'personnelName',
+  clickKey: 'personnelName', addLabel: '新增考核记录',
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'item', label: '项目', type: 'select', options: function () { return dictLabels('fitness_item'); } }
@@ -1247,6 +1246,60 @@ function statsView() {
       root.className = '';
       root.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
     });
+  }
+  return { render: render };
+}
+
+/* ================= 操作日志视图 ================= */
+
+function logView() {
+  var state = { page: 1, size: 20, total: 0, keyword: '' };
+  var root = h('div');
+  var pagerBox = h('div');
+  var table = h('table', { class: 'grid' });
+
+  function load() {
+    var q = { page: state.page, size: state.size };
+    if (state.keyword) {
+      q.keyword = state.keyword;
+    }
+    var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
+    GET('/api/log?' + qs).then(function (pageData) {
+      var rows = (pageData && pageData.list) || [];
+      state.total = (pageData && pageData.total) || 0;
+      table.innerHTML = '<thead><tr><th style="width:150px">时间</th><th style="width:110px">用户</th>'
+        + '<th style="width:130px">IP</th><th style="width:120px">操作</th><th>详情</th></tr></thead><tbody>'
+        + (rows.length ? rows.map(function (r) {
+            return '<tr><td>' + esc(r.created_at) + '</td>'
+              + '<td>' + esc(r.username || '-') + '</td>'
+              + '<td>' + esc(r.ip || '-') + '</td>'
+              + '<td>' + esc(r.action) + '</td>'
+              + '<td>' + esc(r.detail || '') + '</td></tr>';
+          }).join('') : '<tr><td colspan="5" class="empty-row">暂无日志</td></tr>')
+        + '</tbody>';
+      pagerBox.innerHTML = '';
+      pagerBox.appendChild(renderPager(state, function (p) { state.page = p; load(); }));
+    }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  function render(container) {
+    var kw = h('input', { type: 'text', 'data-fkey': 'kw', placeholder: '用户/操作/IP 关键字,回车搜索' });
+    kw.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { state.keyword = kw.value.trim(); state.page = 1; load(); }
+    });
+    root.appendChild(h('div', { class: 'panel' },
+      h('div', { class: 'toolbar' },
+        h('div', { class: 'field-inline' }, h('label', { text: '检索' }), kw),
+        h('button', {
+          class: 'btn btn-ghost', text: '查询',
+          onclick: function () { state.keyword = kw.value.trim(); state.page = 1; load(); }
+        }),
+        h('div', { class: 'spacer' }),
+        h('span', { style: 'color:#8a97a8;font-size:13px', text: '自动记录:登录/登出/增删改/导入导出/备份' })),
+      h('div', { class: 'table-wrap' }, table),
+      pagerBox));
+    container.appendChild(root);
+    load();
   }
   return { render: render };
 }
@@ -1578,6 +1631,7 @@ function renderShell() {
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
     else if (view === 'stats') { titleEl.textContent = '统计报表'; comp = statsView(); }
     else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
+    else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
     else {
       var cfg = null;
       MODULES.forEach(function (m) { if (m.key === view) cfg = m; });
@@ -1602,6 +1656,7 @@ function renderShell() {
   addMenu('department', 'building', '部门管理');
   addMenu('dict', 'book', '数据字典');
   addMenu('backup', 'database', '备份恢复');
+  addMenu('log', 'fileText', '操作日志');
   addMenu('stats', 'chart', '统计报表');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
