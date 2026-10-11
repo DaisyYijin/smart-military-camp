@@ -362,7 +362,12 @@ function makeDropdown(opts, placeholder) {
 document.addEventListener('click', function () {
   $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
 });
-document.addEventListener('scroll', function () {
+document.addEventListener('scroll', function (e) {
+  // 下拉列表/日历面板自身的滚动不关闭;只有页面或弹窗滚动才关闭(避免面板错位)
+  var t = e.target;
+  if (t && t.closest && t.closest('.dd.open, .cal.open')) {
+    return;
+  }
   $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
 }, true);
 document.addEventListener('keydown', function (e) {
