@@ -986,6 +986,9 @@ function crudView(cfg) {
         }).catch(function (e) { toast(e.message, 'err'); });
       }
     }));
+    if (cfg.toolbarExtra) {
+      cfg.toolbarExtra(toolbar, actions);
+    }
     toolbar.appendChild(h('button', {
       class: 'btn btn-primary',
       text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
@@ -1292,6 +1295,121 @@ var REWARD_SUB = {
   ]
 };
 
+/** 批量导入照片:选目录(含子目录),按文件名中的身份证号匹配人员并设置照片 */
+function batchImportPhotos(fileList) {
+  var files = [];
+  for (var i = 0; i < fileList.length; i++) {
+    var f = fileList[i];
+    var ext = (f.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
+      files.push(f);
+    }
+  }
+  if (!files.length) {
+    toast('所选目录中没有 jpg/png 图片', 'err');
+    return;
+  }
+
+  var bar = h('div', { class: 'pg-bar' }, h('div', { class: 'pg-fill', style: 'width:0%' }));
+  var status = h('div', { style: 'margin:10px 0 4px;font-size:13px;color:#66788c', text: '正在读取人员列表…' });
+  var summary = h('div', { style: 'font-size:13px;line-height:1.9;white-space:pre-wrap' });
+  var m = openModal({
+    title: '批量导入照片',
+    body: h('div', {}, status, bar, summary),
+    footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })]
+  });
+
+  function extractId(name) {
+    var m18 = /(^|\D)(\d{17}[0-9Xx])(?=\D|$)/.exec(name);
+    if (m18) {
+      return m18[2].toUpperCase();
+    }
+    var m15 = /(^|\D)(\d{15})(?=\D|$)/.exec(name);
+    if (m15) {
+      return m15[2];
+    }
+    return null;
+  }
+
+  function readAsDataURL(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error('读取失败')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  GET('/api/personnel?page=1&size=100000').then(function (pageData) {
+    var byCard = {};
+    (pageData && pageData.list ? pageData.list : []).forEach(function (p) {
+      var card = (p.idCard || '').trim().toUpperCase();
+      if (card) {
+        byCard[card] = p;
+      }
+    });
+
+    var okCount = 0, overwriteCount = 0, missCount = 0, failCount = 0;
+    var missed = [];
+    var failed = [];
+
+    var chain = Promise.resolve();
+    var idx = 0;
+    files.forEach(function (f) {
+      chain = chain.then(function () {
+        var fid = extractId(f.name);
+        var person = fid ? byCard[fid] : null;
+        if (!person) {
+          missCount++;
+          if (missed.length < 10) {
+            missed.push(f.name);
+          }
+          return null;
+        }
+        if (f.size > 5 * 1024 * 1024) {
+          failCount++;
+          failed.push(f.name + '(超过5MB)');
+          return null;
+        }
+        return readAsDataURL(f).then(function (dataURL) {
+          return PUT('/api/personnel/' + person.id, { photoBase64: dataURL }).then(function () {
+            if (person.photo) {
+              overwriteCount++;
+            }
+            okCount++;
+          });
+        }).catch(function () {
+          failCount++;
+          failed.push(f.name);
+        });
+      }).then(function () {
+        idx++;
+        status.textContent = '进度:' + idx + ' / ' + files.length;
+        bar.firstChild.style.width = Math.round(idx / files.length * 100) + '%';
+      });
+    });
+
+    chain.then(function () {
+      var text = '完成:成功设置 ' + okCount + ' 张照片'
+        + (overwriteCount ? '(其中覆盖旧照 ' + overwriteCount + ' 张)' : '');
+      if (missCount) {
+        text += '\n未匹配到人员:' + missCount + ' 个文件(文件名需含身份证号)';
+        missed.forEach(function (n) { text += '\n  · ' + n; });
+      }
+      if (failCount) {
+        text += '\n失败:' + failCount + ' 个';
+        failed.slice(0, 5).forEach(function (n) { text += '\n  · ' + n; });
+      }
+      summary.textContent = text;
+      status.textContent = '全部处理完毕';
+      toast('照片导入完成:成功 ' + okCount + ',未匹配 ' + missCount + ',失败 ' + failCount,
+        failCount || missCount ? 'info' : 'ok');
+    });
+  }).catch(function (e) {
+    status.textContent = '读取人员列表失败:' + e.message;
+  });
+}
+
 function statusOptions() {
   var l = dictLabels('personnel_status');
   return l.length ? l : ['在职', '休假', '培训', '借调', '离职', '其他'];
@@ -1328,6 +1446,23 @@ var personnelCfg = {
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
   addLabel: '新增人员',
+  toolbarExtra: function (bar, act) {
+    var dirInput = h('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none' });
+    dirInput.setAttribute('webkitdirectory', '');
+    dirInput.addEventListener('change', function () {
+      var files = dirInput.files;
+      dirInput.value = '';
+      if (files && files.length) {
+        batchImportPhotos(files);
+      }
+    });
+    bar.appendChild(dirInput);
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '导入照片',
+      title: '选择文件夹(含子目录),按文件名中的身份证号自动匹配人员照片',
+      onclick: function () { dirInput.click(); }
+    }));
+  },
   form: [
     { section: '基本信息' },
     { key: 'name', label: '姓名', required: true },
