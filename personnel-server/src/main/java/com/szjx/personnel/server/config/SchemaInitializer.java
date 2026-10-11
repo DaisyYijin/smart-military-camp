@@ -206,6 +206,24 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_reward_punish_person ON reward_punish(personnel_id)");
 
+        // 家庭成员(统一:配偶/子女/父母/岳父母等)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS family_member (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "relationship TEXT DEFAULT ''," +
+                "name TEXT DEFAULT ''," +
+                "id_card TEXT DEFAULT ''," +
+                "gender TEXT DEFAULT ''," +
+                "birth_date TEXT DEFAULT ''," +
+                "political_status TEXT DEFAULT ''," +
+                "work_info TEXT DEFAULT ''," +
+                "phone TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_family_member_person ON family_member(personnel_id)");
+
         // 子女信息(人员的子记录)
         jdbc.execute("CREATE TABLE IF NOT EXISTS child_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

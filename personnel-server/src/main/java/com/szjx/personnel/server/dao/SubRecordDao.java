@@ -81,7 +81,7 @@ public class SubRecordDao {
 
     private void checkTable(String table) {
         if (!"position_history".equals(table) && !"reward_punish".equals(table)
-                && !"child_info".equals(table)) {
+                && !"child_info".equals(table) && !"family_member".equals(table)) {
             throw new IllegalArgumentException("非法的子记录表: " + table);
         }
     }

@@ -41,6 +41,11 @@ public class SubRecordController {
 
         ORDER.put("children", "birth_date");
         COLS.put("children", new String[]{"name", "id_card", "gender", "birth_date", "remark"});
+
+        TABLES.put("family", "family_member");
+        ORDER.put("family", "id");
+        COLS.put("family", new String[]{"relationship", "name", "id_card", "gender",
+                "birth_date", "political_status", "work_info", "phone", "remark"});
     }
 
     private final SubRecordDao dao;
@@ -122,6 +127,18 @@ public class SubRecordController {
             if (f.get("post").isEmpty()) {
                 return "请填写担任职务";
             }
+        } else if ("family".equals(kind)) {
+            if (f.get("relationship").isEmpty()) {
+                return "请选择与本人的关系";
+            }
+            if (f.get("name").isEmpty()) {
+                return "请填写姓名";
+            }
+            String idc2 = f.get("id_card");
+            if (!idc2.isEmpty() && !idc2.matches("[0-9]{17}[0-9Xx]") && !idc2.matches("[0-9]{15}")) {
+                return "身份证号格式不正确(15 或 18 位)";
+            }
+            return null;
         } else if ("children".equals(kind)) {
             if (f.get("name").isEmpty()) {
                 return "请填写子女姓名";
