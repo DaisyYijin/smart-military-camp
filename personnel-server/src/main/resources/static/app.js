@@ -1304,8 +1304,8 @@ function backupView() {
         var manualCard = h('div', { class: 'chart-panel' },
           h('h3', { text: '手动备份' }),
           h('div', { class: 'form-inline' },
-            h('button', { class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () { manualGroup.setAll(true); } }),
-            h('button', { class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () { manualGroup.setAll(false); } }),
+            h('button', { class: 'btn btn-ghost', text: '全选', onclick: function () { manualGroup.setAll(true); } }),
+            h('button', { class: 'btn btn-ghost', text: '全不选', onclick: function () { manualGroup.setAll(false); } }),
             h('button', {
               class: 'btn btn-primary', text: '立即备份',
               onclick: function () {

@@ -17,12 +17,13 @@ input:focus, select:focus, textarea:focus { border-color: #2f6fd6; box-shadow: 0
 input[type="date"] { padding: 6px 8px; }
 textarea { resize: vertical; }
 
-/* ---------- 按钮 ---------- */
+/* ---------- 按钮(统一尺寸体系:标准 34px 高 / 小号 28px 高) ---------- */
 .btn {
   display: inline-flex; align-items: center; gap: 5px; justify-content: center;
   border: 1px solid transparent; border-radius: 4px; cursor: pointer;
-  padding: 7px 16px; font-size: 14px; line-height: 1.4; user-select: none;
+  height: 34px; padding: 0 18px; font-size: 14px; line-height: 1; user-select: none;
   white-space: nowrap; transition: background .15s, border-color .15s;
+  vertical-align: middle;
 }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: #2f6fd6; color: #fff; }
@@ -31,7 +32,7 @@ textarea { resize: vertical; }
 .btn-ghost:hover:not(:disabled) { border-color: #2f6fd6; color: #2f6fd6; }
 .btn-danger { background: #d9463e; color: #fff; }
 .btn-danger:hover:not(:disabled) { background: #c23b34; }
-.btn-sm { padding: 3px 10px; font-size: 13px; }
+.btn-sm { height: 28px; padding: 0 12px; font-size: 13px; }
 .btn-link { background: none; border: none; color: #2f6fd6; cursor: pointer; padding: 2px 4px; font-size: 13px; }
 .btn-link:hover { text-decoration: underline; }
 .btn-link.danger { color: #d9463e; }
@@ -57,7 +58,7 @@ textarea { resize: vertical; }
 .login-card label { display: block; font-size: 13px; color: #66788c; margin-bottom: 6px; }
 .login-card input { width: 100%; }
 .login-error { color: #d9463e; font-size: 13px; min-height: 18px; margin-bottom: 8px; }
-.login-btn { width: 100%; padding: 10px; font-size: 15px; }
+.login-btn { width: 100%; height: 42px; padding: 0 10px; font-size: 15px; }
 .login-tip { text-align: center; color: #a6b1bf; font-size: 12px; margin-top: 18px; }
 
 /* ---------- 主布局 ---------- */
