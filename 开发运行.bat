@@ -2,8 +2,12 @@
 rem =============================================
 rem  DEV RUN: build latest code and start the app
 rem  in THIS project folder (uses .\data).
+rem  Dev mode enabled:
+rem    - Web files (HTML/CSS/JS) are read from the
+rem      source folder: edit + press F5 in browser,
+rem      NO restart needed.
+rem    - Java backend changes: re-run this bat.
 rem  Stop the app with the tray icon or Ctrl+C.
-rem  No packaging needed - test first, package later.
 rem =============================================
 cd /d "%~dp0"
 set "JAVA_HOME=%~dp0.tools\zulu8.84.0.15-ca-jdk8.0.442-win_x64"
@@ -17,5 +21,5 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [2/2] Starting app...
-"%JAVA_HOME%\bin\java.exe" -jar personnel-server\target\personnel-server.jar
+echo [2/2] Starting app (dev mode)...
+"%JAVA_HOME%\bin\java.exe" -jar personnel-server\target\personnel-server.jar --dev

@@ -31,6 +31,8 @@ import java.util.List;
  *  --no-ui        无界面模式(无显示器的 Linux 服务器),全部提示走控制台
  *  --port=8080    本次启动端口,优先于配置文件
  *  --setup        强制重新弹出设置向导
+ *  --dev          开发模式:网页文件直接读源码目录(改 HTML/CSS/JS 后浏览器刷新即生效,
+ *                 无需重启;Java 后端改动仍需重新构建运行)
  */
 public class Launcher {
 
@@ -115,6 +117,13 @@ public class Launcher {
         System.out.println("[启动] 正在启动服务,端口 " + port + " ...(首次启动可能需要十几秒)");
         List<String> runArgs = new ArrayList<String>();
         runArgs.add("--server.port=" + port);
+        if (hasFlag(args, "--dev")) {
+            // 开发模式:静态资源优先读源码目录且不缓存,前端改动刷新即生效
+            runArgs.add("--spring.web.resources.static-locations="
+                    + "file:personnel-server/src/main/resources/static/,classpath:/static/");
+            runArgs.add("--spring.web.resources.cache.cachecontrol.no-store=true");
+            System.out.println("[开发模式] 网页文件直接读取源码目录,修改后浏览器刷新即可生效");
+        }
         runArgs.addAll(springArgs);
         ConfigurableApplicationContext ctx = new SpringApplicationBuilder(PersonnelServerApplication.class)
                 .headless(!ui)
@@ -236,7 +245,8 @@ public class Launcher {
     private static List<String> passthroughArgs(String[] args) {
         List<String> rest = new ArrayList<String>();
         for (String a : args) {
-            if (a == null || "--no-ui".equals(a) || "--setup".equals(a) || a.startsWith("--port=")) {
+            if (a == null || "--no-ui".equals(a) || "--setup".equals(a) || "--dev".equals(a)
+                    || a.startsWith("--port=")) {
                 continue;
             }
             rest.add(a);
