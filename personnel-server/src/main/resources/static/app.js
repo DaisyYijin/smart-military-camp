@@ -986,6 +986,15 @@ function crudView(cfg) {
         }).catch(function (e) { toast(e.message, 'err'); });
       }
     }));
+    var actions = {
+      load: load,
+      openNew: function () { openForm(null); },
+      getFilters: function () {
+        var f = collectFilters();
+        Object.keys(f).forEach(function (k) { if (f[k] === '') delete f[k]; });
+        return f;
+      }
+    };
     if (cfg.toolbarExtra) {
       cfg.toolbarExtra(toolbar, actions);
     }
