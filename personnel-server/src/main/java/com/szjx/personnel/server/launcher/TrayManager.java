@@ -127,6 +127,8 @@ public final class TrayManager {
         JPanel panel = new JPanel();
         JPasswordField pw1 = new JPasswordField(16);
         JPasswordField pw2 = new JPasswordField(16);
+        pw1.setFont(pw1.getFont().deriveFont(18f));
+        pw2.setFont(pw2.getFont().deriveFont(18f));
         panel.add(new JLabel("新密码(至少6位):"));
         panel.add(pw1);
         panel.add(new JLabel("确认密码:"));
