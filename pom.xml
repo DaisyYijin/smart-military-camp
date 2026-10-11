@@ -10,11 +10,10 @@
     <packaging>pom</packaging>
 
     <name>数智军营人员管理系统</name>
-    <description>C/S 人员管理系统:Spring Boot 服务端 + Swing 桌面客户端,支持 arm64 麒麟与 Win7</description>
+    <description>内网离线人员管理系统:Spring Boot + SQLite 单文件服务端,双击运行,浏览器访问,支持 Win7+/Linux(x64/arm64 麒麟)</description>
 
     <modules>
         <module>personnel-server</module>
-        <module>personnel-client</module>
     </modules>
 
     <properties>
