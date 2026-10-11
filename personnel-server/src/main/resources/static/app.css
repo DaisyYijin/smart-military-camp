@@ -256,6 +256,21 @@ table.grid td.actions { white-space: nowrap; }
 
 .loading-inline { color: #97a4b5; padding: 40px 0; text-align: center; }
 
+/* ---------- 备份页 ---------- */
+.chk-list { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 6px 0 2px; }
+.chk-list label {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  color: #445262; background: #f2f6fc; border: 1px solid #dbe4ee;
+  padding: 6px 12px; border-radius: 5px; user-select: none;
+}
+.chk-list label:hover { border-color: #2f6fd6; }
+.chk-list input { margin: 0; }
+.form-inline input[type="number"] { width: 90px; }
+.form-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.form-inline label { color: #66788c; font-size: 13px; }
+.backup-tip { background: #fdf6e8; border: 1px solid #f0dcae; color: #8a6100;
+  border-radius: 6px; padding: 10px 14px; font-size: 13px; line-height: 1.7; margin: 10px 0; }
+
 /* 响应式小屏 */
 @media (max-width: 900px) {
   .sidebar { width: 64px; }

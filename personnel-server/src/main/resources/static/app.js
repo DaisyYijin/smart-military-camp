@@ -1088,6 +1088,234 @@ function statsView() {
   return { render: render };
 }
 
+/* ================= 备份恢复视图 ================= */
+
+function fmtSize(bytes) {
+  if (bytes == null) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function backupView() {
+  var root = h('div', { class: 'loading-inline', text: '加载中…' });
+  var MODULES = [];   // [{key,label}]
+
+  function moduleLabel(key) {
+    for (var i = 0; i < MODULES.length; i++) {
+      if (MODULES[i].key === key) return MODULES[i].label;
+    }
+    return key;
+  }
+
+  /** 模块勾选组;返回 {el, get, setAll} */
+  function checkGroup(checkedKeys) {
+    var boxes = [];
+    var wrap = h('div', { class: 'chk-list' });
+    MODULES.forEach(function (m) {
+      var box = h('input', { type: 'checkbox', value: m.key });
+      box.checked = checkedKeys.indexOf(m.key) >= 0;
+      boxes.push(box);
+      wrap.appendChild(h('label', {}, box, m.label));
+    });
+    return {
+      el: wrap,
+      get: function () {
+        return boxes.filter(function (b) { return b.checked; })
+          .map(function (b) { return b.value; });
+      },
+      setAll: function (on) { boxes.forEach(function (b) { b.checked = !!on; }); }
+    };
+  }
+
+  function moduleBadges(mods) {
+    if (!mods) return '<span class="badge gray">未知</span>';
+    return Object.keys(mods).map(function (k) {
+      var rows = 0;
+      var tables = mods[k] || {};
+      Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
+      return '<span class="badge blue" title="' + rows + ' 条">' + esc(moduleLabel(k)) + '</span>';
+    }).join(' ');
+  }
+
+  function openRestore(bk) {
+    var avail = bk.modules ? Object.keys(bk.modules) : [];
+    if (!avail.length) {
+      toast('该备份没有模块信息,无法恢复', 'err');
+      return;
+    }
+    var group = checkGroup(avail);
+    var body = h('div');
+    body.appendChild(h('div', { class: 'backup-tip', text: '恢复会先清空所选模块的现有数据,再写入备份内容(每个模块独立执行)。例如只勾选“人员管理”则只覆盖人员,部门、装备等其他模块不受影响。管理员账号与密码不受影响。' }));
+    body.appendChild(h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:6px', text: '选择要恢复的模块:' }));
+    body.appendChild(group.el);
+    var m = openModal({
+      title: '恢复备份 - ' + bk.createdText,
+      body: body,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-danger', text: '开始恢复',
+          onclick: function () {
+            var mods = group.get();
+            if (!mods.length) { toast('请至少勾选一个模块', 'err'); return; }
+            POST('/api/backup/restore', { name: bk.name, modules: mods }).then(function (r) {
+              m.close();
+              var parts = (r.restored || []).map(function (x) {
+                var rows = 0;
+                var tables = x.tables || {};
+                Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
+                return moduleLabel(x.module) + '(' + rows + '条)';
+              });
+              toast('恢复完成:' + parts.join('、') + (r.photos ? ',照片' + r.photos + '张' : ''), 'ok');
+              refreshAll();
+              loadList();
+            }).catch(function (e) { toast(e.message, 'err'); });
+          }
+        })
+      ]
+    });
+  }
+
+  var listTable = h('table', { class: 'grid' });
+  listTable.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]');
+    if (!b) return;
+    var name = b.getAttribute('data-name');
+    var act = b.getAttribute('data-act');
+    if (act === 'restore') {
+      var bk = lastList.filter(function (x) { return x.name === name; })[0];
+      if (bk) openRestore(bk);
+    } else if (act === 'download') {
+      apiBlob('/api/backup/download?name=' + encodeURIComponent(name))
+        .then(function (r) { downloadBlob(r.blob, r.filename); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    } else if (act === 'delete') {
+      confirmBox('确定删除备份文件 ' + name + ' 吗?删除后不可恢复。', true).then(function (yes) {
+        if (!yes) return;
+        POST('/api/backup/delete', { name: name }).then(function () {
+          toast('已删除'); loadList();
+        }).catch(function (e) { toast(e.message, 'err'); });
+      });
+    }
+  });
+
+  var lastList = [];
+  function loadList() {
+    GET('/api/backup/list').then(function (list) {
+      lastList = list || [];
+      listTable.innerHTML = '<thead><tr><th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th style="width:170px">操作</th></tr></thead><tbody>' +
+        (lastList.length ? lastList.map(function (bk) {
+          return '<tr><td>' + esc(bk.createdText) + '</td>' +
+            '<td>' + (bk.auto ? '<span class="badge green">自动</span>' : '<span class="badge blue">手动</span>') + '</td>' +
+            '<td>' + moduleBadges(bk.modules) + '</td>' +
+            '<td>' + fmtSize(bk.size) + '</td>' +
+            '<td title="' + esc(bk.name) + '">' + esc(bk.name) + '</td>' +
+            '<td class="actions">' +
+            '<button class="btn-link" data-act="restore" data-name="' + esc(bk.name) + '">恢复</button>' +
+            '<button class="btn-link" data-act="download" data-name="' + esc(bk.name) + '">下载</button>' +
+            '<button class="btn-link danger" data-act="delete" data-name="' + esc(bk.name) + '">删除</button>' +
+            '</td></tr>';
+        }).join('') : '<tr><td colspan="6" class="empty-row">暂无备份</td></tr>') + '</tbody>';
+    }).catch(function (e) {
+      toast(e.message, 'err');
+    });
+  }
+
+  function render(container) {
+    container.appendChild(root);
+    Promise.all([GET('/api/backup/modules'), GET('/api/backup/settings')])
+      .then(function (res) {
+        MODULES = res[0] || [];
+        var settings = res[1] || {};
+        root.className = '';
+        root.innerHTML = '';
+
+        /* ---- 自动备份设置 ---- */
+        var enabledBox = h('input', { type: 'checkbox' });
+        enabledBox.checked = !!settings.enabled;
+        var intervalInput = h('input', { type: 'number', min: '1', max: '720', step: '1' });
+        intervalInput.value = settings.intervalHours || 24;
+        var keepInput = h('input', { type: 'number', min: '1', max: '200', step: '1' });
+        keepInput.value = settings.keepCount || 10;
+        var autoGroup = checkGroup(settings.modules && settings.modules.length
+          ? settings.modules : MODULES.map(function (m) { return m.key; }));
+        var statusLine = h('div', { style: 'color:#66788c;font-size:13px;margin-top:10px' });
+        function syncStatusLine() {
+          statusLine.textContent = settings.enabled
+            ? (settings.autoLastRun
+              ? '上次自动备份:' + new Date(settings.autoLastRun).toLocaleString() + '(到点后自动执行)'
+              : '已开启,尚未执行过自动备份(到点后自动执行)')
+            : '自动备份当前:未开启';
+        }
+        syncStatusLine();
+
+        var autoCard = h('div', { class: 'chart-panel' },
+          h('h3', { text: '自动备份' }),
+          h('div', { class: 'form-inline' },
+            h('label', {}, enabledBox, ' 启用自动备份'),
+            h('label', {}, '每 '), intervalInput, h('span', { text: ' 小时备份一次' }),
+            h('label', {}, '自动备份保留最近 '), keepInput, h('span', { text: ' 份(超出自动删除)' })),
+          h('div', { style: 'font-size:13px;color:#66788c;margin:8px 0 2px', text: '自动备份包含的模块:' }),
+          autoGroup.el,
+          statusLine,
+          h('div', { style: 'margin-top:12px' },
+            h('button', {
+              class: 'btn btn-primary', text: '保存设置',
+              onclick: function () {
+                if (!autoGroup.get().length) { toast('自动备份至少选择一个模块', 'err'); return; }
+                POST('/api/backup/settings', {
+                  enabled: enabledBox.checked,
+                  intervalHours: Number(intervalInput.value) || 24,
+                  keepCount: Number(keepInput.value) || 10,
+                  modules: autoGroup.get()
+                }).then(function (s) {
+                  settings = s; syncStatusLine();
+                  toast('自动备份设置已保存');
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            })));
+
+        /* ---- 手动备份 ---- */
+        var manualGroup = checkGroup(MODULES.map(function (m) { return m.key; }));
+        var manualCard = h('div', { class: 'chart-panel' },
+          h('h3', { text: '手动备份' }),
+          h('div', { class: 'form-inline' },
+            h('button', { class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () { manualGroup.setAll(true); } }),
+            h('button', { class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () { manualGroup.setAll(false); } }),
+            h('button', {
+              class: 'btn btn-primary', text: '⚡ 立即备份',
+              onclick: function () {
+                var mods = manualGroup.get();
+                if (!mods.length) { toast('请至少选择一个要备份的模块', 'err'); return; }
+                toast('正在备份…', 'info');
+                POST('/api/backup/run', { modules: mods }).then(function (r) {
+                  toast('备份完成:' + fmtSize(r.size) + '(' + Object.keys(r.modules).map(moduleLabel).join('、') + ')');
+                  loadList();
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            })),
+          manualGroup.el,
+          h('div', { class: 'backup-tip', text: '备份文件保存在本机程序的 data/backup/ 文件夹;可下载后拷到 U 盘保存。恢复时可选只恢复其中部分模块。' }));
+
+        /* ---- 备份列表 ---- */
+        var listCard = h('div', { class: 'chart-panel', style: 'padding:0' },
+          h('div', { class: 'table-wrap' }, listTable));
+
+        root.appendChild(autoCard);
+        root.appendChild(manualCard);
+        listCard.insertBefore(h('h3', { style: 'padding:18px 20px 0;margin-bottom:10px', text: '备份文件' }), listCard.firstChild);
+        root.appendChild(listCard);
+        loadList();
+      })
+      .catch(function (e) {
+        root.className = '';
+        root.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
+      });
+  }
+  return { render: render };
+}
+
 /* ================= 登录页 ================= */
 
 function renderLogin(msg) {
@@ -1180,6 +1408,7 @@ function renderShell() {
     if (view === 'department') { titleEl.textContent = '部门管理'; comp = departmentView(); }
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
     else if (view === 'stats') { titleEl.textContent = '统计报表'; comp = statsView(); }
+    else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
     else {
       var cfg = null;
       MODULES.forEach(function (m) { if (m.key === view) cfg = m; });
@@ -1200,6 +1429,7 @@ function renderShell() {
   MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   addMenu('department', '🏢', '部门管理');
   addMenu('dict', '📚', '数据字典');
+  addMenu('backup', '💾', '备份恢复');
   addMenu('stats', '📊', '统计报表');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
