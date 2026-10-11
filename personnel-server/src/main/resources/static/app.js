@@ -107,6 +107,84 @@ var ICON_PATHS = {
   chevronR: '<polyline points="9 18 15 12 9 6"/>'
 };
 
+/**
+ * 自绘下拉组件:返回一个"按钮即输入控件"(可读写 .value、可监听 change),
+ * 列表为页面内 DOM,不创建浏览器弹窗表面(避免核显环境空白卡顿)。
+ */
+function makeDropdown(opts, placeholder) {
+  var items = (opts || []).map(function (o) {
+    if (o && o.v !== undefined) {
+      return { v: String(o.v), t: String(o.l !== undefined ? o.l : o.v) };
+    }
+    return { v: String(o), t: String(o) };
+  });
+  var ph = placeholder || '请选择';
+  // 调用方已带空值项(如"全部")时不再重复追加占位
+  if (!items.length || items[0].v !== '') {
+    items.unshift({ v: '', t: ph });
+  }
+
+  var cur = '';
+  var txt = h('span', { class: 'txt ph', text: ph });
+  var arrow = h('span', { class: 'dd-arrow', text: '▾' });
+  var btn = h('button', { type: 'button', class: 'dd-btn' }, txt, arrow);
+  var list = h('div', { class: 'dd-list' });
+
+  var wrap = h('div', { class: 'dd' }, btn, list);
+
+  items.forEach(function (it) {
+    list.appendChild(h('div', {
+      class: 'dd-item', text: it.t, 'data-v': it.v,
+      onclick: (function (v) {
+        return function () {
+          wrap.value = v;
+          wrap.classList.remove('open');
+          wrap.dispatchEvent(new CustomEvent('change'));
+        };
+      })(it.v)
+    }));
+  });
+
+  function refresh() {
+    var found = null;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].v === cur) { found = items[i]; break; }
+    }
+    txt.textContent = found ? found.t : ph;
+    txt.classList.toggle('ph', cur === '');
+    $all('.dd-item', list).forEach(function (el2) {
+      el2.classList.toggle('cur', el2.getAttribute('data-v') === cur);
+    });
+  }
+
+  // value 定义在容器上:容器被插入布局时按钮与列表保持一体
+  Object.defineProperty(wrap, 'value', {
+    get: function () { return cur; },
+    set: function (v) { cur = v == null ? '' : String(v); refresh(); }
+  });
+
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var r = wrap.getBoundingClientRect();
+    var downward = r.bottom + 272 <= window.innerHeight || r.top < 300;
+    wrap.classList.toggle('up', !downward);
+    wrap.classList.toggle('open');
+  });
+  list.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  return wrap;
+}
+
+// 全局:点空白/按 Esc 关闭所有下拉(一次注册,避免泄漏)
+document.addEventListener('click', function () {
+  $all('.dd.open').forEach(function (d) { d.classList.remove('open'); });
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    $all('.dd.open').forEach(function (d) { d.classList.remove('open'); });
+  }
+});
+
 /** 生成扁平线性 SVG 图标(继承文字颜色) */
 function iconSvg(key) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
@@ -277,28 +355,19 @@ function buildForm(fields, values) {
     var val = values[f.key];
     var el;
     if (f.type === 'select' || f.type === 'personnel' || f.type === 'dept') {
-      el = h('select', {});
+      var ddOpts;
       if (f.type === 'select') {
-        var options = (typeof f.options === 'function' ? f.options() : f.options) || [];
-        el.appendChild(h('option', { value: '', text: '请选择' }));
-        options.forEach(function (o) {
-          var v = (o && o.v !== undefined) ? o.v : o;
-          var l = (o && o.l !== undefined) ? o.l : o;
-          el.appendChild(h('option', { value: String(v), text: String(l) }));
-        });
+        ddOpts = (typeof f.options === 'function' ? f.options() : f.options) || [];
       } else if (f.type === 'personnel') {
-        el.appendChild(h('option', { value: '', text: '请选择人员' }));
-        Ctx.personnelOptions.forEach(function (p) {
-          var label = p.name + (p.departmentName ? ' (' + p.departmentName + ')' : '');
-          el.appendChild(h('option', { value: String(p.id), text: label }));
+        ddOpts = Ctx.personnelOptions.map(function (p) {
+          return { v: String(p.id), l: p.name + (p.departmentName ? ' (' + p.departmentName + ')' : '') };
         });
       } else {
-        el.appendChild(h('option', { value: '', text: f.required ? '请选择部门' : '(不指定)' }));
-        Ctx.deptFlat.forEach(function (d) {
-          var prefix = new Array(d.depth + 1).join('　');
-          el.appendChild(h('option', { value: String(d.id), text: prefix + d.name }));
+        ddOpts = Ctx.deptFlat.map(function (d) {
+          return { v: String(d.id), l: new Array(d.depth + 1).join('　') + d.name };
         });
       }
+      el = makeDropdown(ddOpts, f.type === 'dept' && !f.required ? '(不指定)' : '请选择');
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else if (f.type === 'textarea') {
       el = h('textarea', { placeholder: f.placeholder || '' });
@@ -551,10 +620,12 @@ function crudView(cfg) {
       inline.appendChild(h('label', { text: f.label }));
       var el;
       if (f.type === 'select') {
-        el = h('select', { 'data-fkey': f.key });
-        el.appendChild(h('option', { value: '', text: '全部' }));
-        var opts = (typeof f.options === 'function' ? f.options() : f.options) || [];
-        opts.forEach(function (o) { el.appendChild(h('option', { value: String(o), text: String(o) })); });
+        var fopts = (typeof f.options === 'function' ? f.options() : f.options) || [];
+        var ddItems = [{ v: '', l: '全部' }].concat(fopts.map(function (o) {
+          return { v: String(o), l: String(o) };
+        }));
+        el = makeDropdown(ddItems, '全部');
+        el.setAttribute('data-fkey', f.key);
         el.addEventListener('change', function () { state.page = 1; load(); });
       } else {
         el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '关键字,回车搜索' });
