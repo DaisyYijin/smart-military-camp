@@ -40,7 +40,7 @@ public class SubRecordController {
                 COLS.put("reward-punish", new String[]{"kind", "occur_date", "reason", "content", "remark"});
 
         ORDER.put("children", "birth_date");
-        COLS.put("children", new String[]{"name", "gender", "birth_date", "remark"});
+        COLS.put("children", new String[]{"name", "id_card", "gender", "birth_date", "remark"});
     }
 
     private final SubRecordDao dao;
@@ -126,8 +126,9 @@ public class SubRecordController {
             if (f.get("name").isEmpty()) {
                 return "请填写子女姓名";
             }
-            if (!f.get("gender").isEmpty() && !"男".equals(f.get("gender")) && !"女".equals(f.get("gender"))) {
-                return "性别只能是 男 或 女";
+            String idc = f.get("id_card");
+            if (!idc.isEmpty() && !idc.matches("[0-9]{17}[0-9Xx]") && !idc.matches("[0-9]{15}")) {
+                return "身份证号格式不正确(15 或 18 位)";
             }
             return null;
         } else {

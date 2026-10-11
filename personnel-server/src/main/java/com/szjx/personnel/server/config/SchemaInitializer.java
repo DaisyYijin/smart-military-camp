@@ -211,6 +211,7 @@ public class SchemaInitializer implements CommandLineRunner {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "name TEXT DEFAULT ''," +
+                "id_card TEXT DEFAULT ''," +
                 "gender TEXT DEFAULT ''," +
                 "birth_date TEXT DEFAULT ''," +
                 "remark TEXT DEFAULT ''," +
@@ -218,6 +219,12 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_child_info_person ON child_info(personnel_id)");
+        // 老库升级:补充 id_card 列(新库已含)
+        try {
+            jdbc.execute("ALTER TABLE child_info ADD COLUMN id_card TEXT DEFAULT ''");
+        } catch (Exception ignore) {
+            // 列已存在则跳过
+        }
 
         // 操作日志:谁、何时、从哪个 IP、做了什么
         jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +

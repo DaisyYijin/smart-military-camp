@@ -1091,7 +1091,8 @@ function openDetailModal(cfg, row, act) {
                   + r.place + '　任 ' + r.post);
               } else if (title === '家庭信息') {
                 line = esc('子女:' + r.name + (r.gender ? '(' + r.gender + ')' : '')
-                  + (r.birth_date ? '　' + r.birth_date : ''));
+                  + (r.birth_date ? '　' + r.birth_date : '')
+                  + (r.id_card ? '　身份证 ' + r.id_card : ''));
               } else {
                 line = esc((r.occur_date || '—') + '　') + badge(r.kind)
                   + esc('　' + r.reason + '　' + r.content);
@@ -1144,6 +1145,51 @@ function openDetailModal(cfg, row, act) {
 }
 
 /** 人员子记录面板:表单标签页内的可编辑列表(任职经历/奖惩情况) */
+/** 从身份证号解析出生日期与性别 */
+function parseIdCard(idCard) {
+  var id = String(idCard || '').trim().toUpperCase();
+  var m18 = /^\d{17}[0-9X]$/.test(id);
+  var m15 = /^\d{15}$/.test(id);
+  if (!m18 && !m15) {
+    return null;
+  }
+  var y, mo, d, genderDigit;
+  if (m18) {
+    y = +id.slice(6, 10); mo = +id.slice(10, 12); d = +id.slice(12, 14);
+    genderDigit = +id.charAt(16);
+  } else {
+    y = 1900 + +id.slice(6, 8); mo = +id.slice(8, 10); d = +id.slice(10, 12);
+    genderDigit = +id.charAt(14);
+  }
+  var dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) {
+    return null;
+  }
+  function p2(n) { return n < 10 ? '0' + n : '' + n; }
+  return {
+    birthDate: y + '-' + p2(mo) + '-' + p2(d),
+    gender: genderDigit % 2 === 1 ? '男' : '女'
+  };
+}
+
+/** 根据出生日期计算年龄 */
+function calcAge(birthDate) {
+  if (!birthDate) { return ''; }
+  var d = parseIdCard('000000' + birthDate.replace(/-/g, '') + '0');
+  if (!d) {
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(birthDate);
+    if (!m) { return ''; }
+    d = { birthDate: birthDate };
+  }
+  var now = new Date();
+  var b = m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  if (!b || b.getFullYear() < 1900) { return ''; }
+  var age = now.getFullYear() - b.getFullYear();
+  var mo = now.getMonth() - b.getMonth();
+  if (mo < 0 || (mo === 0 && now.getDate() < b.getDate())) { age--; }
+  return age >= 0 && age < 150 ? String(age) : '';
+}
+
 var subUid = 0;
 
 /**
@@ -1171,7 +1217,7 @@ function subRecordsPanel(kind, personnelId, opt) {
   function rowValid(r) {
     for (var i = 0; i < opt.columns.length; i++) {
       var c = opt.columns[i];
-      if (c.required && !String(r[c.key] || '').trim()) {
+      if (!c.virtual && !c.auto && c.required && !String(r[c.key] || '').trim()) {
         return false;
       }
     }
@@ -1204,14 +1250,26 @@ function subRecordsPanel(kind, personnelId, opt) {
   }
 
   function fmtCell(r, c) {
-    var v = r[c.key] || '';
-    if (!String(v).trim()) {
+    if (c.virtual) {
+      if (c.key === '__age') {
+        var age = calcAge(r.birth_date);
+        return age ? esc(age) + ' 岁' : '<span style="color:#c6cfda">—</span>';
+      }
+      return '';
+    }
+    if (c.auto) {
+      // 身份证自动填充列:值来自身份证解析,背景淡蓝标识
+      var v = r[c.key] || '';
+      return v ? '<span style="color:#1a5d3a">' + esc(v) + '</span>' : '<span style="color:#c6cfda">—</span>';
+    }
+    var v2 = r[c.key] || '';
+    if (!String(v2).trim()) {
       return c.required ? '<span class="cell-empty-hint">双击填写</span>' : '<span style="color:#c6cfda">—</span>';
     }
     if (c.render) {
       return c.render(r);
     }
-    return esc(v);
+    return esc(v2);
   }
 
   function render() {
@@ -1242,6 +1300,9 @@ function subRecordsPanel(kind, personnelId, opt) {
   }
 
   function openEditor(r, c) {
+    if (c.virtual || c.auto) {
+      return; // 虚拟列(年龄)和自动填充列(性别/出生日期)不可手动编辑
+    }
     var td = table.querySelector('td[data-row="' + r.__id + '"][data-col="' + c.key + '"]');
     if (!td) {
       return;
@@ -1291,6 +1352,14 @@ function subRecordsPanel(kind, personnelId, opt) {
       return;
     }
     r[c.key] = value;
+    // 身份证号失焦:自动填充性别和出生日期
+    if (c.key === 'id_card' && value) {
+      var parsed = parseIdCard(value);
+      if (parsed) {
+        r.gender = parsed.gender;
+        r.birth_date = parsed.birthDate;
+      }
+    }
     saveRow(r);
   }
 
@@ -1408,9 +1477,11 @@ var POSITION_SUB = {
 var CHILD_SUB = {
   name: '子女', kind: 'children',
   columns: [
-    { key: 'name', label: '姓名', required: true, w: 100 },
-    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'], w: 70 },
-    { key: 'birth_date', label: '出生日期', type: 'date', w: 105 },
+    { key: 'name', label: '姓名', required: true, w: 90 },
+    { key: 'id_card', label: '身份证号', w: 160 },
+    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'], w: 60, auto: true },
+    { key: 'birth_date', label: '出生日期', type: 'date', w: 100, auto: true },
+    { key: '__age', label: '年龄', w: 55, virtual: true },
     { key: 'remark', label: '备注' }
   ]
 };
