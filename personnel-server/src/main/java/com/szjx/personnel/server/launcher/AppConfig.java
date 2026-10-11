@@ -14,6 +14,7 @@ public class AppConfig {
 
     private int port = 8080;
     private boolean setupDone = false;
+    private String adminUser = "admin";
 
     public int getPort() {
         return port;
@@ -29,6 +30,14 @@ public class AppConfig {
 
     public void setSetupDone(boolean setupDone) {
         this.setupDone = setupDone;
+    }
+
+    public String getAdminUser() {
+        return adminUser == null || adminUser.trim().isEmpty() ? "admin" : adminUser.trim();
+    }
+
+    public void setAdminUser(String adminUser) {
+        this.adminUser = adminUser == null ? "admin" : adminUser.trim();
     }
 
     public static AppConfig load() {

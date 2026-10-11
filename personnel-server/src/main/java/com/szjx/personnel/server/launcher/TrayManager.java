@@ -37,7 +37,8 @@ public final class TrayManager {
     private TrayManager() {
     }
 
-    public static void install(final int port, final String lanUrl, final PasswordChanger changer) {
+    public static void install(final int port, final String lanUrl, final String adminUser,
+                               final PasswordChanger changer) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 try {
@@ -64,7 +65,7 @@ public final class TrayManager {
                     menu.addSeparator();
                     menu.add(item("修改管理员密码", new ActionListener() {
                         public void actionPerformed(java.awt.event.ActionEvent e) {
-                            showPasswordDialog(changer);
+                            showPasswordDialog(adminUser, changer);
                         }
                     }));
                     menu.addSeparator();
@@ -122,16 +123,17 @@ public final class TrayManager {
         }
     }
 
-    private static void showPasswordDialog(final PasswordChanger changer) {
+    private static void showPasswordDialog(final String adminUser, final PasswordChanger changer) {
         JPanel panel = new JPanel();
-        JPasswordField pw1 = new JPasswordField(14);
-        JPasswordField pw2 = new JPasswordField(14);
+        JPasswordField pw1 = new JPasswordField(16);
+        JPasswordField pw2 = new JPasswordField(16);
         panel.add(new JLabel("新密码(至少6位):"));
         panel.add(pw1);
         panel.add(new JLabel("确认密码:"));
         panel.add(pw2);
         while (true) {
-            int ok = JOptionPane.showConfirmDialog(null, panel, "修改管理员(admin)密码",
+            int ok = JOptionPane.showConfirmDialog(null, panel,
+                    "修改管理员(" + adminUser + ")密码",
                     JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (ok != JOptionPane.OK_OPTION) {
                 return;

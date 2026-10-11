@@ -47,6 +47,7 @@ public class Launcher {
             } catch (Exception ignore) {
                 // 保持默认外观即可
             }
+            SetupWizard.applyGlobalFontSize();
         }
 
         File dataDir = new File("data");
@@ -56,6 +57,8 @@ public class Launcher {
 
         AppConfig config = AppConfig.load();
         int port = portOverride != null ? portOverride : config.getPort();
+        final String oldAdminUser = config.getAdminUser(); // 向导改账号时的改名源
+        String pendingUsername = oldAdminUser;
         char[] pendingPassword = null;
         boolean firstRun = !config.isSetupDone() || hasFlag(args, "--setup");
 
@@ -85,26 +88,30 @@ public class Launcher {
                 System.exit(1);
                 return;
             }
-            SetupWizard.Result r = SetupWizard.show(false, port, occupier);
+            SetupWizard.Result r = SetupWizard.show(false, port, occupier, config.getAdminUser());
             if (!r.confirmed) {
                 System.exit(0);
                 return;
             }
             port = r.port;
+            pendingUsername = r.username;
             pendingPassword = r.newPassword;
             config.setPort(port);
+            config.setAdminUser(r.username);
             config.setSetupDone(true);
             config.save();
         } else if (firstRun) {
             if (ui) {
-                SetupWizard.Result r = SetupWizard.show(true, port, null);
+                SetupWizard.Result r = SetupWizard.show(true, port, null, config.getAdminUser());
                 if (!r.confirmed) {
                     System.exit(0);
                     return;
                 }
                 port = r.port;
+                pendingUsername = r.username;
                 pendingPassword = r.newPassword;
                 config.setPort(port);
+                config.setAdminUser(r.username);
                 config.setSetupDone(true);
                 config.save();
             } else {
@@ -134,38 +141,42 @@ public class Launcher {
             return;
         }
 
-        // ---- 应用向导里设置的密码(首次运行时数据库刚初始化为 admin123,这里覆盖为用户设置的密码) ----
-        if (pendingPassword != null && pendingPassword.length > 0) {
-            try {
-                ctx.getBean(AdminUserDao.class)
-                        .updatePassword("admin", PasswordUtil.hash(new String(pendingPassword)));
-                System.out.println("[启动] 管理员密码已按设置更新。");
-            } catch (Exception e) {
-                System.err.println("[启动] 管理员密码设置失败: " + e.getMessage());
-                if (ui) {
-                    JOptionPane.showMessageDialog(null,
-                            "管理员密码设置失败:" + e.getMessage() + "\n当前仍为默认密码,可登录后在托盘菜单修改。",
-                            "密码设置失败", JOptionPane.WARNING_MESSAGE);
-                }
+        // ---- 应用向导里设置的账号与密码(首次运行时数据库刚初始化为 admin/admin123,这里覆盖) ----
+        final String adminUser = pendingUsername;
+        try {
+            AdminUserDao adminDao = ctx.getBean(AdminUserDao.class);
+            if (!oldAdminUser.equals(adminUser)) {
+                adminDao.rename(oldAdminUser, adminUser); // 旧名不存在时为 0 行,无副作用
+            }
+            if (pendingPassword != null && pendingPassword.length > 0) {
+                adminDao.updatePassword(adminUser, PasswordUtil.hash(new String(pendingPassword)));
+            }
+            System.out.println("[启动] 管理员账号已按设置更新: " + adminUser);
+        } catch (Exception e) {
+            System.err.println("[启动] 管理员账号/密码设置失败: " + e.getMessage());
+            if (ui) {
+                JOptionPane.showMessageDialog(null,
+                        "管理员账号设置失败:" + e.getMessage() + "\n可登录后在托盘菜单修改。",
+                        "账号设置失败", JOptionPane.WARNING_MESSAGE);
             }
         }
 
         String lanUrl = "http://" + firstLanIp() + ":" + port;
-        printBanner(port, lanUrl);
+        printBanner(port, lanUrl, adminUser);
 
         if (ui) {
             if (firstRun) {
                 JOptionPane.showMessageDialog(null,
-                        "初始设置完成,系统已启动!\n\n本机浏览器即将自动打开,请使用账号 admin 和你设置的密码登录。\n"
-                                + "局域网其他电脑访问地址:" + lanUrl,
+                        "初始设置完成,系统已启动!\n\n本机浏览器即将自动打开,请使用账号 " + adminUser
+                                + " 和你设置的密码登录。\n局域网其他电脑访问地址:" + lanUrl,
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
             }
             TrayManager.openBrowser("http://127.0.0.1:" + port);
-            TrayManager.install(port, lanUrl, new TrayManager.PasswordChanger() {
+            TrayManager.install(port, lanUrl, adminUser, new TrayManager.PasswordChanger() {
                 public String change(String newPassword) {
                     try {
                         ctx.getBean(AdminUserDao.class)
-                                .updatePassword("admin", PasswordUtil.hash(newPassword));
+                                .updatePassword(adminUser, PasswordUtil.hash(newPassword));
                         return null;
                     } catch (Exception e) {
                         return e.getMessage();
@@ -176,12 +187,12 @@ public class Launcher {
         // main 返回后由 Tomcat 工作线程保持进程存活
     }
 
-    private static void printBanner(int port, String lanUrl) {
+    private static void printBanner(int port, String lanUrl, String adminUser) {
         System.out.println("======================================================");
         System.out.println("  数智军营人员管理系统 已启动");
         System.out.println("  本机访问:   http://127.0.0.1:" + port);
         System.out.println("  局域网访问: " + lanUrl);
-        System.out.println("  管理账号:   admin(密码为初始设置/托盘修改后的密码)");
+        System.out.println("  管理账号:   " + adminUser + "(密码为初始设置/托盘修改后的密码)");
         System.out.println("  退出方式:   托盘图标右键 → 退出(无界面模式按 Ctrl+C)");
         System.out.println("======================================================");
     }

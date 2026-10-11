@@ -10,7 +10,9 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.WindowConstants;
+import javax.swing.plaf.FontUIResource;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -22,16 +24,20 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 首次启动/端口冲突时的设置向导:
+ * - 设置管理员账号与密码(首次必填,之后账号可改、密码留空表示不修改)
  * - 选择端口(可检测占用、可从空闲端口列表挑选,选定后持久化)
- * - 设置管理员密码(首次必填,之后留空表示不修改)
  */
 public class SetupWizard extends JDialog {
 
     public static class Result {
         public int port;
+        public String username;
         public char[] newPassword; // null/空 = 不修改
         public boolean confirmed = false;
     }
@@ -40,17 +46,18 @@ public class SetupWizard extends JDialog {
     private final Result result = new Result();
 
     private JTextField portField;
+    private JTextField userField;
     private JLabel statusLabel;
     private JPanel suggestionPanel;
     private JPasswordField pwField;
     private JPasswordField pw2Field;
     private JLabel banner;
 
-    private SetupWizard(boolean firstRun, int initialPort, String occupier) {
+    private SetupWizard(boolean firstRun, int initialPort, String occupier, String initialUsername) {
         super((JFrame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
-                : "数智军营人员管理系统 - 端口设置", true);
+                : "数智军营人员管理系统 - 设置", true);
         this.firstRun = firstRun;
-        buildUi(initialPort, occupier);
+        buildUi(initialPort, occupier, initialUsername);
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
@@ -59,15 +66,16 @@ public class SetupWizard extends JDialog {
             }
         });
         pack();
-        setMinimumSize(new Dimension(460, getHeight()));
+        setMinimumSize(new Dimension(660, getHeight()));
+        setSize(Math.max(660, getWidth()), getHeight());
         setLocationRelativeTo(null);
     }
 
-    private void buildUi(int initialPort, String occupier) {
+    private void buildUi(int initialPort, String occupier, String initialUsername) {
         JPanel root = new JPanel(new GridBagLayout());
-        root.setBorder(BorderFactory.createEmptyBorder(14, 16, 14, 16));
+        root.setBorder(BorderFactory.createEmptyBorder(20, 26, 20, 26));
         GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(5, 6, 5, 6);
+        gc.insets = new Insets(8, 10, 8, 10);
         gc.fill = GridBagConstraints.HORIZONTAL;
         int row = 0;
 
@@ -75,7 +83,7 @@ public class SetupWizard extends JDialog {
                 ? "欢迎使用!首次运行需要进行简单设置。"
                 : "端口 " + initialPort + " 已被 " + occupier + " 占用,请换一个端口。");
         banner.setForeground(occupier == null ? new Color(0, 102, 153) : new Color(200, 40, 40));
-        banner.setFont(banner.getFont().deriveFont(Font.BOLD));
+        banner.setFont(banner.getFont().deriveFont(Font.BOLD, 18f));
         gc.gridx = 0;
         gc.gridy = row++;
         gc.gridwidth = 3;
@@ -85,11 +93,13 @@ public class SetupWizard extends JDialog {
         gc.gridy = row++;
         gc.gridx = 0;
         root.add(new JLabel("服务端口:"), gc);
-        portField = new JTextField(String.valueOf(initialPort), 8);
+        portField = new JTextField(String.valueOf(initialPort), 10);
+        portField.setPreferredSize(new Dimension(140, 34));
         gc.gridx = 1;
         gc.weightx = 1;
         root.add(portField, gc);
         JButton checkBtn = new JButton("检测占用");
+        checkBtn.setPreferredSize(new Dimension(120, 34));
         checkBtn.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 checkPort();
@@ -100,68 +110,81 @@ public class SetupWizard extends JDialog {
         root.add(checkBtn, gc);
 
         statusLabel = new JLabel(" ");
-        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.PLAIN, 15f));
         gc.gridx = 1;
         gc.gridy = row++;
         root.add(statusLabel, gc);
 
-        suggestionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        suggestionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         suggestionPanel.setVisible(false);
         gc.gridx = 1;
         gc.gridy = row++;
         root.add(suggestionPanel, gc);
 
-        JSeparatorLike sep1 = new JSeparatorLike();
-        gc.gridx = 0;
-        gc.gridwidth = 3;
-        gc.gridy = row++;
-        root.add(sep1, gc);
-        gc.gridwidth = 1;
+        root.add(new javax.swing.JSeparator(), gbcRow(gc, row++));
 
-        JLabel pwTitle = new JLabel(firstRun
-                ? "设置管理员密码(登录账号 admin,至少 6 位)"
-                : "修改管理员密码(账号 admin,留空表示不修改)");
-        pwTitle.setFont(pwTitle.getFont().deriveFont(Font.BOLD));
+        JLabel pwTitle = new JLabel("管理员账号设置");
+        pwTitle.setFont(pwTitle.getFont().deriveFont(Font.BOLD, 17f));
         gc.gridx = 0;
-        gc.gridy = row++;
         gc.gridwidth = 3;
+        gc.gridy = row++;
         root.add(pwTitle, gc);
         gc.gridwidth = 1;
 
         gc.gridy = row++;
         gc.gridx = 0;
-        root.add(new JLabel(firstRun ? "密码:" : "新密码:"), gc);
+        root.add(new JLabel("管理员账号:"), gc);
+        userField = new JTextField(initialUsername == null ? "admin" : initialUsername, 14);
+        userField.setPreferredSize(new Dimension(220, 34));
+        gc.gridx = 1;
+        root.add(userField, gc);
+        JLabel userHint = new JLabel("登录时使用,如 zhangwei 或 admin");
+        userHint.setFont(userHint.getFont().deriveFont(Font.PLAIN, 13f));
+        userHint.setForeground(Color.GRAY);
+        gc.gridx = 2;
+        root.add(userHint, gc);
+
+        gc.gridy = row++;
+        gc.gridx = 0;
+        root.add(new JLabel(firstRun ? "设置密码:" : "新密码:"), gc);
         pwField = new JPasswordField(14);
+        pwField.setPreferredSize(new Dimension(220, 34));
         gc.gridx = 1;
         root.add(pwField, gc);
+        JLabel pwHint = new JLabel(firstRun ? "至少 6 位,务必牢记" : "留空表示不修改");
+        pwHint.setFont(pwHint.getFont().deriveFont(Font.PLAIN, 13f));
+        pwHint.setForeground(Color.GRAY);
+        gc.gridx = 2;
+        root.add(pwHint, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
         root.add(new JLabel("确认密码:"), gc);
         pw2Field = new JPasswordField(14);
+        pw2Field.setPreferredSize(new Dimension(220, 34));
         gc.gridx = 1;
         root.add(pw2Field, gc);
 
-        JLabel tip = new JLabel("<html><body style='width:380px'>提示:局域网其他电脑可通过 "
-                + "http://本机IP:端口 访问本系统;首次启动 Windows 防火墙弹窗时请点“允许访问”。"
-                + "</body></html>");
-        tip.setFont(tip.getFont().deriveFont(Font.PLAIN, 12f));
+        JLabel tip = new JLabel("<html><body style='width:520px'>提示:局域网其他电脑可通过 "
+                + "http://本机IP:端口 访问本系统;首次启动 Windows 防火墙弹窗时请点“允许访问”; "
+                + "忘记密码可随时在右下角托盘菜单中重置。</body></html>");
+        tip.setFont(tip.getFont().deriveFont(Font.PLAIN, 14f));
         tip.setForeground(Color.GRAY);
         gc.gridx = 0;
         gc.gridwidth = 3;
         gc.gridy = row++;
         root.add(tip, gc);
 
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         JButton ok = new JButton(firstRun ? "保存并启动" : "保存设置");
-        ok.setPreferredSize(new Dimension(110, 28));
+        ok.setPreferredSize(new Dimension(140, 38));
         ok.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 trySave();
             }
         });
         JButton quit = new JButton("退出");
-        quit.setPreferredSize(new Dimension(80, 28));
+        quit.setPreferredSize(new Dimension(100, 38));
         quit.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 cancel();
@@ -176,6 +199,14 @@ public class SetupWizard extends JDialog {
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(root, BorderLayout.CENTER);
         getRootPane().setDefaultButton(ok);
+    }
+
+    private GridBagConstraints gbcRow(GridBagConstraints gc, int row) {
+        gc.gridx = 0;
+        gc.gridwidth = 3;
+        gc.gridy = row;
+        gc.weightx = 0;
+        return gc;
     }
 
     private void checkPort() {
@@ -196,21 +227,21 @@ public class SetupWizard extends JDialog {
         }
         suggestionPanel.revalidate();
         pack();
+        setSize(Math.max(660, getWidth()), getHeight());
     }
 
     /** 端口被占用时,扫描一组空闲端口生成"改用 xxxx"按钮,用户挑哪个就填哪个 */
     private void fillSuggestions(int occupiedPort) {
         suggestionPanel.removeAll();
-        java.util.List<Integer> free = PortProbe.findFreePorts(occupiedPort, 5);
+        List<Integer> free = PortProbe.findFreePorts(occupiedPort, 5);
         if (free.isEmpty()) {
             suggestionPanel.setVisible(false);
             return;
         }
-        JLabel label = new JLabel("可改用:");
-        suggestionPanel.add(label);
+        suggestionPanel.add(new JLabel("可改用:"));
         for (final Integer p : free) {
             JButton b = new JButton(String.valueOf(p));
-            b.setMargin(new Insets(1, 6, 1, 6));
+            b.setMargin(new Insets(2, 8, 2, 8));
             b.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     portField.setText(String.valueOf(p));
@@ -253,6 +284,19 @@ public class SetupWizard extends JDialog {
             return;
         }
 
+        String username = userField.getText().trim();
+        if (username.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "请设置管理员账号(登录时使用)。",
+                    "账号不能为空", JOptionPane.WARNING_MESSAGE);
+            userField.requestFocus();
+            return;
+        }
+        if (username.length() > 30) {
+            JOptionPane.showMessageDialog(this, "账号名过长(最多 30 个字符)。", "账号无效",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         String pw = new String(pwField.getPassword());
         String pw2 = new String(pw2Field.getPassword());
         if (firstRun && pw.length() < 6) {
@@ -276,6 +320,7 @@ public class SetupWizard extends JDialog {
         }
 
         result.port = port;
+        result.username = username;
         result.newPassword = pw.length() == 0 ? null : pw.toCharArray();
         result.confirmed = true;
         dispose();
@@ -292,8 +337,8 @@ public class SetupWizard extends JDialog {
     }
 
     /** 在 EDT 上弹出向导并阻塞调用线程,直到用户保存或退出 */
-    public static Result show(final boolean firstRun, final int initialPort, final String occupier)
-            throws Exception {
+    public static Result show(final boolean firstRun, final int initialPort, final String occupier,
+                              final String initialUsername) throws Exception {
         if (GraphicsEnvironment.isHeadless()) {
             // 无显示环境兜底:直接取消,由调用方按无界面模式处理
             Result r = new Result();
@@ -303,16 +348,34 @@ public class SetupWizard extends JDialog {
         final Result[] holder = new Result[1];
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
-                holder[0] = new SetupWizard(firstRun, initialPort, occupier).showDialog();
+                holder[0] = new SetupWizard(firstRun, initialPort, occupier, initialUsername).showDialog();
             }
         });
         return holder[0];
     }
 
-    /** 简单分隔线(避免引入更多组件) */
-    private static class JSeparatorLike extends javax.swing.JSeparator {
-        JSeparatorLike() {
-            setPreferredSize(new Dimension(1, 1));
+    /**
+     * 放大 Swing 全局字体(所有界面元素按 1.35 倍放大,最小 15 号),
+     * 须在创建任何界面组件之前调用。
+     */
+    public static void applyGlobalFontSize() {
+        float scale = 1.35f;
+        int minSize = 15;
+        List<Object[]> toSet = new ArrayList<Object[]>();
+        for (Map.Entry<Object, Object> e : UIManager.getLookAndFeelDefaults().entrySet()) {
+            Object key = e.getKey();
+            if (key == null || !(key instanceof String) || !((String) key).endsWith(".font")) {
+                continue;
+            }
+            Object val = e.getValue();
+            if (val instanceof Font) {
+                Font f = (Font) val;
+                int newSize = Math.max(minSize, Math.round(f.getSize() * scale));
+                toSet.add(new Object[]{key, new FontUIResource(f.getName(), f.getStyle(), newSize)});
+            }
+        }
+        for (Object[] kv : toSet) {
+            UIManager.put(kv[0], kv[1]);
         }
     }
 }

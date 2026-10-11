@@ -37,6 +37,11 @@ public class AdminUserDao {
                 passwordHash, username);
     }
 
+    /** 改管理员账号名;返回受影响行数(0 = 原账号不存在,可能已改过名) */
+    public int rename(String from, String to) {
+        return jdbc.update("UPDATE admin_user SET username=? WHERE username=?", to, from);
+    }
+
     public long count() {
         Long n = jdbc.queryForObject("SELECT COUNT(*) FROM admin_user", Long.class);
         return n == null ? 0 : n;
