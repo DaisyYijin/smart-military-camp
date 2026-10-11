@@ -174,7 +174,10 @@ function makeDateField() {
     var clearBtn = h('button', { type: 'button', class: 'cal-foot-btn cal-clear', text: '清空' });
     panel = h('div', { class: 'cal-panel' },
       h('div', { class: 'cal-head' }, prevBtn, title, nextBtn),
-      h('div', { class: 'cal-week' }, '一', '二', '三', '四', '五', '六', '日'),
+      h('div', { class: 'cal-week' },
+        h('span', { text: '一' }), h('span', { text: '二' }), h('span', { text: '三' }),
+        h('span', { text: '四' }), h('span', { text: '五' }), h('span', { text: '六' }),
+        h('span', { text: '日' })),
       grid,
       h('div', { class: 'cal-foot' }, todayBtn, clearBtn));
     wrap.appendChild(panel);
@@ -238,9 +241,15 @@ function makeDateField() {
     view.y = t.getFullYear();
     view.m = t.getMonth();
     renderPanel();
-    var r = wrap.getBoundingClientRect();
-    wrap.classList.toggle('up', r.bottom + 330 > window.innerHeight && r.top > 350);
+    // 视口定位:absolute 在弹窗滚动区域内会被边界裁剪,fixed 不会
+    var r = input.getBoundingClientRect();
     wrap.classList.add('open');
+    var ph = panel.offsetHeight || 330;
+    var below = r.bottom + 6 + ph <= window.innerHeight;
+    panel.style.position = 'fixed';
+    panel.style.width = '262px';
+    panel.style.left = Math.min(r.left, window.innerWidth - 274) + 'px';
+    panel.style.top = (below ? r.bottom + 6 : Math.max(6, r.top - ph - 6)) + 'px';
   }
 
   iconBtn.addEventListener('click', function (e) {
@@ -329,10 +338,20 @@ function makeDropdown(opts, placeholder) {
 
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    var r = wrap.getBoundingClientRect();
-    var downward = r.bottom + 272 <= window.innerHeight || r.top < 300;
-    wrap.classList.toggle('up', !downward);
-    wrap.classList.toggle('open');
+    var opening = !wrap.classList.contains('open');
+    $all('.dd.open, .cal.open').forEach(function (d) { if (d !== wrap) d.classList.remove('open'); });
+    wrap.classList.toggle('open', opening);
+    if (!opening) {
+      return;
+    }
+    // 视口定位:避免被弹窗滚动区域裁剪
+    var r = btn.getBoundingClientRect();
+    list.style.position = 'fixed';
+    list.style.left = r.left + 'px';
+    list.style.width = r.width + 'px';
+    var lh = list.offsetHeight || 200;
+    var below = r.bottom + 6 + lh <= window.innerHeight;
+    list.style.top = (below ? r.bottom + 5 : Math.max(6, r.top - lh - 5)) + 'px';
   });
   list.addEventListener('click', function (e) { e.stopPropagation(); });
 
@@ -343,6 +362,9 @@ function makeDropdown(opts, placeholder) {
 document.addEventListener('click', function () {
   $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
 });
+document.addEventListener('scroll', function () {
+  $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
+}, true);
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
     $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
