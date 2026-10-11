@@ -178,6 +178,34 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
 
+        // 任职经历(人员的子记录)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS position_history (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "start_date TEXT DEFAULT ''," +
+                "end_date TEXT DEFAULT ''," +
+                "place TEXT DEFAULT ''," +
+                "post TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_position_history_person ON position_history(personnel_id)");
+
+        // 奖惩情况(人员的子记录,kind 区分 奖励/处分)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS reward_punish (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "kind TEXT DEFAULT ''," +
+                "occur_date TEXT DEFAULT ''," +
+                "reason TEXT DEFAULT ''," +
+                "content TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_reward_punish_person ON reward_punish(personnel_id)");
+
         // 操作日志:谁、何时、从哪个 IP、做了什么
         jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

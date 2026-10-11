@@ -80,10 +80,10 @@ function confirmBox(msg, danger) {
 function badge(text) {
   var t = text || '';
   var cls = 'badge';
-  if (/在职|正常|优秀|已归还|启用/.test(t)) cls += ' green';
+  if (/在职|正常|优秀|已归还|启用|奖励/.test(t)) cls += ' green';
   else if (/休假|借调|培训|良好|使用中/.test(t)) cls += ' blue';
   else if (/维修|保养|及格|预警|缺货/.test(t)) cls += ' orange';
-  else if (/离职|报废|不及格|损坏|停用/.test(t)) cls += ' red';
+  else if (/离职|报废|不及格|损坏|停用|处分/.test(t)) cls += ' red';
   else if (/其他|未填写/.test(t)) cls += ' gray';
   return '<span class="' + cls + '">' + esc(t || '-') + '</span>';
 }
@@ -529,8 +529,9 @@ function loadRowPhotos(root) {
 
 /* ================= 表单构建 ================= */
 
-function buildForm(fields, values) {
+function buildForm(fields, values, extraPanels) {
   values = values || {};
+  extraPanels = extraPanels || {};
   var inputs = {};
   var sectionOf = {};
   var datalistSeq = 0;
@@ -605,6 +606,9 @@ function buildForm(fields, values) {
   }
 
   groups.forEach(function (g, gi) {
+    if (!g.fields.length && !extraPanels[g.title]) {
+      return;
+    }
     var panel = h('div', { class: 'form-grid tab-panel' });
     if (!useTabs) {
       panel.classList.add('active');
@@ -624,6 +628,9 @@ function buildForm(fields, values) {
       addField(panel, f);
       sectionOf[f.key] = gi;
     });
+    if (!g.fields.length && extraPanels[g.title]) {
+      panel.appendChild(extraPanels[g.title]);
+    }
     panels.push(panel);
   });
 
@@ -817,7 +824,7 @@ function crudView(cfg) {
   }
 
   function openForm(row) {
-    var form = buildForm(cfg.form, row || {});
+    var form = buildForm(cfg.form, row || {}, cfg.subPanels ? cfg.subPanels(row) : null);
     var extra = cfg.formTop ? cfg.formTop(row) : null;
     var body = h('div');
     if (extra) body.appendChild(extra.el);
@@ -1032,9 +1039,29 @@ function crudView(cfg) {
 /** 通用详情弹窗:按模块表单定义分栏展示全部字段(人员模块附带照片) */
 function openDetailModal(cfg, row, act) {
   var grid = h('div', { class: 'detail-grid' });
+  var SUB_KINDS = { '任职经历': 'position-history', '奖惩情况': 'reward-punish' };
   (cfg.form || []).forEach(function (f) {
     if (f.section) {
       grid.appendChild(h('div', { class: 'form-section', text: f.section }));
+      if (SUB_KINDS[f.section] && row.id) {
+        var holder = h('div', { style: 'grid-column:1/-1' });
+        grid.appendChild(holder);
+        (function (title, kind) {
+          GET('/api/sub/' + kind + '?personnelId=' + row.id).then(function (list) {
+            (list || []).forEach(function (r) {
+              var line = title === '任职经历'
+                ? esc((r.start_date || '—') + ' 至 ' + (r.end_date || '今') + '　'
+                  + r.place + '　任 ' + r.post)
+                : esc((r.occur_date || '—') + '　') + badge(r.kind)
+                  + esc('　' + r.reason + '　' + r.content);
+              holder.appendChild(h('div', { class: 'detail-sub-line', html: line }));
+            });
+            if (!list || !list.length) {
+              holder.appendChild(h('div', { class: 'detail-sub-line', text: '暂无记录' }));
+            }
+          }).catch(function () { });
+        })(f.section, SUB_KINDS[f.section]);
+      }
       return;
     }
     var v = row[f.key];
@@ -1073,6 +1100,129 @@ function openDetailModal(cfg, row, act) {
     ]
   });
 }
+
+/** 人员子记录面板:表单标签页内的可编辑列表(任职经历/奖惩情况) */
+function subRecordsPanel(kind, personnelId, opt) {
+  var box = h('div', { style: 'grid-column: 1 / -1; padding: 2px 0 6px;' });
+  var table = h('table', { class: 'grid' });
+  table.style.minWidth = '480px';
+  var lastRows = [];
+
+  function reload() {
+    GET('/api/sub/' + kind + '?personnelId=' + personnelId).then(function (list) {
+      lastRows = list || [];
+      table.innerHTML = '<thead><tr>'
+        + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
+        + '<th style="width:100px">操作</th></tr></thead><tbody>'
+        + (lastRows.length ? lastRows.map(function (r) {
+            return '<tr>' + opt.columns.map(function (c) {
+              var raw = r[c.key] === null || r[c.key] === undefined ? '' : r[c.key];
+              var inner = c.render ? c.render(r) : esc(raw);
+              return '<td>' + inner + '</td>';
+            }).join('')
+              + '<td class="actions">'
+              + '<button class="btn-link" data-edit="' + r.id + '">编辑</button>'
+              + '<button class="btn-link danger" data-del="' + r.id + '">删除</button></td></tr>';
+          }).join('') : '<tr><td colspan="' + (opt.columns.length + 1) + '" class="empty-row">暂无记录</td></tr>')
+        + '</tbody>';
+    }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  table.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-edit],button[data-del]');
+    if (!b) return;
+    var id = b.getAttribute('data-edit') || b.getAttribute('data-del');
+    var rec = lastRows.filter(function (r) { return String(r.id) === String(id); })[0];
+    if (!rec) return;
+    if (b.hasAttribute('data-del')) {
+      confirmBox('确定删除这条' + opt.name + '吗?', true).then(function (yes) {
+        if (!yes) return;
+        DEL('/api/sub/' + kind + '/' + id).then(function () { toast('已删除'); reload(); })
+          .catch(function (err) { toast(err.message, 'err'); });
+      });
+    } else {
+      openSubForm(rec);
+    }
+  });
+
+  function openSubForm(rec) {
+    var form = buildForm(opt.fields, rec || {});
+    var m = openModal({
+      title: (rec ? '编辑' : '添加') + opt.name,
+      body: form.el,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            var data = form.get();
+            if (!data) return;
+            data.personnelId = personnelId;
+            var done = rec ? PUT('/api/sub/' + kind + '/' + rec.id, data)
+                           : POST('/api/sub/' + kind, data);
+            done.then(function () {
+              m.close();
+              toast('保存成功');
+              reload();
+            }).catch(function (err) { form.setError(err.message); });
+          }
+        })
+      ]
+    });
+  }
+
+  box.appendChild(h('div', { style: 'margin-bottom:10px' },
+    h('button', {
+      class: 'btn btn-ghost btn-sm', text: '＋ 添加' + opt.name,
+      onclick: function () { openSubForm(null); }
+    })));
+  box.appendChild(h('div', { class: 'table-wrap' }, table));
+  reload();
+  return box;
+}
+
+function subHintPanel(text) {
+  return h('div', {
+    style: 'grid-column:1/-1;color:#97a4b5;padding:34px 0;text-align:center;font-size:14px',
+    text: text
+  });
+}
+
+var POSITION_SUB = {
+  name: '任职经历', kind: 'position-history',
+  columns: [
+    { key: 'start_date', label: '开始日期' },
+    { key: 'end_date', label: '结束日期' },
+    { key: 'place', label: '任职地点' },
+    { key: 'post', label: '担任职务' },
+    { key: 'remark', label: '备注' }
+  ],
+  fields: [
+    { key: 'start_date', label: '开始日期', type: 'date', required: true },
+    { key: 'end_date', label: '结束日期', type: 'date', placeholder: '留空表示至今' },
+    { key: 'place', label: '任职地点', required: true, placeholder: '如:XX部队XX营' },
+    { key: 'post', label: '担任职务', required: true, placeholder: '如:参谋、连长' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var REWARD_SUB = {
+  name: '奖惩记录', kind: 'reward-punish',
+  columns: [
+    { key: 'kind', label: '类型', render: function (r) { return badge(r.kind); } },
+    { key: 'occur_date', label: '日期' },
+    { key: 'reason', label: '事由' },
+    { key: 'content', label: '内容' },
+    { key: 'remark', label: '备注' }
+  ],
+  fields: [
+    { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true },
+    { key: 'occur_date', label: '日期', type: 'date', required: true },
+    { key: 'reason', label: '事由', required: true, placeholder: '因某某情况', span: 'full' },
+    { key: 'content', label: '表彰/处分内容', required: true, placeholder: '如:记三等功一次 / 警告处分', span: 'full' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
 
 function statusOptions() {
   var l = dictLabels('personnel_status');
@@ -1141,8 +1291,22 @@ var personnelCfg = {
     { key: 'spouseWork', label: '配偶工作单位' },
     { key: 'spouseIdCard', label: '配偶身份证号' },
     { key: 'marriageDate', label: '结婚日期', type: 'date' },
-    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' },
+    { section: '任职经历' },
+    { section: '奖惩情况' }
+  ],
+  subPanels: function (row) {
+    if (!row || !row.id) {
+      return {
+        '任职经历': subHintPanel('保存人员后即可添加任职经历'),
+        '奖惩情况': subHintPanel('保存人员后即可添加奖惩记录')
+      };
+    }
+    return {
+      '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
+      '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB)
+    };
+  }
 };
 
 /* 人员表单顶部的照片选择区 */

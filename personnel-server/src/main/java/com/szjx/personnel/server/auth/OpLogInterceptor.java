@@ -20,6 +20,8 @@ public class OpLogInterceptor implements HandlerInterceptor {
 
     static {
         MODULE_NAMES.put("personnel", "人员管理");
+        MODULE_NAMES.put("position-history", "任职经历");
+        MODULE_NAMES.put("reward-punish", "奖惩情况");
         MODULE_NAMES.put("departments", "部门管理");
         MODULE_NAMES.put("dict", "数据字典");
         MODULE_NAMES.put("equipment", "装备管理");
@@ -56,8 +58,13 @@ public class OpLogInterceptor implements HandlerInterceptor {
 
             String[] parts = uri.split("/"); // ["", "api", module, sub...]
             String moduleKey = parts.length > 2 ? parts[2] : "";
-            String moduleName = MODULE_NAMES.containsKey(moduleKey) ? MODULE_NAMES.get(moduleKey) : moduleKey;
             String sub = parts.length > 3 ? parts[3] : "";
+            if ("sub".equals(moduleKey) && parts.length > 3) {
+                // /api/sub/<人员子记录类型>/<id>
+                moduleKey = sub;
+                sub = parts.length > 4 ? parts[4] : "";
+            }
+            String moduleName = MODULE_NAMES.containsKey(moduleKey) ? MODULE_NAMES.get(moduleKey) : moduleKey;
 
             String action;
             String detail;

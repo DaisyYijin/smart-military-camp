@@ -408,3 +408,6 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 /* 校验失败红框 */
 input.bad, textarea.bad { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217, 70, 62, .15); }
 .dd.bad .dd-btn, .cal.bad input { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217, 70, 62, .15); }
+
+/* 详情里的子记录行 */
+.detail-sub-line { padding: 7px 2px; border-bottom: 1px dashed #eef2f6; font-size: 13px; color: #445262; }

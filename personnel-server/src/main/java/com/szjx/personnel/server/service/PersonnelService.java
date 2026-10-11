@@ -26,11 +26,14 @@ public class PersonnelService {
     private final PersonnelDao personnelDao;
     private final PhotoService photoService;
     private final DepartmentDao departmentDao;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public PersonnelService(PersonnelDao personnelDao, PhotoService photoService, DepartmentDao departmentDao) {
+    public PersonnelService(PersonnelDao personnelDao, PhotoService photoService, DepartmentDao departmentDao,
+                             org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.personnelDao = personnelDao;
         this.photoService = photoService;
         this.departmentDao = departmentDao;
+        this.jdbc = jdbc;
     }
 
     public List<Personnel> query(String keyword, Long departmentId, String status, int page, int size) {
@@ -146,6 +149,8 @@ public class PersonnelService {
         if (old != null) {
             final String photo = old.getPhoto();
             personnelDao.delete(id);
+            jdbc.update("DELETE FROM position_history WHERE personnel_id=?", id);
+            jdbc.update("DELETE FROM reward_punish WHERE personnel_id=?", id);
             if (photo != null && !photo.isEmpty()) {
                 deletePhotoAfterCommit(photo);
             }
