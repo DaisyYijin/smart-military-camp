@@ -1,0 +1,24 @@
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+# 运行时数据
+data/
+logs/
+personnel.db
+personnel.db-*
+*.log
+# 本地构建工具
+.tools/
+
+# 发行包产物
+packaging/dist/
+packaging/.stage/
+packaging/jres/

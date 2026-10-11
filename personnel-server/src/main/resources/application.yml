@@ -1,0 +1,32 @@
+# 数智军营人员管理系统 - 服务端配置
+# 默认端口 8080,如需修改用 --server.port=xxxx 覆盖
+server:
+  port: 8080
+  address: 0.0.0.0
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  datasource:
+    # SQLite 数据库文件(相对运行目录),可改用绝对路径
+    url: jdbc:sqlite:file:data/personnel.db?busy_timeout=5000&journal_mode=WAL&foreign_keys=on
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+
+app:
+  # 数据目录(数据库与照片存放于此)
+  data-dir: data
+  auth:
+    # 登录令牌有效期(小时)
+    token-expire-hours: 24
+
+logging:
+  level:
+    root: info
+  file:
+    name: logs/personnel-server.log

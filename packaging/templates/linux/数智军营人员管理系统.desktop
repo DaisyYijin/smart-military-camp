@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=数智军营人员管理系统
+Name[zh_CN]=数智军营人员管理系统
+Comment=内网离线人员管理系统
+Exec=@DIR@/start.sh
+Path=@DIR@
+Terminal=false
+Categories=Office;
