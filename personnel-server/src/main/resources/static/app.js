@@ -326,13 +326,24 @@ function buildForm(fields, values) {
       };
       el.addEventListener('input', syncEmpty);
       el.addEventListener('change', syncEmpty);
-      el.addEventListener('focus', function () { box.classList.add('focused'); });
-      el.addEventListener('blur', function () {
-        box.classList.remove('focused');
+      el.addEventListener('input', function () {
+        box.classList.add('editing');
         syncEmpty();
       });
-      el.addEventListener('click', function () {
-        try { el.showPicker(); } catch (e) { /* 旧浏览器忽略,仍可点右侧日历图标 */ }
+      el.addEventListener('keydown', function () {
+        box.classList.add('editing');
+      });
+      el.addEventListener('blur', function () {
+        box.classList.remove('editing');
+        syncEmpty();
+      });
+      el.addEventListener('click', function (e) {
+        // 点右侧日历图标时浏览器自己会弹,避免重复弹出造成闪烁
+        var r = el.getBoundingClientRect();
+        if (e.clientX > r.right - 28) {
+          return;
+        }
+        try { el.showPicker(); } catch (err) { /* 旧浏览器忽略 */ }
       });
       syncEmpty();
       box.appendChild(el);
