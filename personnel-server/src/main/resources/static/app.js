@@ -1200,6 +1200,26 @@ function subRecordsPanel(kind, personnelId, opt) {
     }
   });
 
+  // 双击行直接进入编辑
+  table.addEventListener('dblclick', function (e) {
+    var tr = e.target.closest('tr');
+    if (!tr) {
+      return;
+    }
+    var editBtn = tr.querySelector('button[data-edit]');
+    if (!editBtn) {
+      return; // 表头或空行
+    }
+    var id = editBtn.getAttribute('data-edit');
+    var pool = localMode ? staged : lastRows;
+    var rec = pool.filter(function (r) {
+      return String(localMode ? r.__id : r.id) === String(id);
+    })[0];
+    if (rec) {
+      openSubForm(rec);
+    }
+  });
+
   function openSubForm(rec) {
     var form = buildForm(opt.fields, rec || {});
     var m = openModal({
