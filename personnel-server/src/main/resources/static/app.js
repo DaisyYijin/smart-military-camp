@@ -824,7 +824,8 @@ function crudView(cfg) {
   }
 
   function openForm(row) {
-    var form = buildForm(cfg.form, row || {}, cfg.subPanels ? cfg.subPanels(row) : null);
+    var subExtra = cfg.subPanels ? cfg.subPanels(row) : null;
+    var form = buildForm(cfg.form, row || {}, subExtra ? subExtra.panels : null);
     var extra = cfg.formTop ? cfg.formTop(row) : null;
     var body = h('div');
     if (extra) body.appendChild(extra.el);
@@ -847,10 +848,31 @@ function crudView(cfg) {
               Object.keys(ex).forEach(function (k) { if (ex[k] !== undefined) data[k] = ex[k]; });
             }
             var done = row ? PUT(cfg.endpoint + '/' + row.id, data) : POST(cfg.endpoint, data);
-            done.then(function () {
-              m.close();
-              toast('保存成功');
-              afterChange();
+            done.then(function (saved) {
+              // 新建时:暂存的子记录(任职经历/奖惩)随人员一并入库
+              var chain = Promise.resolve();
+              var subCount = 0;
+              if (!row && subExtra && subExtra.staged && saved && saved.id) {
+                Object.keys(subExtra.staged).forEach(function (kind) {
+                  (subExtra.staged[kind]() || []).forEach(function (rec) {
+                    chain = chain.then(function () {
+                      var body = {};
+                      for (var k in rec) {
+                        body[k] = rec[k];
+                      }
+                      body.personnelId = saved.id;
+                      return POST('/api/sub/' + kind, body).then(function () {
+                        subCount++;
+                      }).catch(function () { /* 单条失败不阻断 */ });
+                    });
+                  });
+                });
+              }
+              chain.then(function () {
+                m.close();
+                toast(subCount ? '保存成功(含 ' + subCount + ' 条子记录)' : '保存成功');
+                afterChange();
+              });
             }).catch(function (e) { form.setError(e.message); });
           }
         })
@@ -1102,39 +1124,60 @@ function openDetailModal(cfg, row, act) {
 }
 
 /** 人员子记录面板:表单标签页内的可编辑列表(任职经历/奖惩情况) */
+var subUid = 0;
+
 function subRecordsPanel(kind, personnelId, opt) {
   var box = h('div', { style: 'grid-column: 1 / -1; padding: 2px 0 6px;' });
   var table = h('table', { class: 'grid' });
   table.style.minWidth = '480px';
   var lastRows = [];
+  var localMode = !personnelId; // 新建人员:先暂存,保存人员时一并入库
+  var staged = [];
 
   function reload() {
+    if (localMode) {
+      renderRows(staged);
+      return;
+    }
     GET('/api/sub/' + kind + '?personnelId=' + personnelId).then(function (list) {
       lastRows = list || [];
-      table.innerHTML = '<thead><tr>'
-        + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
-        + '<th style="width:100px">操作</th></tr></thead><tbody>'
-        + (lastRows.length ? lastRows.map(function (r) {
-            return '<tr>' + opt.columns.map(function (c) {
-              var raw = r[c.key] === null || r[c.key] === undefined ? '' : r[c.key];
-              var inner = c.render ? c.render(r) : esc(raw);
-              return '<td>' + inner + '</td>';
-            }).join('')
-              + '<td class="actions">'
-              + '<button class="btn-link" data-edit="' + r.id + '">编辑</button>'
-              + '<button class="btn-link danger" data-del="' + r.id + '">删除</button></td></tr>';
-          }).join('') : '<tr><td colspan="' + (opt.columns.length + 1) + '" class="empty-row">暂无记录</td></tr>')
-        + '</tbody>';
+      renderRows(lastRows);
     }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  function renderRows(rows) {
+    table.innerHTML = '<thead><tr>'
+      + opt.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('')
+      + '<th style="width:100px">操作</th></tr></thead><tbody>'
+      + (rows.length ? rows.map(function (r) {
+          var rid = r.__id !== undefined ? r.__id : r.id;
+          return '<tr>' + opt.columns.map(function (c) {
+            var raw = r[c.key] === null || r[c.key] === undefined ? '' : r[c.key];
+            var inner = c.render ? c.render(r) : esc(raw);
+            return '<td>' + inner + '</td>';
+          }).join('')
+            + '<td class="actions">'
+            + '<button class="btn-link" data-edit="' + rid + '">编辑</button>'
+            + '<button class="btn-link danger" data-del="' + rid + '">删除</button></td></tr>';
+        }).join('') : '<tr><td colspan="' + (opt.columns.length + 1) + '" class="empty-row">暂无记录</td></tr>')
+      + '</tbody>';
   }
 
   table.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-edit],button[data-del]');
     if (!b) return;
     var id = b.getAttribute('data-edit') || b.getAttribute('data-del');
-    var rec = lastRows.filter(function (r) { return String(r.id) === String(id); })[0];
+    var pool = localMode ? staged : lastRows;
+    var rec = pool.filter(function (r) {
+      return String(localMode ? r.__id : r.id) === String(id);
+    })[0];
     if (!rec) return;
     if (b.hasAttribute('data-del')) {
+      if (localMode) {
+        staged = staged.filter(function (r) { return r !== rec; });
+        renderRows(staged);
+        return;
+      }
       confirmBox('确定删除这条' + opt.name + '吗?', true).then(function (yes) {
         if (!yes) return;
         DEL('/api/sub/' + kind + '/' + id).then(function () { toast('已删除'); reload(); })
@@ -1157,6 +1200,19 @@ function subRecordsPanel(kind, personnelId, opt) {
           onclick: function () {
             var data = form.get();
             if (!data) return;
+            if (localMode) {
+              if (rec) {
+                data.__id = rec.__id;
+                staged = staged.map(function (r) { return r === rec ? data : r; });
+              } else {
+                data.__id = --subUid;
+                staged.push(data);
+              }
+              m.close();
+              toast('已填写,保存人员时将一并保存');
+              renderRows(staged);
+              return;
+            }
             data.personnelId = personnelId;
             var done = rec ? PUT('/api/sub/' + kind + '/' + rec.id, data)
                            : POST('/api/sub/' + kind, data);
@@ -1177,6 +1233,18 @@ function subRecordsPanel(kind, personnelId, opt) {
       onclick: function () { openSubForm(null); }
     })));
   box.appendChild(h('div', { class: 'table-wrap' }, table));
+  // 供人员保存流程读取暂存记录(剥离内部 __id)
+  box.__staged = function () {
+    return staged.map(function (r) {
+      var o = {};
+      for (var k in r) {
+        if (k !== '__id') {
+          o[k] = r[k];
+        }
+      }
+      return o;
+    });
+  };
   reload();
   return box;
 }
@@ -1296,15 +1364,19 @@ var personnelCfg = {
     { section: '奖惩情况' }
   ],
   subPanels: function (row) {
-    if (!row || !row.id) {
+    if (row && row.id) {
       return {
-        '任职经历': subHintPanel('保存人员后即可添加任职经历'),
-        '奖惩情况': subHintPanel('保存人员后即可添加奖惩记录')
+        panels: {
+          '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
+          '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB)
+        }
       };
     }
+    var pos = subRecordsPanel(POSITION_SUB.kind, null, POSITION_SUB);
+    var rew = subRecordsPanel(REWARD_SUB.kind, null, REWARD_SUB);
     return {
-      '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
-      '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB)
+      panels: { '任职经历': pos, '奖惩情况': rew },
+      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged }
     };
   }
 };
