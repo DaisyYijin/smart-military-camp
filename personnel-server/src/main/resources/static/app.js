@@ -317,6 +317,15 @@ function buildForm(fields, values) {
       if (f.step) el.setAttribute('step', f.step);
       if (val !== undefined && val !== null) el.value = val;
     }
+    // 日期框:空值时盖住 Chrome 的"yyyy/mm/日"半翻译占位符
+    if (f.type === 'date') {
+      var syncEmpty = function () {
+        el.classList.toggle('date-empty', !el.value);
+      };
+      el.addEventListener('input', syncEmpty);
+      el.addEventListener('change', syncEmpty);
+      syncEmpty();
+    }
     inputs[f.key] = el;
     wrap.appendChild(el);
     grid.appendChild(wrap);

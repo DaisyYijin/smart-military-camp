@@ -15,6 +15,12 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: #2f6fd6; box-shadow: 0 0 0 2px rgba(47,111,214,.15); }
 input[type="date"] { padding: 6px 8px; }
+/* 覆盖 Chrome 中文环境日期框的"yyyy/mm/日"半翻译占位符(配合 JS 的 date-empty 类) */
+input[type="date"].date-empty::-webkit-datetime-edit { color: transparent; }
+input[type="date"].date-empty::-webkit-datetime-edit::before {
+  content: '年/月/日';
+  color: #97a4b5;
+}
 textarea { resize: vertical; }
 
 /* ---------- 按钮(统一尺寸体系:标准 34px 高 / 小号 28px 高) ---------- */
