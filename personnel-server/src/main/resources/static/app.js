@@ -280,7 +280,7 @@ function buildForm(fields, values) {
       el = h('select', {});
       if (f.type === 'select') {
         var options = (typeof f.options === 'function' ? f.options() : f.options) || [];
-        if (!f.required) el.appendChild(h('option', { value: '', text: '请选择' }));
+        el.appendChild(h('option', { value: '', text: '请选择' }));
         options.forEach(function (o) {
           var v = (o && o.v !== undefined) ? o.v : o;
           var l = (o && o.l !== undefined) ? o.l : o;
@@ -299,7 +299,7 @@ function buildForm(fields, values) {
           el.appendChild(h('option', { value: String(d.id), text: prefix + d.name }));
         });
       }
-      if (val !== undefined && val !== null) el.value = String(val);
+      if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else if (f.type === 'textarea') {
       el = h('textarea', { placeholder: f.placeholder || '' });
       el.value = val || '';
@@ -317,17 +317,21 @@ function buildForm(fields, values) {
       if (f.step) el.setAttribute('step', f.step);
       if (val !== undefined && val !== null) el.value = val;
     }
-    // 日期框:空值时盖住 Chrome 的"yyyy/mm/日"半翻译占位符
+    inputs[f.key] = el;
     if (f.type === 'date') {
+      // 空值时用覆盖层显示"年/月/日"(比伪元素方案在各类浏览器上都可靠)
       var syncEmpty = function () {
         el.classList.toggle('date-empty', !el.value);
       };
       el.addEventListener('input', syncEmpty);
       el.addEventListener('change', syncEmpty);
       syncEmpty();
+      var box = h('div', { class: 'date-wrap' }, el,
+        h('span', { class: 'date-ph', text: '年/月/日' }));
+      wrap.appendChild(box);
+    } else {
+      wrap.appendChild(el);
     }
-    inputs[f.key] = el;
-    wrap.appendChild(el);
     grid.appendChild(wrap);
   });
 

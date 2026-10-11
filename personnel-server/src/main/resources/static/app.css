@@ -14,13 +14,18 @@ input, select, textarea {
   padding: 7px 10px; outline: none; background: #fff;
 }
 input:focus, select:focus, textarea:focus { border-color: #2f6fd6; box-shadow: 0 0 0 2px rgba(47,111,214,.15); }
-input[type="date"] { padding: 6px 8px; }
-/* 覆盖 Chrome 中文环境日期框的"yyyy/mm/日"半翻译占位符(配合 JS 的 date-empty 类) */
+input[type="date"] { padding: 0 8px; }
+select { height: 36px; }
+select option { font-family: inherit; font-size: 14px; }
+/* 日期框空值占位:盖住 Chrome 的"yyyy/mm/日"半翻译文字,用覆盖层显示纯中文 */
 input[type="date"].date-empty::-webkit-datetime-edit { color: transparent; }
-input[type="date"].date-empty::-webkit-datetime-edit::before {
-  content: '年/月/日';
-  color: #97a4b5;
+.date-wrap { position: relative; }
+.date-wrap .date-ph {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: #97a4b5; font-size: 14px; pointer-events: none; background: #fff;
+  padding-right: 10px; display: none; line-height: 1;
 }
+input[type="date"].date-empty + .date-ph { display: block; }
 textarea { resize: vertical; }
 
 /* ---------- 按钮(统一尺寸体系:标准 34px 高 / 小号 28px 高) ---------- */
@@ -110,7 +115,7 @@ textarea { resize: vertical; }
 .toolbar .spacer { flex: 1; }
 .toolbar .field-inline { display: flex; align-items: center; gap: 6px; }
 .toolbar .field-inline label { color: #66788c; font-size: 13px; }
-.toolbar input, .toolbar select { padding: 6px 9px; }
+.toolbar input, .toolbar select { height: 34px; padding: 0 9px; }
 
 .table-wrap { overflow: auto; }
 table.grid { width: 100%; border-collapse: collapse; min-width: 720px; }

@@ -5,6 +5,12 @@ server:
   address: 0.0.0.0
 
 spring:
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # 本地内网服务,禁用浏览器缓存,保证每次刷新都拿到最新页面
+          no-store: true
   servlet:
     multipart:
       max-file-size: 10MB
