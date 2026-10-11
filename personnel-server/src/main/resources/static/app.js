@@ -130,10 +130,19 @@ function clearSession() {
   localStorage.removeItem('tk'); localStorage.removeItem('usr');
 }
 
+var redirectingToLogin = false;
+
 function forceLogin(msg) {
+  // 并发的多个 401(如重启后页面启动时的字典/部门/选项三个请求)
+  // 只弹一次提示、只渲染一次登录页
+  if (redirectingToLogin) {
+    return;
+  }
+  redirectingToLogin = true;
   if ($('.login-wrap')) { if (msg) toast(msg, 'err'); return; }
   clearSession();
   renderLogin(msg);
+  setTimeout(function () { redirectingToLogin = false; }, 600);
 }
 
 function api(method, path, body) {
@@ -1607,6 +1616,9 @@ function openChangePassword() {
 var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, fitnessCfg];
 
 function renderShell() {
+  if (!TOKEN) {
+    return; // 已被踢回登录页(令牌失效/退出),不再渲染主界面
+  }
   var app = $('#app');
   app.innerHTML = '';
 
@@ -1725,7 +1737,11 @@ function renderShell() {
 
 (function boot() {
   if (!TOKEN) { renderLogin(); return; }
-  refreshAll().then(renderShell).catch(function (e) {
+  refreshAll().then(function () {
+    if (TOKEN) {
+      renderShell();             // 缓存刷新期间令牌失效则不进主界面(已在登录页)
+    }
+  }).catch(function (e) {
     if (!TOKEN) return;          // 401 已跳转登录
     toast(e.message, 'err');
     renderShell();
