@@ -45,9 +45,14 @@ public class Launcher {
         if (ui) {
             System.setProperty("java.awt.headless", "false");
             try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignore) {
-                // 保持默认外观即可
+                // 现代扁平外观(FlatLaf),失败时回退系统外观
+                com.formdev.flatlaf.FlatIntelliJLaf.setup();
+            } catch (Throwable ignore) {
+                try {
+                    UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                } catch (Exception ignore2) {
+                    // 保持默认外观即可
+                }
             }
             SetupWizard.applyGlobalFontSize();
         }

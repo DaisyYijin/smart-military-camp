@@ -90,8 +90,8 @@ public class SetupWizard extends JDialog {
                 occupier != null
                         ? "端口 " + initialPort + " 已被 " + occupier + " 占用,请换一个端口。"
                         : firstRun
-                        ? "欢迎使用!首次运行需要进行简单设置。"
-                        : "启动前可在此调整端口与管理员账号;密码留空表示不修改。");
+                        ? "欢迎使用,请完成初始设置。"
+                        : "确认设置后点击启动。");
         banner.setForeground(occupier == null ? new Color(0, 102, 153) : new Color(200, 40, 40));
         banner.setFont(banner.getFont().deriveFont(Font.BOLD, 24f));
         gc.gridx = 0;
@@ -112,6 +112,8 @@ public class SetupWizard extends JDialog {
         JButton checkBtn = new JButton("检测占用");
         checkBtn.setFont(checkBtn.getFont().deriveFont(Font.PLAIN, 18f));
         checkBtn.setPreferredSize(new Dimension(140, 44));
+        checkBtn.putClientProperty("JButton.buttonType", "roundRect");
+        checkBtn.setFocusPainted(false);
         checkBtn.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 checkPort();
@@ -151,25 +153,15 @@ public class SetupWizard extends JDialog {
         userField.setPreferredSize(new Dimension(230, 48));
         gc.gridx = 1;
         root.add(userField, gc);
-        JLabel userHint = new JLabel("登录时使用,如 zhangwei 或 admin");
-        userHint.setFont(userHint.getFont().deriveFont(Font.PLAIN, 15f));
-        userHint.setForeground(Color.GRAY);
-        gc.gridx = 2;
-        root.add(userHint, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
-        root.add(lbl(firstRun ? "设置密码:" : "新密码:"), gc);
+        root.add(lbl(firstRun ? "设置密码(至少6位):" : "新密码(留空不改):"), gc);
         pwField = new JPasswordField(14);
         pwField.setFont(pwField.getFont().deriveFont(Font.PLAIN, 22f));
         pwField.setPreferredSize(new Dimension(230, 48));
         gc.gridx = 1;
         root.add(pwField, gc);
-        JLabel pwHint = new JLabel(firstRun ? "至少 6 位,务必牢记" : "留空表示不修改");
-        pwHint.setFont(pwHint.getFont().deriveFont(Font.PLAIN, 15f));
-        pwHint.setForeground(Color.GRAY);
-        gc.gridx = 2;
-        root.add(pwHint, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
@@ -180,20 +172,15 @@ public class SetupWizard extends JDialog {
         gc.gridx = 1;
         root.add(pw2Field, gc);
 
-        JLabel tip = new JLabel("<html><body style='width:580px'>提示:局域网其他电脑可通过 "
-                + "http://本机IP:端口 访问本系统;首次启动 Windows 防火墙弹窗时请点“允许访问”; "
-                + "忘记密码可随时在右下角托盘菜单中重置。</body></html>");
-        tip.setFont(tip.getFont().deriveFont(Font.PLAIN, 16f));
-        tip.setForeground(Color.GRAY);
-        gc.gridx = 0;
-        gc.gridwidth = 3;
-        gc.gridy = row++;
-        root.add(tip, gc);
-
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         JButton ok = new JButton(firstRun ? "保存并启动" : "启动系统");
         ok.setFont(ok.getFont().deriveFont(Font.PLAIN, 19f));
         ok.setPreferredSize(new Dimension(160, 48));
+        ok.putClientProperty("JButton.buttonType", "roundRect");
+        ok.setBackground(new Color(47, 111, 214));
+        ok.setForeground(Color.WHITE);
+        ok.setOpaque(true);
+        ok.setFocusPainted(false);
         ok.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 trySave();
@@ -202,6 +189,8 @@ public class SetupWizard extends JDialog {
         JButton quit = new JButton("退出");
         quit.setFont(quit.getFont().deriveFont(Font.PLAIN, 19f));
         quit.setPreferredSize(new Dimension(110, 48));
+        quit.putClientProperty("JButton.buttonType", "roundRect");
+        quit.setFocusPainted(false);
         quit.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 cancel();

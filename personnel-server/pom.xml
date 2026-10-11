@@ -23,6 +23,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
+        <!-- FlatLaf:启动向导/托盘弹窗的现代扁平外观 -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.7.2</version>
+        </dependency>
         <!-- SQLite JDBC:内置各平台 native 库(含 linux-aarch64 / windows-x86) -->
         <dependency>
             <groupId>org.xerial</groupId>
