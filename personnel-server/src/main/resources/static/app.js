@@ -1241,6 +1241,7 @@ function subRecordsPanel(kind, personnelId, opt) {
       return;
     }
     td.innerHTML = '';
+    td.classList.add('editing');
     var editor;
     if (c.type === 'date') {
       editor = makeDateField();
