@@ -37,7 +37,20 @@ zip_one() { # $1=待打包目录 $2=zip 输出
     powershell -NoProfile -Command "Compress-Archive -Path '$P1' -DestinationPath '$P2' -Force"
   fi
 }
-targz_one() { (cd "$(dirname "$1")" && tar -czf "$2" "$(basename "$1")"); }
+targz_one() {
+  (cd "$(dirname "$1")" && tar -czf "$2" --transform='s/\.exe$//' --owner=0 --group=0 "$(basename "$1")")
+}
+
+# Git Bash 挂载无 ACL:chmod 无效,但 Cygwin 规则给 .exe 后缀文件授予执行位。
+# 借此恢复 Linux JRE 的可执行权限:暂存副本改名加 .exe,归档时 --transform 去掉。
+fix_exec_bits() { # $1 = 暂存区 jre 目录
+  find "$1/bin" -maxdepth 1 -type f ! -name "*.*" | while read -r f; do
+    mv "$f" "$f.exe"
+  done
+  for f in "$1/lib/"*/jspawnhelper "$1/lib/jexec"; do
+    [ -f "$f" ] && mv "$f" "$f.exe"
+  done
+}
 
 echo "==> [2/4] Windows x64 免安装包(内置 JRE)"
 if [ -d "$ZULU8/jre" ]; then
@@ -67,6 +80,7 @@ for arch in x64 arm64; do
     cp "$PKG/templates/linux/数智军营人员管理系统.desktop" "$L/"
     chmod +x "$L/start.sh" "$L/创建桌面图标.sh"
     cp -r "$JR" "$L/jre"
+    fix_exec_bits "$L/jre"
     targz_one "$L" "$DIST/数智军营-linux-$arch.tar.gz"
     echo "    -> packaging/dist/数智军营-linux-$arch.tar.gz"
   else

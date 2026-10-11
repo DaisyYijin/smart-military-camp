@@ -34,9 +34,11 @@
 ## 快速开始
 
 ### 方式一:发行包(推荐给最终用户)
-到 `packaging/dist/`(由 `bash packaging/build-release.sh` 生成)取对应包:
-- `数智军营-win64.zip`:解压 → 双击 `启动系统.bat`,**无需安装任何软件**
-- `数智军营-linux-*.tar.gz`:解压 → `./start.sh`(内置 JRE 的版本同样零依赖)
+到 `packaging/dist/`(由 `bash packaging/build-release.sh` 生成)取对应包,**全部内置运行环境,解压即用**:
+- `数智军营-win64.zip`:Windows 7/10/11(64位)→ 解压 → 双击 `启动系统.bat`
+- `数智军营-linux-x64.tar.gz`:Ubuntu/CentOS/统信等 x86 → 解压 → `./start.sh`
+- `数智军营-linux-arm64.tar.gz`:麒麟/鲲鹏/飞腾 arm64 → 解压 → `./start.sh`
+- `数智军营-linux.tar.gz`:轻量通用包(不内置 JRE,要求系统已装 Java8)
 - 详见包内《使用说明.txt / README.txt》
 
 ### 方式二:源码构建(JDK8 + Maven,仓库 `.tools/` 内自带)
@@ -55,13 +57,16 @@ java -jar personnel-server.jar           # 双击运行:向导 → 浏览器 →
 ## 打包说明(packaging/)
 
 ```
-build-release.sh              一键打包脚本 → packaging/dist/
+build-release.sh              一键打包脚本 → packaging/dist/(四个平台包)
 templates/win/                Windows 启动脚本与使用说明模板
 templates/linux/              Linux 启动脚本、桌面图标生成、说明模板
-jres/linux-x64|linux-arm64/   (可选)放入对应架构 JRE8 后,打包时自动内置
+jres/linux-x64|linux-arm64/   已内置的 Temurin JRE8(8u504,清华镜像下载;原始包备份于 .tools/)
 ```
-Windows 包自动使用 `.tools/` 里的 Zulu JRE8;Linux 内置 JRE 包需先准备好 JRE
-(Temurin/Zulu 均提供 x64 与 aarch64 的 JRE8),放入 `packaging/jres/` 后重跑脚本。
+
+> 打包备注:Windows 包自动使用 `.tools/` 里的 Zulu JRE8;Linux 包的 JRE 已就位。
+> 在 Windows 上打 Linux 包时,脚本会自动处理两处平台差异:JRE 内的符号链接转为
+> 实际文件复制、借 `.exe` 后缀恢复 Linux 可执行权限位(归档时自动去掉后缀)。
+> **建议拿到真实麒麟 arm64 机器上做一次启动验证**。
 
 ## 安全提示
 - 首次运行向导会强制设置管理员密码;`--no-ui` 无界面模式跳过向导时才保留默认密码 `admin123`,此时务必登录后修改(托盘菜单"修改管理员密码"也可随时重置,避免遗忘)
