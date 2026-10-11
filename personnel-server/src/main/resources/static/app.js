@@ -1373,7 +1373,6 @@ function renderLogin(msg) {
     h('div', { class: 'login-card' },
       h('div', { class: 'login-emblem', text: '★' }),
       h('div', { class: 'login-title', text: '数智军营人员管理系统' }),
-      h('div', { class: 'login-sub', text: '内网离线运行 · 数据本机存储' }),
       h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
       h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
       errBox,
@@ -1484,8 +1483,7 @@ function renderShell() {
         h('div', {},
           h('div', { class: 't1', text: '数智军营' }),
           h('div', { class: 't2', text: '人员管理系统' }))),
-      menu,
-      h('div', { class: 'sidebar-foot', text: '内网离线运行' })),
+      menu),
     h('div', { class: 'main' }, topbar, content)));
 
   // 浏览器前进/后退键切换模块
