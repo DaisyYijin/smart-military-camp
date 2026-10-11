@@ -108,6 +108,170 @@ var ICON_PATHS = {
 };
 
 /**
+ * 自绘日期组件:文本输入 + 页面内日历面板(不用浏览器原生弹窗,杜绝核显卡顿)。
+ * 返回容器,.value 为规范的 yyyy-MM-dd(空串表示未选)。
+ */
+function makeDateField() {
+  function p2(n) { return n < 10 ? '0' + n : '' + n; }
+  function fmt(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+  function parse(s) {
+    var t = String(s == null ? '' : s).trim();
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t) || /^(\d{4})(\d{2})(\d{2})$/.exec(t);
+    if (!m) {
+      return null;
+    }
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (d.getFullYear() !== +m[1] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) {
+      return null;
+    }
+    return d;
+  }
+
+  var input = h('input', { type: 'text', placeholder: '年/月/日,可点选或输入', autocomplete: 'off' });
+  var iconBtn = h('button', {
+    type: 'button', class: 'cal-icon', html: iconSvg('calendar'), title: '选择日期'
+  });
+  var wrap = h('div', { class: 'cal' }, input, iconBtn);
+  var panel = null;
+  var renderPanel = null;
+  var view = { y: 0, m: 0 };
+
+  function commit(text) {
+    var d = parse(text);
+    if (d) {
+      input.value = fmt(d);
+      input.classList.remove('bad');
+    } else if (String(text).trim() === '') {
+      input.value = '';
+      input.classList.remove('bad');
+    } else {
+      input.classList.add('bad');
+    }
+    wrap.dispatchEvent(new CustomEvent('change'));
+  }
+
+  Object.defineProperty(wrap, 'value', {
+    get: function () {
+      var d = parse(input.value);
+      return d ? fmt(d) : '';
+    },
+    set: function (v) {
+      var d = parse(v);
+      input.value = d ? fmt(d) : '';
+      input.classList.remove('bad');
+    }
+  });
+
+  function ensurePanel() {
+    if (panel) {
+      return;
+    }
+    var title = h('div', { class: 'cal-title' });
+    var prevBtn = h('button', { type: 'button', class: 'cal-nav', text: '‹' });
+    var nextBtn = h('button', { type: 'button', class: 'cal-nav', text: '›' });
+    var grid = h('div', { class: 'cal-grid' });
+    var todayBtn = h('button', { type: 'button', class: 'cal-foot-btn', text: '今天' });
+    var clearBtn = h('button', { type: 'button', class: 'cal-foot-btn cal-clear', text: '清空' });
+    panel = h('div', { class: 'cal-panel' },
+      h('div', { class: 'cal-head' }, prevBtn, title, nextBtn),
+      h('div', { class: 'cal-week' }, '一', '二', '三', '四', '五', '六', '日'),
+      grid,
+      h('div', { class: 'cal-foot' }, todayBtn, clearBtn));
+    wrap.appendChild(panel);
+
+    renderPanel = function () {
+      title.textContent = view.y + ' 年 ' + (view.m + 1) + ' 月';
+      grid.innerHTML = '';
+      var offset = (new Date(view.y, view.m, 1).getDay() + 6) % 7;
+      var days = new Date(view.y, view.m + 1, 0).getDate();
+      var today = new Date();
+      var sel = wrap.value;
+      var i;
+      for (i = 0; i < offset; i++) {
+        grid.appendChild(h('span', { class: 'cal-day blank' }));
+      }
+      for (var d = 1; d <= days; d++) {
+        (function (dd) {
+          var iso = view.y + '-' + p2(view.m + 1) + '-' + p2(dd);
+          var cls = 'cal-day';
+          if (iso === sel) {
+            cls += ' sel';
+          }
+          if (view.y === today.getFullYear() && view.m === today.getMonth() && dd === today.getDate()) {
+            cls += ' today';
+          }
+          grid.appendChild(h('span', {
+            class: cls, text: String(dd),
+            onclick: function () {
+              input.value = iso;
+              input.classList.remove('bad');
+              wrap.classList.remove('open');
+              wrap.dispatchEvent(new CustomEvent('change'));
+            }
+          }));
+        })(d);
+      }
+    };
+    prevBtn.addEventListener('click', function () {
+      view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderPanel();
+    });
+    nextBtn.addEventListener('click', function () {
+      view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderPanel();
+    });
+    todayBtn.addEventListener('click', function () {
+      input.value = fmt(new Date());
+      wrap.classList.remove('open');
+      wrap.dispatchEvent(new CustomEvent('change'));
+    });
+    clearBtn.addEventListener('click', function () {
+      input.value = '';
+      wrap.classList.remove('open');
+      wrap.dispatchEvent(new CustomEvent('change'));
+    });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+  }
+
+  function openPanel() {
+    ensurePanel();
+    var base = parse(input.value);
+    var t = base || new Date();
+    view.y = t.getFullYear();
+    view.m = t.getMonth();
+    renderPanel();
+    var r = wrap.getBoundingClientRect();
+    wrap.classList.toggle('up', r.bottom + 330 > window.innerHeight && r.top > 350);
+    wrap.classList.add('open');
+  }
+
+  iconBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (wrap.classList.contains('open')) {
+      wrap.classList.remove('open');
+    } else {
+      openPanel();
+    }
+  });
+  input.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!wrap.classList.contains('open')) {
+      openPanel();
+    }
+  });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      commit(input.value);
+      wrap.classList.remove('open');
+      e.preventDefault();
+    }
+  });
+  input.addEventListener('blur', function () {
+    commit(input.value);
+  });
+
+  return wrap;
+}
+
+/**
  * 自绘下拉组件:返回一个"按钮即输入控件"(可读写 .value、可监听 change),
  * 列表为页面内 DOM,不创建浏览器弹窗表面(避免核显环境空白卡顿)。
  */
@@ -177,11 +341,11 @@ function makeDropdown(opts, placeholder) {
 
 // 全局:点空白/按 Esc 关闭所有下拉(一次注册,避免泄漏)
 document.addEventListener('click', function () {
-  $all('.dd.open').forEach(function (d) { d.classList.remove('open'); });
+  $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
-    $all('.dd.open').forEach(function (d) { d.classList.remove('open'); });
+    $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
   }
 });
 
@@ -380,47 +544,17 @@ function buildForm(fields, values) {
       wrap.appendChild(list);
       el = h('input', { type: 'text', list: listId, placeholder: f.placeholder || '可输入或从列表选择' });
       el.value = val || '';
+    } else if (f.type === 'date') {
+      el = makeDateField();
+      if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else {
-      var type = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text');
+      var type = f.type === 'number' ? 'number' : 'text';
       el = h('input', { type: type, placeholder: f.placeholder || '' });
       if (f.step) el.setAttribute('step', f.step);
       if (val !== undefined && val !== null) el.value = val;
     }
     inputs[f.key] = el;
-    if (f.type === 'date') {
-      // 空值且未聚焦时用覆盖层显示"年/月/日";聚焦后立即可输入、可点日历
-      var box = h('div', { class: 'date-wrap' });
-      var syncEmpty = function () {
-        el.classList.toggle('date-empty', !el.value);
-      };
-      el.addEventListener('input', syncEmpty);
-      el.addEventListener('change', syncEmpty);
-      el.addEventListener('input', function () {
-        box.classList.add('editing');
-        syncEmpty();
-      });
-      el.addEventListener('keydown', function () {
-        box.classList.add('editing');
-      });
-      el.addEventListener('blur', function () {
-        box.classList.remove('editing');
-        syncEmpty();
-      });
-      el.addEventListener('click', function (e) {
-        // 点右侧日历图标:浏览器原生弹出,不再调用 showPicker(重复触发会闪)
-        var r = el.getBoundingClientRect();
-        if (e.clientX > r.right - 30) {
-          return;
-        }
-        try { el.showPicker(); } catch (err) { /* 旧浏览器忽略 */ }
-      });
-      syncEmpty();
-      box.appendChild(el);
-      box.appendChild(h('span', { class: 'date-ph', text: '年/月/日' }));
-      wrap.appendChild(box);
-    } else {
-      wrap.appendChild(el);
-    }
+    wrap.appendChild(el);
     grid.appendChild(wrap);
   });
 

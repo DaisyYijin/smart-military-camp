@@ -15,22 +15,10 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: #2f6fd6; box-shadow: 0 0 0 2px rgba(47,111,214,.15); }
 /* 表单控件统一高度 */
-input[type="text"], input[type="number"], input[type="password"], input[type="date"], select {
+input[type="text"], input[type="number"], input[type="password"], select {
   height: 36px; padding: 0 10px;
 }
 /* 不给 option 设字体:保持原生下拉弹窗(设了字体 Chrome 会自绘,出现空白闪烁) */
-/* 日期框空值占位:盖住 Chrome 的"yyyy/mm/日"半翻译文字,用覆盖层显示纯中文 */
-input[type="date"].date-empty::-webkit-datetime-edit { color: transparent; }
-/* 键入开始(JS 加 editing 类):恢复文字可见并撤掉覆盖层;空值未键入时覆盖层始终盖住原生占位符 */
-.date-wrap.editing input[type="date"].date-empty::-webkit-datetime-edit { color: #26313d; }
-.date-wrap.editing .date-ph { display: none !important; }
-.date-wrap { position: relative; }
-.date-wrap .date-ph {
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-  color: #97a4b5; font-size: 14px; pointer-events: none; background: #fff;
-  padding-right: 10px; display: none; line-height: 1;
-}
-input[type="date"].date-empty + .date-ph { display: block; }
 textarea { resize: vertical; }
 
 /* ---------- 按钮(统一尺寸体系:标准 34px 高 / 小号 28px 高) ---------- */
@@ -362,3 +350,46 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 .dd-item.cur { color: #2f6fd6; font-weight: 600; background: #eef4ff; }
 .toolbar .dd { width: 150px; }
 .toolbar .dd-btn { height: 34px; }
+
+/* ---------- 自绘日期组件 ---------- */
+.cal { position: relative; }
+.cal input { width: 100%; padding-right: 40px; }
+.cal input.bad { border-color: #d9463e; }
+.cal-icon {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 28px; border: none; background: none; cursor: pointer;
+  color: #8a97a8; display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.cal-icon svg { width: 17px; height: 17px; }
+.cal-icon:hover { color: #2f6fd6; }
+.cal-panel {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 320;
+  width: 262px; background: #fff; border: 1px solid #dbe4ee; border-radius: 8px;
+  padding: 10px 12px 12px; display: none;
+  box-shadow: 0 6px 18px rgba(23, 43, 77, .18);
+}
+.cal.up .cal-panel { top: auto; bottom: calc(100% + 4px); }
+.cal.open .cal-panel { display: block; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-title { font-size: 14px; font-weight: 600; color: #1d2c40; }
+.cal-nav {
+  width: 26px; height: 26px; border: 1px solid #dbe4ee; background: #fff; border-radius: 4px;
+  cursor: pointer; color: #445262; font-size: 15px; line-height: 1; padding: 0;
+}
+.cal-nav:hover { border-color: #2f6fd6; color: #2f6fd6; }
+.cal-week, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.cal-week span { font-size: 12px; color: #8a97a8; padding: 4px 0; }
+.cal-day { height: 30px; line-height: 30px; font-size: 13px; color: #26313d; border-radius: 4px; cursor: pointer; }
+.cal-day:hover { background: #f0f5fd; }
+.cal-day.blank { cursor: default; }
+.cal-day.blank:hover { background: none; }
+.cal-day.today { color: #2f6fd6; font-weight: 700; }
+.cal-day.sel { background: #2f6fd6; color: #fff; }
+.cal-day.sel.today { color: #fff; }
+.cal-foot { display: flex; justify-content: space-between; margin-top: 8px; }
+.cal-foot-btn {
+  border: 1px solid #dbe4ee; background: #fff; border-radius: 4px; padding: 4px 12px;
+  font-size: 12px; color: #445262; cursor: pointer;
+}
+.cal-foot-btn:hover { border-color: #2f6fd6; color: #2f6fd6; }
+.cal-foot-btn.cal-clear:hover { border-color: #d9463e; color: #d9463e; }
