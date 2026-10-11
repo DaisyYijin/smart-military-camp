@@ -119,6 +119,8 @@ table.grid th {
 table.grid tbody tr:hover { background: #f4f8ff; }
 table.grid td.actions { white-space: nowrap; }
 .empty-row { text-align: center; color: #97a4b5; padding: 40px 0 !important; }
+/* 权重要盖过 table.grid td 的 text-align:left,保证空行提示居中 */
+table.grid td.empty-row { text-align: center; }
 
 .avatar {
   width: 30px; height: 30px; border-radius: 4px; object-fit: cover;
