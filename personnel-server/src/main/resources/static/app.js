@@ -331,6 +331,9 @@ function buildForm(fields, values) {
         box.classList.remove('focused');
         syncEmpty();
       });
+      el.addEventListener('click', function () {
+        try { el.showPicker(); } catch (e) { /* 旧浏览器忽略,仍可点右侧日历图标 */ }
+      });
       syncEmpty();
       box.appendChild(el);
       box.appendChild(h('span', { class: 'date-ph', text: '年/月/日' }));
@@ -794,14 +797,14 @@ var personnelCfg = {
     { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
     { key: 'entryDate', label: '入伍/入职日期', type: 'date' },
     { section: '更多资料' },
-    { key: 'nation', label: '民族' },
+    { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
     { key: 'nativePlace', label: '籍贯' },
-    { key: 'bloodType', label: '血型' },
+    { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'partyJoinDate', label: '入党/入团日期', type: 'date' },
-    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: ['未婚', '已婚', '离异', '丧偶'] },
-    { key: 'education', label: '学历', type: 'select', options: ['高中', '中专', '大专', '本科', '硕士', '博士'] },
-    { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
+    { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
     { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
     { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
     { key: 'address', label: '家庭住址', span: 'full' },
