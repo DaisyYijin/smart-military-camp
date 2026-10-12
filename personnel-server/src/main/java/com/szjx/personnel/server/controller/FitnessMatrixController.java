@@ -73,6 +73,46 @@ public class FitnessMatrixController {
         return ApiResponse.ok();
     }
 
+    /** 初始化新项目(创建矩阵结构并入库,关闭不丢失) */
+    @SuppressWarnings("unchecked")
+    @PostMapping("/init")
+    public ApiResponse init(@RequestBody Map<String, Object> body) {
+        String item = str(body.get("item"));
+        String unit = str(body.get("unit"));
+        if (item.isEmpty()) { return ApiResponse.error("项目名称不能为空"); }
+        if (!"count".equals(unit) && !"time".equals(unit)) { unit = "count"; }
+        List<String> ageGroups = (List<String>) body.get("ageGroups");
+        List<Number> scores = (List<Number>) body.get("scores");
+        if (ageGroups == null || ageGroups.isEmpty() || scores == null || scores.isEmpty()) {
+            return ApiResponse.error("年龄段和分数不能为空");
+        }
+        jdbc.update("DELETE FROM fitness_matrix WHERE item=?", item);
+        for (String g : ageGroups) {
+            for (Number sc : scores) {
+                jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value, unit) VALUES(?,?,?,?,?)",
+                        item, g, sc.intValue(), 0.0, unit);
+            }
+        }
+        return ApiResponse.ok(jdbc.queryForList("SELECT * FROM fitness_matrix WHERE item=? ORDER BY score DESC", item));
+    }
+
+    /** 复制项目(含全部矩阵数据) */
+    @PostMapping("/copy")
+    public ApiResponse copy(@RequestBody Map<String, Object> body) {
+        String source = str(body.get("source"));
+        String target = str(body.get("target"));
+        if (source.isEmpty() || target.isEmpty()) { return ApiResponse.error("源项目和目标项目不能为空"); }
+        List<Map<String, Object>> src = jdbc.queryForList("SELECT * FROM fitness_matrix WHERE item=?", source);
+        if (src.isEmpty()) { return ApiResponse.error("源项目不存在"); }
+        jdbc.update("DELETE FROM fitness_matrix WHERE item=?", target);
+        for (Map<String, Object> row : src) {
+            jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value, unit) VALUES(?,?,?,?,?)",
+                    target, row.get("age_group"), row.get("score"), row.get("value"),
+                    row.get("unit") == null ? "" : row.get("unit"));
+        }
+        return ApiResponse.ok();
+    }
+
     /** 重命名项目 */
     @PostMapping("/rename")
     public ApiResponse rename(@RequestBody Map<String, Object> body) {

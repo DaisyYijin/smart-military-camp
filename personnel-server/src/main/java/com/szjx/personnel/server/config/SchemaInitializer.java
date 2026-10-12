@@ -348,6 +348,9 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
 
         // 体能评分矩阵:项目 x 年龄段 x 分数 → 达标值(用户可自行维护)
+        try {
+            jdbc.execute("ALTER TABLE fitness_matrix ADD COLUMN unit TEXT DEFAULT ''");
+        } catch (Exception ignore) { }
         jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_matrix (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "item TEXT NOT NULL," +
