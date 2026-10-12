@@ -540,7 +540,7 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   display: flex;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .content-main {
   flex: 1;
@@ -558,10 +558,12 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   transition: width .3s cubic-bezier(.4,0,.2,1);
   display: flex;
   flex-direction: column;
+  align-self: stretch;
+  max-height: none;
 }
 .filter-panel.open {
   width: 270px;
-  overflow-y: auto;
+  overflow-y: visible;
   overflow-x: hidden;
 }
 .filter-panel-inner {
