@@ -1107,7 +1107,8 @@ function crudView(cfg) {
         })));
       filterPanel.appendChild(inner);
 
-      // 垂直标签按钮(固定在右侧边缘居中)
+      // 垂直标签按钮(固定在右侧边缘居中);先清理旧按钮避免累积
+      $all('.filter-tab-btn', document).forEach(function (b) { b.remove(); });
       filterBtn = h('div', {
         class: 'filter-tab-btn', text: '筛 选',
         onclick: function () {
@@ -3542,6 +3543,9 @@ function renderShell() {
     localStorage.setItem('lastView', view);
     Object.keys(menuItems).forEach(function (k) { menuItems[k].classList.remove('active'); });
     if (menuItems[view]) menuItems[view].classList.add('active');
+
+    // 切换页面时清理筛选按钮(非 CRUD 页面不显示)
+    $all('.filter-tab-btn', document).forEach(function (b) { b.remove(); });
 
     content.innerHTML = '';
     var comp;
