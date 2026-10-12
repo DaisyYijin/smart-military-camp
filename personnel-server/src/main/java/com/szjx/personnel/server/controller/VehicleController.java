@@ -24,24 +24,56 @@ import java.util.List;
 public class VehicleController {
 
     private final VehicleService vehicleService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public VehicleController(VehicleService vehicleService) {
+    public VehicleController(VehicleService vehicleService,
+                             org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.vehicleService = vehicleService;
+        this.jdbc = jdbc;
     }
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String plateNo,
+                             @RequestParam(required = false) String type,
                              @RequestParam(required = false) String status,
+                             @RequestParam(required = false) String brand,
+                             @RequestParam(required = false) String driverName,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "20") int size) {
-        if (page < 1) {
-            page = 1;
+                             @RequestParam(defaultValue = "50") int size) {
+        if (page < 1) page = 1;
+        if (size < 1 || size > 200) size = 50;
+        StringBuilder sql = new StringBuilder(
+            "SELECT v.*, p.name AS driverName FROM vehicle v LEFT JOIN personnel p ON v.driver_id = p.id WHERE 1=1");
+        StringBuilder csql = new StringBuilder(
+            "SELECT COUNT(*) FROM vehicle v LEFT JOIN personnel p ON v.driver_id = p.id WHERE 1=1");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        java.util.List<Object> cargs = new java.util.ArrayList<Object>();
+        if (plateNo != null && !plateNo.trim().isEmpty()) {
+            sql.append(" AND v.plate_no LIKE ?"); args.add("%" + plateNo.trim() + "%");
+            csql.append(" AND v.plate_no LIKE ?"); cargs.add("%" + plateNo.trim() + "%");
         }
-        if (size < 1 || size > 200) {
-            size = 20;
+        if (type != null && !type.trim().isEmpty()) {
+            sql.append(" AND v.type = ?"); args.add(type.trim());
+            csql.append(" AND v.type = ?"); cargs.add(type.trim());
         }
-        List<Vehicle> list = vehicleService.query(keyword, status, page, size);
-        return ApiResponse.ok(new PageResult<Vehicle>(vehicleService.count(keyword, status), list));
+        if (status != null && !status.trim().isEmpty()) {
+            sql.append(" AND v.status = ?"); args.add(status.trim());
+            csql.append(" AND v.status = ?"); cargs.add(status.trim());
+        }
+        if (brand != null && !brand.trim().isEmpty()) {
+            sql.append(" AND v.brand LIKE ?"); args.add("%" + brand.trim() + "%");
+            csql.append(" AND v.brand LIKE ?"); cargs.add("%" + brand.trim() + "%");
+        }
+        if (driverName != null && !driverName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + driverName.trim() + "%");
+            csql.append(" AND p.name LIKE ?"); cargs.add("%" + driverName.trim() + "%");
+        }
+        Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
+        sql.append(" ORDER BY v.updated_at DESC, v.id DESC LIMIT ? OFFSET ?");
+        args.add(size); args.add((page - 1) * size);
+        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
+        return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
 
     @PostMapping

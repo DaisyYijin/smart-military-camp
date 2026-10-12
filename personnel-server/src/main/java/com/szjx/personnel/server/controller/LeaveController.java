@@ -24,23 +24,51 @@ import java.util.List;
 public class LeaveController {
 
     private final LeaveService leaveService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public LeaveController(LeaveService leaveService) {
+    public LeaveController(LeaveService leaveService,
+                           org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.leaveService = leaveService;
+        this.jdbc = jdbc;
     }
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String personnelName,
+                             @RequestParam(required = false) String leaveType,
+                             @RequestParam(required = false) String startDate,
+                             @RequestParam(required = false) String endDate,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "20") int size) {
-        if (page < 1) {
-            page = 1;
+                             @RequestParam(defaultValue = "50") int size) {
+        if (page < 1) page = 1;
+        if (size < 1 || size > 200) size = 50;
+        StringBuilder sql = new StringBuilder(
+            "SELECT l.*, p.name AS personnelName FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
+        StringBuilder csql = new StringBuilder(
+            "SELECT COUNT(*) FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        java.util.List<Object> cargs = new java.util.ArrayList<Object>();
+        if (personnelName != null && !personnelName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
+            csql.append(" AND p.name LIKE ?"); cargs.add("%" + personnelName.trim() + "%");
         }
-        if (size < 1 || size > 200) {
-            size = 20;
+        if (leaveType != null && !leaveType.trim().isEmpty()) {
+            sql.append(" AND l.leave_type = ?"); args.add(leaveType.trim());
+            csql.append(" AND l.leave_type = ?"); cargs.add(leaveType.trim());
         }
-        List<LeaveRecord> list = leaveService.query(keyword, page, size);
-        return ApiResponse.ok(new PageResult<LeaveRecord>(leaveService.count(keyword), list));
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            sql.append(" AND l.start_date >= ?"); args.add(startDate.trim());
+            csql.append(" AND l.start_date >= ?"); cargs.add(startDate.trim());
+        }
+        if (endDate != null && !endDate.trim().isEmpty()) {
+            sql.append(" AND l.end_date <= ?"); args.add(endDate.trim());
+            csql.append(" AND l.end_date <= ?"); cargs.add(endDate.trim());
+        }
+        Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
+        sql.append(" ORDER BY l.start_date DESC, l.id DESC LIMIT ? OFFSET ?");
+        args.add(size); args.add((page - 1) * size);
+        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
+        return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
 
     @PostMapping

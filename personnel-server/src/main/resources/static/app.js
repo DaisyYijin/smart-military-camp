@@ -2755,8 +2755,16 @@ var equipmentCfg = {
   key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
   clickKey: 'name', addLabel: '新增装备',
   filters: [
-    { key: 'keyword', label: '检索' },
+    { key: 'name', label: '名称' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
+  ],
+  moreFilters: [
+    { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
+    { key: 'code', label: '编号' },
+    { key: 'keeperName', label: '保管人' },
+    { key: 'location', label: '存放位置' },
+    { key: 'buyDateStart', label: '购置起', type: 'date' },
+    { key: 'buyDateEnd', label: '购置止', type: 'date' }
   ],
   columns: [
     { key: 'name', label: '装备名称' },
@@ -2786,8 +2794,13 @@ var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
   clickKey: 'name', addLabel: '新增物资',
   filters: [
-    { key: 'keyword', label: '检索' },
+    { key: 'name', label: '名称' },
     { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
+  ],
+  moreFilters: [
+    { key: 'spec', label: '规格' },
+    { key: 'keeperName', label: '责任人' },
+    { key: 'location', label: '存放位置' }
   ],
   columns: [
     { key: 'name', label: '物资名称' },
@@ -2822,8 +2835,13 @@ var vehicleCfg = {
   key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
   clickKey: 'plateNo', addLabel: '新增车辆',
   filters: [
-    { key: 'keyword', label: '检索' },
+    { key: 'plateNo', label: '车牌号' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
+  ],
+  moreFilters: [
+    { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
+    { key: 'brand', label: '品牌型号' },
+    { key: 'driverName', label: '驾驶员' }
   ],
   columns: [
     { key: 'plateNo', label: '车牌号' },
@@ -2850,7 +2868,14 @@ var vehicleCfg = {
 var leaveCfg = {
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
   clickKey: 'personnelName', addLabel: '新增休假',
-  filters: [{ key: 'keyword', label: '检索' }],
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'leaveType', label: '休假类型', type: 'select', options: function () { return dictLabels('leave_type'); } }
+  ],
+  moreFilters: [
+    { key: 'startDate', label: '开始日期', type: 'date' },
+    { key: 'endDate', label: '结束日期', type: 'date' }
+  ],
   columns: [
     { key: 'personnelName', label: '姓名' },
     { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },

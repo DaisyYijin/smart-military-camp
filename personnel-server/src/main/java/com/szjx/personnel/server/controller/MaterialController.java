@@ -24,24 +24,56 @@ import java.util.List;
 public class MaterialController {
 
     private final MaterialService materialService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public MaterialController(MaterialService materialService) {
+    public MaterialController(MaterialService materialService,
+                              org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.materialService = materialService;
+        this.jdbc = jdbc;
     }
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String name,
                              @RequestParam(required = false) String category,
+                             @RequestParam(required = false) String spec,
+                             @RequestParam(required = false) String keeperName,
+                             @RequestParam(required = false) String location,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "20") int size) {
-        if (page < 1) {
-            page = 1;
+                             @RequestParam(defaultValue = "50") int size) {
+        if (page < 1) page = 1;
+        if (size < 1 || size > 200) size = 50;
+        StringBuilder sql = new StringBuilder(
+            "SELECT m.*, p.name AS keeperName FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+        StringBuilder csql = new StringBuilder(
+            "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        java.util.List<Object> cargs = new java.util.ArrayList<Object>();
+        if (name != null && !name.trim().isEmpty()) {
+            sql.append(" AND m.name LIKE ?"); args.add("%" + name.trim() + "%");
+            csql.append(" AND m.name LIKE ?"); cargs.add("%" + name.trim() + "%");
         }
-        if (size < 1 || size > 200) {
-            size = 20;
+        if (category != null && !category.trim().isEmpty()) {
+            sql.append(" AND m.category = ?"); args.add(category.trim());
+            csql.append(" AND m.category = ?"); cargs.add(category.trim());
         }
-        List<Material> list = materialService.query(keyword, category, page, size);
-        return ApiResponse.ok(new PageResult<Material>(materialService.count(keyword, category), list));
+        if (spec != null && !spec.trim().isEmpty()) {
+            sql.append(" AND m.spec LIKE ?"); args.add("%" + spec.trim() + "%");
+            csql.append(" AND m.spec LIKE ?"); cargs.add("%" + spec.trim() + "%");
+        }
+        if (keeperName != null && !keeperName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + keeperName.trim() + "%");
+            csql.append(" AND p.name LIKE ?"); cargs.add("%" + keeperName.trim() + "%");
+        }
+        if (location != null && !location.trim().isEmpty()) {
+            sql.append(" AND m.location LIKE ?"); args.add("%" + location.trim() + "%");
+            csql.append(" AND m.location LIKE ?"); cargs.add("%" + location.trim() + "%");
+        }
+        Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
+        sql.append(" ORDER BY m.updated_at DESC, m.id DESC LIMIT ? OFFSET ?");
+        args.add(size); args.add((page - 1) * size);
+        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
+        return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
 
     @PostMapping
