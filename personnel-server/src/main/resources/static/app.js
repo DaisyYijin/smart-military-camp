@@ -1507,15 +1507,21 @@ function subRecordsPanel(kind, personnelId, opt) {
       editor.value = r[c.key] || '';
       editor.addEventListener('blur', function () { commit(r, c, editor.value); });
       editor.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter') { editor.blur(); }
+        if (e.key === 'Tab') {
+          e.preventDefault();
           editor.blur();
+          var cols = opt.columns.filter(function (x) { return !x.virtual && !x.auto; });
+          var ci = cols.indexOf(c);
+          var next = cols[ci + 1] || cols[0];
+          if (next) { setTimeout(function () { openEditor(r, next); }, 50); }
         }
       });
     }
     td.appendChild(editor);
     var focusEl = editor.tagName === 'INPUT' ? editor : editor.querySelector('input,.dd-btn');
     if (focusEl) {
-      setTimeout(function () { focusEl.focus(); }, 0);
+      setTimeout(function () { focusEl.focus(); if (focusEl.select) { focusEl.select(); } }, 0);
     }
   }
 

@@ -433,3 +433,17 @@ tr.pending-row:hover { background: #fdf3d0 !important; }
 .tabs::-webkit-scrollbar { height: 3px; }
 .tabs::-webkit-scrollbar-track { background: transparent; }
 .tabs::-webkit-scrollbar-thumb { background: #d0d8e2; border-radius: 2px; }
+
+/* 子表格单元格编辑优化 */
+table.sub-grid td[data-row][data-col] { position: relative; }
+table.sub-grid td[data-row][data-col]:hover::after {
+  content: '✏';
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  font-size: 10px; color: #b0bccb; pointer-events: none; opacity: 0;
+  transition: opacity .15s;
+}
+table.sub-grid td[data-row][data-col]:hover::after { opacity: 1; }
+table.sub-grid td.editing { background: #f0f6ff !important; box-shadow: inset 0 0 0 2px #2f6fd6; border-radius: 3px; }
+table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-grid td.editing .cal input {
+  border-color: #2f6fd6;
+}
