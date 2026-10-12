@@ -3951,7 +3951,7 @@ function renderShell() {
     sideEl.classList.toggle('collapsed', collapsed);
     document.body.classList.toggle('side-mini', collapsed);
     localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
-    toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronL' : 'chevronR');
+    toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronR' : 'chevronL');
     toggleTxt.textContent = collapsed ? '展开菜单' : '收起菜单';
     toggleBtn.setAttribute('data-tip', collapsed ? '展开菜单' : '收起菜单');
     // 侧边栏由 CSS transform 过渡平移;主区 margin 瞬切 + FLIP transform 滑动,两者同步
