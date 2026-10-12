@@ -2389,7 +2389,18 @@ var personnelCfg = {
   endpoint: '/api/personnel', wide: true,
   filters: [
     { key: 'keyword', label: '检索' },
-    { key: 'status', label: '状态', type: 'select', options: statusOptions }
+    { key: 'status', label: '状态', type: 'select', options: statusOptions },
+    { key: 'departmentId', label: '部门', type: 'select', options: function () {
+        return Ctx.deptFlat.map(function (d) {
+          var prefix = '';
+          for (var i = 0; i < d.depth; i++) { prefix += '　'; }
+          return { v: String(d.id), l: prefix + d.name };
+        });
+      } },
+    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
+    { key: 'rank', label: '军衔', type: 'select', options: function () { return dictLabels('rank'); } },
+    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } }
   ],
   columns: [
     {

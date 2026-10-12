@@ -72,27 +72,29 @@ public class PersonnelDao {
      * 分页查询
      */
     public List<Personnel> query(String keyword, Long departmentId, String status,
+                                 String gender, String politicalStatus, String rank, String education,
                                  int page, int size) {
         StringBuilder sql = new StringBuilder(BASE_SELECT).append(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, departmentId, status);
+        appendFilter(sql, args, keyword, departmentId, status, gender, politicalStatus, rank, education);
         sql.append(" ORDER BY p.updated_at DESC, p.id DESC LIMIT ? OFFSET ? ");
         args.add(size);
         args.add((page - 1) * size);
         return jdbc.query(sql.toString(), MAPPER, args.toArray());
     }
 
-    public long count(String keyword, Long departmentId, String status) {
+    public long count(String keyword, Long departmentId, String status, String gender, String politicalStatus, String rank, String education) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM personnel p WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, departmentId, status);
+        appendFilter(sql, args, keyword, departmentId, status, gender, politicalStatus, rank, education);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
         return n == null ? 0 : n;
     }
 
     private void appendFilter(StringBuilder sql, List<Object> args,
-                              String keyword, Long departmentId, String status) {
+                              String keyword, Long departmentId, String status,
+                              String gender, String politicalStatus, String rank, String education) {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String kw = "%" + keyword.trim() + "%";
             sql.append(" AND (p.name LIKE ? OR p.id_card LIKE ? OR p.phone LIKE ? OR p.post LIKE ?) ");
@@ -104,6 +106,22 @@ public class PersonnelDao {
         if (departmentId != null && departmentId > 0) {
             sql.append(" AND p.department_id = ? ");
             args.add(departmentId);
+        }
+        if (gender != null && !gender.trim().isEmpty()) {
+            sql.append(" AND p.gender = ? ");
+            args.add(gender.trim());
+        }
+        if (politicalStatus != null && !politicalStatus.trim().isEmpty()) {
+            sql.append(" AND p.political_status = ? ");
+            args.add(politicalStatus.trim());
+        }
+        if (rank != null && !rank.trim().isEmpty()) {
+            sql.append(" AND p.rank = ? ");
+            args.add(rank.trim());
+        }
+        if (education != null && !education.trim().isEmpty()) {
+            sql.append(" AND p.education = ? ");
+            args.add(education.trim());
         }
         if (status != null && !status.trim().isEmpty()) {
             sql.append(" AND p.status = ? ");

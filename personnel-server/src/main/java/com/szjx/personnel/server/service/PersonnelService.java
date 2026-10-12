@@ -36,12 +36,12 @@ public class PersonnelService {
         this.jdbc = jdbc;
     }
 
-    public List<Personnel> query(String keyword, Long departmentId, String status, int page, int size) {
-        return personnelDao.query(keyword, departmentId, status, page, size);
+    public List<Personnel> query(String keyword, Long departmentId, String status, String gender, String politicalStatus, String rank, String education, int page, int size) {
+        return personnelDao.query(keyword, departmentId, status, gender, politicalStatus, rank, education, page, size);
     }
 
-    public long count(String keyword, Long departmentId, String status) {
-        return personnelDao.count(keyword, departmentId, status);
+    public long count(String keyword, Long departmentId, String status, String gender, String politicalStatus, String rank, String education) {
+        return personnelDao.count(keyword, departmentId, status, gender, politicalStatus, rank, education);
     }
 
     public Personnel findById(Long id) {
