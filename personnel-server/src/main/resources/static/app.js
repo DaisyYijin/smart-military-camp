@@ -2081,30 +2081,16 @@ function openFitnessStdManager() {
     style: 'width:100%',
     onclick: function () { openNewProjectDialog(); }
   }));
-  addBox.appendChild(h('button', {
-    class: 'btn btn-ghost btn-sm', text: '📋 复制当前项目',
-    style: 'width:100%;margin-top:6px',
-    onclick: function () {
-      if (!currentItem) { toast('请先选择要复制的项目', 'err'); return; }
-      openNewProjectDialog(currentItem);
-    }
-  }));
 
-  function openNewProjectDialog(copyFrom) {
+  function openNewProjectDialog() {
     var nameInput = h('input', { type: 'text', placeholder: '如:3000米跑', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
-    var unitDD = makeDropdown([{v:'count',l:'次数型(越多越好)'},{v:'time',l:'时间型(越少越好)'}], '请选择');
-    unitDD.value = 'count';
-    var copyDD = copyFrom ? null : (items.length > 0 ? makeDropdown(
-      [{v:'',l:'不复制(空白新建)'}].concat(items.map(function(it){return {v:it,l:'复制「'+it+'」的数据'};})),
-      '不复制') : null);
-    if (copyDD) { copyDD.value = ''; }
+    var unitDD = makeDropdown([{v:'count',l:'次数型(越多越好)'},{v:'time',l:'时间型(越少越好)'}], '必选');
 
     var m2 = openModal({
-      title: copyFrom ? '复制项目(源:' + copyFrom + ')' : '新建考核项目',
+      title: '新建考核项目',
       body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
-        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '项目名称:' }), nameInput),
-        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '计分方式:' }), unitDD),
-        copyDD ? h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '初始数据:' }), copyDD) : null),
+        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '项目名称(必填):' }), nameInput),
+        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '计分方式(必选):' }), unitDD)),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m2.close(); } }),
         h('button', {
@@ -2113,28 +2099,19 @@ function openFitnessStdManager() {
             var name = nameInput.value.trim();
             if (!name) { toast('请输入项目名称', 'err'); return; }
             if (items.indexOf(name) >= 0) { toast('该项目已存在', 'err'); return; }
-            var unit = unitDD.value || 'count';
-            var copySource = copyFrom || (copyDD ? copyDD.value : '');
+            var unit = unitDD.value;
+            if (!unit) { toast('请选择计分方式(次数型或时间型)', 'err'); return; }
             m2.close();
-            if (copySource) {
-              POST('/api/fitness-matrix/copy', { source: copySource, target: name }).then(function () {
-                items.push(name);
-                currentItem = name;
-                loadMatrix(name);
-                reloadFitnessMatrix();
-                toast('项目「' + name + '」已从「' + copySource + '」复制创建');
-              }).catch(function (e) { toast(e.message, 'err'); });
-            } else {
-              var defaultAges = ['24岁以下', '25-27', '28-30', '31-33', '34-36', '37-39'];
-              var defaultScores = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55];
-              POST('/api/fitness-matrix/init', {
-                item: name, unit: unit,
-                ageGroups: defaultAges, scores: defaultScores
-              }).then(function () {
-                items.push(name);
-                currentItem = name;
-                loadMatrix(name);
-                reloadFitnessMatrix();
+            var defaultAges = ['24岁以下', '25-27', '28-30', '31-33', '34-36', '37-39'];
+            var defaultScores = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55];
+            POST('/api/fitness-matrix/init', {
+              item: name, unit: unit,
+              ageGroups: defaultAges, scores: defaultScores
+            }).then(function () {
+              items.push(name);
+              currentItem = name;
+              loadMatrix(name);
+              reloadFitnessMatrix();
                 toast('项目「' + name + '」已创建(已保存,关闭不丢失)');
               }).catch(function (e) { toast(e.message, 'err'); });
             }
