@@ -1000,10 +1000,13 @@ function crudView(cfg) {
   }
 
   function render(container) {
+    // 工具栏(只放操作按钮,不放筛选)
     var toolbar = h('div', { class: 'toolbar' });
-    (cfg.filters || []).forEach(function (f) {
-      var inline = h('div', { class: 'field-inline' });
-      inline.appendChild(h('label', { text: f.label }));
+
+    // 筛选面板构建函数
+    function buildFilterField(f) {
+      var wrap = h('div', { class: 'filter-field' });
+      wrap.appendChild(h('label', { text: f.label }));
       var el;
       if (f.type === 'select') {
         var fopts = (typeof f.options === 'function' ? f.options() : f.options) || [];
@@ -1016,63 +1019,71 @@ function crudView(cfg) {
         el = makeDropdown(ddItems, '全部');
         el.setAttribute('data-fkey', f.key);
         el.addEventListener('change', function () { state.page = 1; load(); });
+      } else if (f.type === 'date') {
+        el = makeDateField();
+        el.setAttribute('data-fkey', f.key);
+        el.addEventListener('change', function () { state.page = 1; load(); });
       } else {
-        el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '关键字,回车搜索' });
+        el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '回车搜索' });
         el.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') { state.page = 1; load(); }
         });
       }
-      inline.appendChild(el);
-      toolbar.appendChild(inline);
-    });
-    if (cfg.filters && cfg.filters.length) {
-      toolbar.appendChild(h('button', {
-        class: 'btn btn-ghost', text: '查询',
-        onclick: function () { state.page = 1; load(); }
-      }));
+      wrap.appendChild(el);
+      return wrap;
     }
-    // 更多筛选(折叠面板)
-    if (cfg.moreFilters && cfg.moreFilters.length) {
-      var moreBox = h('div', { class: 'toolbar more-filters', style: 'display:none;width:100%;margin-top:6px;padding:0' });
-      cfg.moreFilters.forEach(function (f) {
-        var inline = h('div', { class: 'field-inline' });
-        inline.appendChild(h('label', { text: f.label }));
-        var el;
-        if (f.type === 'select') {
-          var fopts = (typeof f.options === 'function' ? f.options() : f.options) || [];
-          var ddItems = [{ v: '', l: '全部' }].concat(fopts.map(function (o) {
-            if (o && o.v !== undefined) {
-              return { v: String(o.v), l: String(o.l !== undefined ? o.l : o.v) };
-            }
-            return { v: String(o), l: String(o) };
-          }));
-          el = makeDropdown(ddItems, '全部');
-          el.setAttribute('data-fkey', f.key);
-          el.addEventListener('change', function () { state.page = 1; load(); });
-        } else if (f.type === 'date') {
-          el = makeDateField();
-          el.setAttribute('data-fkey', f.key);
-          el.style.width = '140px';
-          el.addEventListener('change', function () { state.page = 1; load(); });
-        } else {
-          el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '' });
-          el.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { state.page = 1; load(); }
-          });
-        }
-        inline.appendChild(el);
-        moreBox.appendChild(inline);
+
+    // 右侧筛选面板
+    var hasFilters = (cfg.filters && cfg.filters.length) || (cfg.moreFilters && cfg.moreFilters.length);
+    var filterPanel = h('div', { class: 'filter-panel' });
+    var filterCount = h('span', { class: 'badge blue', text: '0' });
+
+    if (hasFilters) {
+      var inner = h('div', { class: 'filter-panel-inner' });
+      inner.appendChild(h('h4', { text: '筛选条件' }));
+      (cfg.filters || []).forEach(function (f) {
+        inner.appendChild(buildFilterField(f));
       });
-      toolbar.appendChild(moreBox);
+      (cfg.moreFilters || []).forEach(function (f) {
+        inner.appendChild(buildFilterField(f));
+      });
+      // 操作按钮
+      inner.appendChild(h('div', { class: 'filter-actions' },
+        h('button', {
+          class: 'btn btn-primary', text: '查询',
+          onclick: function () { state.page = 1; load(); }
+        }),
+        h('button', {
+          class: 'btn btn-ghost', text: '重置',
+          onclick: function () {
+            $all('[data-fkey]', filterPanel).forEach(function (el) {
+              el.value = '';
+            });
+            state.page = 1; load();
+          }
+        })));
+      filterPanel.appendChild(inner);
+
+      // 工具栏筛选切换按钮
       toolbar.appendChild(h('button', {
-        class: 'btn btn-ghost btn-sm more-toggle', text: '▼ 更多筛选',
+        class: 'btn btn-ghost filter-toggle-btn', html: '筛选 <span class="badge blue" data-count>0</span>',
         onclick: function () {
-          var visible = moreBox.style.display !== 'none';
-          moreBox.style.display = visible ? 'none' : 'flex';
-          this.textContent = visible ? '▼ 更多筛选' : '▲ 收起筛选';
+          var open = filterPanel.classList.contains('open');
+          filterPanel.classList.toggle('open');
+          this.innerHTML = open ? '筛选 <span class="badge blue" data-count>' + getActiveCount() + '</span>'
+                                 : '收起 <span class="badge blue" data-count>' + getActiveCount() + '</span>';
         }
       }));
     }
+
+    function getActiveCount() {
+      var n = 0;
+      $all('[data-fkey]', filterPanel).forEach(function (el) {
+        if (String(el.value || '').trim()) { n++; }
+      });
+      return n;
+    }
+
     toolbar.appendChild(h('div', { class: 'spacer' }));
     var batchBtn = h('button', {
       class: 'btn btn-ghost', text: '删除所选', disabled: true,
@@ -1275,9 +1286,15 @@ function crudView(cfg) {
     });
 
     var panel = h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table), pagerBox);
-    root.appendChild(h('div', { class: 'panel' }, toolbar));
-    root.appendChild(h('div', { style: 'height:12px' }));
-    root.appendChild(panel);
+    // 布局:左侧主内容 + 右侧筛选面板
+    var mainArea = h('div', { class: 'content-main' },
+      h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
+      panel);
+    var layout = h('div', { class: 'content-layout' }, mainArea);
+    if (hasFilters) {
+      layout.appendChild(filterPanel);
+    }
+    root.appendChild(layout);
     container.appendChild(root);
     syncBatchBtn();
     load();

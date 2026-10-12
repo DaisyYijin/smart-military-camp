@@ -534,3 +534,83 @@ table.sub-grid td.editing { background: #f0f6ff !important; box-shadow: inset 0 
 table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-grid td.editing .cal input {
   border-color: #2f6fd6;
 }
+
+/* ---------- 右侧筛选面板 ---------- */
+.content-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.content-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.filter-panel {
+  width: 0;
+  flex: none;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: width .3s cubic-bezier(.4,0,.2,1);
+  display: flex;
+  flex-direction: column;
+}
+.filter-panel.open {
+  width: 270px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.filter-panel-inner {
+  padding: 16px;
+  min-width: 270px;
+}
+.filter-panel h4 {
+  font-size: 14px;
+  color: #16437e;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #edf1f6;
+}
+.filter-field {
+  margin-bottom: 12px;
+}
+.filter-field label {
+  display: block;
+  font-size: 13px;
+  color: #66788c;
+  margin-bottom: 5px;
+}
+.filter-field input,
+.filter-field select,
+.filter-field .dd,
+.filter-field .cal {
+  width: 100%;
+}
+.filter-field .dd-btn {
+  width: 100%;
+}
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #edf1f6;
+}
+.filter-actions .btn {
+  flex: 1;
+}
+.filter-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.filter-toggle-btn .badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
