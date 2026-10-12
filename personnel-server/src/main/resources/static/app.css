@@ -67,8 +67,11 @@ textarea { resize: vertical; }
 
 /* ---------- 主布局 ---------- */
 .layout { display: flex; height: 100%; overflow: hidden; }
+/* 侧边栏固定定位恒宽 208:收起仅靠 translateX 平移(合成层动画),
+   左侧 64px 始终被自身深色背景覆盖,不会露底闪烁,也不逐帧重排主区 */
 .sidebar {
-  width: 208px; flex: none; background: #132d52;
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 30;
+  width: 208px; background: #132d52;
   color: #cdd9ea; display: flex; flex-direction: column;
 }
 .sidebar-logo {
@@ -89,7 +92,8 @@ textarea { resize: vertical; }
 }
 .menu-item .ic { width: 18px; text-align: center; }
 
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: 208px; }
+body.side-mini .main { margin-left: 64px; }
 .topbar {
   height: 52px; flex: none; background: #fff; border-bottom: 1px solid #e2e8f0;
   display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
@@ -97,7 +101,7 @@ textarea { resize: vertical; }
 .topbar-title { font-size: 17px; font-weight: 600; color: #1d2c40; }
 .topbar-user { display: flex; align-items: center; gap: 10px; }
 .topbar-user .who { color: #66788c; }
-.content { flex: 1; overflow: auto; padding: 18px 20px; }
+.content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 18px 20px; }
 
 /* ---------- 通用页面组件 ---------- */
 .panel { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(23,43,77,.08); }
@@ -283,7 +287,8 @@ table.grid td.empty-row { text-align: center; }
 
 /* 响应式小屏 */
 @media (max-width: 900px) {
-  .sidebar { width: 64px; }
+  .sidebar { transform: translateX(-144px); }
+  .main { margin-left: 64px; }
   .sidebar-logo .t1, .sidebar-logo .t2, .menu-item span.txt { display: none; }
   .menu-item { justify-content: center; }
   .form-grid { grid-template-columns: 1fr; }
@@ -292,13 +297,12 @@ table.grid td.empty-row { text-align: center; }
 }
 
 /* ---------- 侧边栏收起 ---------- */
-/* 宽度瞬时切换(无逐帧重排),滑动由 JS FLIP 用 transform 完成(仅合成层,GPU 加速) */
+/* 恒定宽度,收起只平移(纯合成层动画);主区 margin 瞬时切换 + FLIP 滑动 */
 .sidebar {
   overflow: hidden;
-  overflow-x: hidden;
-  flex-shrink: 0;
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
 }
-.sidebar.collapsed { width: 64px; }
+.sidebar.collapsed { transform: translateX(-144px); }
 
 /* 文字淡入淡出(仅 opacity,合成层属性) */
 .sidebar .menu-item span.txt,
@@ -390,9 +394,7 @@ table.grid td.empty-row { text-align: center; }
   transform: translateY(-50%) translateX(0);
 }
 
-/* 主内容区跟随侧边栏平滑过渡 */
-.layout { transition: none; }
-.main { transition: margin-left .3s cubic-bezier(.4,0,.2,1); }
+/* 主区 margin-left 瞬时切换(滚动感由 JS FLIP transform 提供),绝不能再加 margin 过渡造成双重位移 */
 
 /* ---------- 表格复选框列 ---------- */
 table.grid th.cb-cell, table.grid td.cb-cell { text-align: center; width: 36px; padding-left: 12px; }

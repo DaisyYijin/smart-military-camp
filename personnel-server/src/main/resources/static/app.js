@@ -3949,15 +3949,14 @@ function renderShell() {
   function setCollapsed(collapsed) {
     var was = sideEl.classList.contains('collapsed');
     sideEl.classList.toggle('collapsed', collapsed);
+    document.body.classList.toggle('side-mini', collapsed);
     localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
     toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronL' : 'chevronR');
     toggleTxt.textContent = collapsed ? '展开菜单' : '收起菜单';
     toggleBtn.setAttribute('data-tip', collapsed ? '展开菜单' : '收起菜单');
-    // 宽度瞬时切换 + FLIP transform 滑动(侧边栏与主区同步平移,合成层动画不卡顿)
+    // 侧边栏由 CSS transform 过渡平移;主区 margin 瞬切 + FLIP transform 滑动,两者同步
     if (was !== collapsed) {
-      var dx = collapsed ? (SIDEBAR_W - SIDEBAR_MINI) : -(SIDEBAR_W - SIDEBAR_MINI);
-      slideFrom(sideEl, dx);
-      slideFrom(mainEl, dx);
+      slideFrom(mainEl, collapsed ? (SIDEBAR_W - SIDEBAR_MINI) : -(SIDEBAR_W - SIDEBAR_MINI));
     }
   }
   setCollapsed(localStorage.getItem('sidebarCollapsed') === '1');
