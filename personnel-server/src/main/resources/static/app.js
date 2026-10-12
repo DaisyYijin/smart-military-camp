@@ -3038,6 +3038,816 @@ function openChangePassword() {
   });
 }
 
+var equipmentCfg = {
+  key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
+  clickKey: 'name', addLabel: '新增装备',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
+  ],
+  columns: [
+    { key: 'name', label: '装备名称' },
+    { key: 'code', label: '编号' },
+    { key: 'category', label: '类别' },
+    { key: 'model', label: '型号' },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'keeperName', label: '保管人' },
+    { key: 'location', label: '存放位置' },
+    { key: 'buyDate', label: '购置日期' }
+  ],
+  rowTitle: function (r) { return r.name; },
+  form: [
+    { key: 'name', label: '装备名称', required: true },
+    { key: 'code', label: '装备编号' },
+    { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
+    { key: 'model', label: '型号' },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('equipment_status'); } },
+    { key: 'keeperId', label: '保管人', type: 'personnel' },
+    { key: 'location', label: '存放位置' },
+    { key: 'buyDate', label: '购置日期', type: 'date' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var materialCfg = {
+  key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
+  clickKey: 'name', addLabel: '新增物资',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
+  ],
+  columns: [
+    { key: 'name', label: '物资名称' },
+    { key: 'category', label: '分类' },
+    { key: 'spec', label: '规格' },
+    { key: 'unit', label: '单位' },
+    {
+      label: '数量', render: function (r) {
+        var low = r.minQuantity != null && r.quantity != null && r.quantity <= r.minQuantity;
+        return low ? '<span class="warn-num">' + esc(r.quantity) + ' ⚠</span>' : esc(r.quantity);
+      }
+    },
+    { key: 'minQuantity', label: '预警下限' },
+    { key: 'keeperName', label: '责任人' },
+    { key: 'location', label: '存放位置' }
+  ],
+  rowTitle: function (r) { return r.name; },
+  form: [
+    { key: 'name', label: '物资名称', required: true },
+    { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } },
+    { key: 'spec', label: '规格' },
+    { key: 'unit', label: '单位', placeholder: '个/箱/件…' },
+    { key: 'quantity', label: '数量', type: 'number', step: '0.01' },
+    { key: 'minQuantity', label: '库存预警下限', type: 'number', step: '0.01' },
+    { key: 'keeperId', label: '责任人', type: 'personnel' },
+    { key: 'location', label: '存放位置' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var vehicleCfg = {
+  key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
+  clickKey: 'plateNo', addLabel: '新增车辆',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
+  ],
+  columns: [
+    { key: 'plateNo', label: '车牌号' },
+    { key: 'brand', label: '品牌型号' },
+    { key: 'type', label: '车型' },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'driverName', label: '驾驶员' },
+    { key: 'seats', label: '核定人数' },
+    { key: 'mileage', label: '里程(km)' }
+  ],
+  rowTitle: function (r) { return r.plateNo; },
+  form: [
+    { key: 'plateNo', label: '车牌号', required: true },
+    { key: 'brand', label: '品牌型号' },
+    { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('vehicle_status'); } },
+    { key: 'driverId', label: '驾驶员', type: 'personnel' },
+    { key: 'seats', label: '核定人数', type: 'number', step: '1' },
+    { key: 'mileage', label: '里程(km)', type: 'number', step: '0.1' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var leaveCfg = {
+  key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
+  clickKey: 'personnelName', addLabel: '新增休假',
+  filters: [{ key: 'keyword', label: '检索' }],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },
+    { key: 'startDate', label: '开始日期' },
+    { key: 'endDate', label: '结束日期' },
+    { key: 'days', label: '天数' },
+    { key: 'reason', label: '事由' }
+  ],
+  rowTitle: function (r) { return r.personnelName; },
+  delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假记录吗?'; },
+  form: [
+    { key: 'personnelId', label: '休假人员', type: 'personnel', required: true },
+    { key: 'leaveType', label: '休假类型', type: 'select', required: true, options: function () { return dictLabels('leave_type'); } },
+    { key: 'startDate', label: '开始日期', type: 'date', required: true },
+    { key: 'endDate', label: '结束日期', type: 'date', required: true },
+    { key: 'days', label: '天数', type: 'number', step: '0.5' },
+    { key: 'reason', label: '事由', span: 'full' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var fitnessCfg = {
+  key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
+  clickKey: 'personnelName', addLabel: '新增考核记录',
+  toolbarExtra: function (bar, act) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '体能标准',
+      title: '查看体能考核评分标准',
+      onclick: function () { openFitnessStdManager(); }
+    }));
+  },
+  filters: [
+    { key: 'departmentId', label: '部门', type: 'select', options: function () {
+        return Ctx.deptFlat.map(function (d) {
+          var prefix = '';
+          for (var i = 0; i < d.depth; i++) { prefix += '　'; }
+          return { v: String(d.id), l: prefix + d.name };
+        });
+      } },
+    { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
+    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下'] },
+    { key: 'minScore', label: '最低分' },
+    { key: 'maxScore', label: '最高分' },
+    { key: 'startDate', label: '起日期' },
+    { key: 'endDate', label: '止日期' }
+  ],
+  afterTable: function (rootEl) {
+    var toolbar = rootEl.querySelector('.toolbar');
+    if (!toolbar || toolbar.querySelector('.quick-tags')) { return; }
+    var now = new Date();
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    var q = Math.floor(now.getMonth() / 3) + 1;
+    var tags = [
+      { label: '本月', f: { startDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-01', endDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-31' } },
+      { label: '本季度', f: { startDate: now.getFullYear() + '-' + pad2((q - 1) * 3 + 1) + '-01', endDate: now.getFullYear() + '-' + pad2(q * 3) + '-31' } },
+      { label: '本年度', f: { startDate: now.getFullYear() + '-01-01', endDate: now.getFullYear() + '-12-31' } },
+      { label: '仅及格', f: { minScore: '60' } },
+      { label: '仅不及格', f: { maxScore: '59' } },
+      { label: '仅优秀', f: { minScore: '90' } },
+    ];
+    var tagRow = h('div', { class: 'quick-tags', style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;margin-top:4px' });
+    tagRow.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '快捷:' }));
+    tags.forEach(function (t) {
+      tagRow.appendChild(h('button', {
+        class: 'btn btn-ghost btn-sm', text: t.label,
+        style: 'font-size:12px;padding:3px 12px;border-radius:12px',
+        onclick: function () {
+          Object.keys(t.f).forEach(function (k) {
+            var el = rootEl.querySelector('[data-fkey="' + k + '"]');
+            if (el) { el.value = t.f[k] || ''; }
+          });
+          var queryBtn = Array.from(toolbar.querySelectorAll('.btn')).find(function (b) {
+            return b.textContent.trim() === '查询';
+          });
+          if (queryBtn) { queryBtn.click(); }
+        }
+      }));
+    });
+    toolbar.appendChild(tagRow);
+  },
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'item', label: '考核项目' },
+    { key: 'score', label: '成绩' },
+    { key: 'grade', label: '等级', render: function (r) { return badge(r.grade); } },
+    { key: 'testDate', label: '考核日期' },
+    { key: 'tester', label: '考核人' }
+  ],
+  rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
+  form: [
+    { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
+    { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
+    { key: 'score', label: '成绩', placeholder: '如 12\'30 或 45 次' },
+    {
+      key: 'grade', label: '评定等级', type: 'select', required: true,
+      options: function () { var l = dictLabels('fitness_grade'); return l.length ? l : ['优秀', '良好', '及格', '不及格']; }
+    },
+    { key: 'testDate', label: '考核日期', type: 'date', required: true },
+    { key: 'tester', label: '考核人' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+/* ================= 部门管理视图(树) ================= */
+
+function departmentView() {
+  var root = h('div');
+
+  function nodeRow(node, depth) {
+    var hasKids = node.children && node.children.length;
+    var expand = hasKids
+      ? h('span', { class: 'tw', text: node._open === false ? '▸' : '▾', onclick: function () { node._open = node._open === false; renderTree(); } })
+      : h('span', { class: 'tw', text: '·' });
+    var row = h('div', { class: 'dept-row' }, expand,
+      h('span', { class: 'name', text: node.name }),
+      hasKids ? h('span', { class: 'cnt', text: hasKids + ' 个子部门' }) : null,
+      h('span', { class: 'acts' },
+        h('button', { class: 'btn-link', text: '加子级', onclick: function () { openForm(null, node.id); } }),
+        h('button', { class: 'btn-link', text: '编辑', onclick: function () { openForm(node); } }),
+        h('button', {
+          class: 'btn-link danger', text: '删除',
+          onclick: function () {
+            confirmBox('确定删除部门「' + node.name + '」吗?若其下有子部门或人员将无法删除。', true).then(function (yes) {
+              if (!yes) return;
+              DEL('/api/departments/' + node.id).then(function () {
+                toast('已删除');
+                refreshDepts().then(renderTree);
+              }).catch(function (e) { toast(e.message, 'err'); });
+            });
+          }
+        })));
+    row.style.paddingLeft = (10 + depth * 22) + 'px';
+    return row;
+  }
+
+  function renderTree() {
+    var box = $('.dept-tree', root);
+    box.innerHTML = '';
+    if (!Ctx.deptTree.length) {
+      box.appendChild(h('div', { class: 'empty-row', text: '暂无部门,点击上方按钮创建' }));
+      return;
+    }
+    (function emit(nodes, depth) {
+      nodes.forEach(function (n) {
+        box.appendChild(nodeRow(n, depth));
+        if (n._open !== false && n.children && n.children.length) emit(n.children, depth + 1);
+      });
+    })(Ctx.deptTree, 0);
+  }
+
+  function openForm(node, parentId) {
+    var form = buildForm([
+      { key: 'name', label: '部门名称', required: true },
+      { key: 'parentId', label: '上级部门', type: 'dept' },
+      { key: 'sort', label: '排序号', type: 'number', step: '1', placeholder: '小的排前面' },
+      { key: 'remark', label: '备注', span: 'full' }
+    ], node || { parentId: parentId || null });
+    var m = openModal({
+      title: node ? '编辑部门 - ' + node.name : '新增部门',
+      body: form.el,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            var data = form.get();
+            if (!data) return;
+            if (data.parentId === '') data.parentId = null;
+            if (data.sort === null) data.sort = 0;
+            var done = node ? PUT('/api/departments/' + node.id, data) : POST('/api/departments', data);
+            done.then(function () {
+              m.close();
+              toast('保存成功');
+              refreshDepts().then(renderTree);
+            }).catch(function (e) { form.setError(e.message); });
+          }
+        })
+      ]
+    });
+  }
+
+  function render(container) {
+    root.appendChild(h('div', { class: 'panel' },
+      h('div', { class: 'dept-toolbar' },
+        h('button', { class: 'btn btn-primary', text: '＋ 新增部门', onclick: function () { openForm(null, null); } }),
+        h('button', {
+          class: 'btn btn-ghost', text: '刷新', style: 'margin-left:8px',
+          onclick: function () { refreshDepts().then(renderTree); }
+        })),
+      h('div', { class: 'dept-tree' })));
+    renderTree();
+    container.appendChild(root);
+  }
+  return { render: render };
+}
+
+/* ================= 数据字典视图 ================= */
+
+function dictView() {
+  var root = h('div');
+  var currentType = null;
+
+  function typeGroup(t) {
+    for (var i = 0; i < Ctx.dictTypes.length; i++) {
+      if (Ctx.dictTypes[i].type === t) return Ctx.dictTypes[i];
+    }
+    return null;
+  }
+
+  function renderTypeList() {
+    var box = $('.dict-types', root);
+    box.innerHTML = '';
+    Ctx.dictTypes.forEach(function (g) {
+      box.appendChild(h('div', {
+        class: 'dict-type-item' + (g.type === currentType ? ' active' : ''),
+        onclick: function () { currentType = g.type; renderTypeList(); renderItems(); }
+      }, h('span', { text: g.name || g.type }), h('span', { class: 'n', text: String((g.items || []).length) })));
+    });
+  }
+
+  function renderItems() {
+    var main = $('.dict-main', root);
+    main.innerHTML = '';
+    if (!currentType) {
+      main.appendChild(h('div', { class: 'panel' }, h('div', { class: 'empty-row', text: '暂无字典数据' })));
+      return;
+    }
+    var g = typeGroup(currentType) || { items: [] };
+    var items = g.items || [];
+
+    var table = h('table', { class: 'grid' });
+    table.innerHTML = '<thead><tr><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th style="width:110px">操作</th></tr></thead><tbody>' +
+      (items.length ? items.map(function (d) {
+        return '<tr><td>' + esc(d.dictLabel) + '</td><td>' + esc(d.sort) + '</td>' +
+          '<td>' + (d.enabled === false ? '<span class="badge gray">停用</span>' : '<span class="badge green">启用</span>') + '</td>' +
+          '<td>' + esc(d.remark) + '</td>' +
+          '<td class="actions"><button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
+          '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
+      }).join('') : '<tr><td colspan="5" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
+    table.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var id = b.getAttribute('data-edit') || b.getAttribute('data-del');
+      var item = items.filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!item) return;
+      if (b.hasAttribute('data-del')) {
+        confirmBox('确定删除选项「' + item.dictLabel + '」吗?已有数据中的该值将保留,但不再出现在下拉选项中。', true)
+          .then(function (yes) {
+            if (!yes) return;
+            DEL('/api/dict/' + id).then(function () {
+              toast('已删除');
+              refreshDicts().then(renderAll);
+            }).catch(function (err) { toast(err.message, 'err'); });
+          });
+      } else {
+        openForm(item);
+      }
+    });
+
+    main.appendChild(h('div', { class: 'panel' },
+      h('div', { class: 'toolbar' },
+        h('strong', { text: (g.name || currentType) + '(' + currentType + ')' }),
+        h('div', { class: 'spacer' }),
+        h('button', { class: 'btn btn-primary', text: '＋ 新增选项', onclick: function () { openForm(null); } })),
+      h('div', { class: 'table-wrap' }, table)));
+  }
+
+  function openForm(item) {
+    var form = buildForm([
+      { key: 'dictLabel', label: '选项内容', required: true },
+      { key: 'sort', label: '排序号', type: 'number', step: '1' },
+      { key: 'enabled', label: '状态', type: 'select', required: true, options: [{ v: '1', l: '启用' }, { v: '0', l: '停用' }] },
+      { key: 'remark', label: '备注', span: 'full' }
+    ], item
+      ? { dictLabel: item.dictLabel, sort: item.sort, enabled: item.enabled === false ? '0' : '1', remark: item.remark }
+      : { enabled: '1', sort: 0 });
+    var m = openModal({
+      title: item ? '编辑选项 - ' + item.dictLabel : '新增选项 · ' + (typeGroup(currentType) || {}).name,
+      body: form.el,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            var data = form.get();
+            if (!data) return;
+            data.dictType = currentType;
+            data.enabled = data.enabled !== '0';
+            if (data.sort === null) data.sort = 0;
+            var done = item ? PUT('/api/dict/' + item.id, data) : POST('/api/dict', data);
+            done.then(function () {
+              m.close();
+              toast('保存成功');
+              refreshDicts().then(renderAll);
+            }).catch(function (e) { form.setError(e.message); });
+          }
+        })
+      ]
+    });
+  }
+
+  function renderAll() {
+    if (!currentType && Ctx.dictTypes.length) currentType = Ctx.dictTypes[0].type;
+    renderTypeList();
+    renderItems();
+  }
+
+  function render(container) {
+    root.appendChild(h('div', { class: 'dict-layout' },
+      h('div', { class: 'panel dict-types' }),
+      h('div', { class: 'dict-main' })));
+    renderAll();
+    container.appendChild(root);
+  }
+  return { render: render };
+}
+
+/* ================= 统计视图 ================= */
+
+function statsView() {
+  var root = h('div', { class: 'loading-inline', text: '加载中…' });
+
+  function barList(list, colorClass) {
+    if (!list.length) return '<div class="empty-row">暂无数据</div>';
+    var max = 1;
+    list.forEach(function (x) { if (x.count > max) max = x.count; });
+    return list.map(function (x) {
+      var pct = Math.max(2, Math.round(x.count / max * 100));
+      return '<div class="bar-row ' + colorClass + '"><span class="bn" title="' + esc(x.name) + '">' + esc(x.name) +
+        '</span><span class="bt"><span class="bf" style="width:' + pct + '%"></span></span>' +
+        '<span class="bv">' + x.count + ' 人</span></div>';
+    }).join('');
+  }
+
+  function render(container) {
+    container.appendChild(root);
+    GET('/api/stats/summary').then(function (s) {
+      var onDuty = 0;
+      (s.status || []).forEach(function (x) { if (x.name === '在职') onDuty = x.count; });
+      root.className = '';
+      root.innerHTML =
+        '<div class="stats-cards">' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('users') + '</span><div class="num">' + (s.total || 0) + '</div><div class="lbl">人员总数</div></div>' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('building') + '</span><div class="num">' + ((s.department || []).length) + '</div><div class="lbl">有人员的部门数</div></div>' +
+        '<div class="stat-card"><span class="ic">' + iconSvg('check') + '</span><div class="num">' + onDuty + '</div><div class="lbl">在职人数</div></div>' +
+        '</div>' +
+        '<div class="chart-panel"><h3>各部门人数</h3>' + barList(s.department || [], '') + '</div>' +
+        '<div class="chart-panel"><h3>性别分布</h3>' + barList(s.gender || [], 'green') + '</div>' +
+        '<div class="chart-panel"><h3>人员状态分布</h3>' + barList(s.status || [], 'orange') + '</div>';
+    }).catch(function (e) {
+      root.className = '';
+      root.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
+    });
+  }
+  return { render: render };
+}
+
+/* ================= 操作日志视图 ================= */
+
+function logView() {
+  var state = { page: 1, size: 20, total: 0, keyword: '' };
+  var root = h('div');
+  var pagerBox = h('div');
+  var table = h('table', { class: 'grid' });
+
+  function load() {
+    var q = { page: state.page, size: state.size };
+    if (state.keyword) {
+      q.keyword = state.keyword;
+    }
+    var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
+    GET('/api/log?' + qs).then(function (pageData) {
+      var rows = (pageData && pageData.list) || [];
+      state.total = (pageData && pageData.total) || 0;
+      table.innerHTML = '<thead><tr><th style="width:150px">时间</th><th style="width:110px">用户</th>'
+        + '<th style="width:130px">IP</th><th style="width:120px">操作</th><th>详情</th></tr></thead><tbody>'
+        + (rows.length ? rows.map(function (r) {
+            return '<tr><td>' + esc(r.created_at) + '</td>'
+              + '<td>' + esc(r.username || '-') + '</td>'
+              + '<td>' + esc(r.ip || '-') + '</td>'
+              + '<td>' + esc(r.action) + '</td>'
+              + '<td>' + esc(r.detail || '') + '</td></tr>';
+          }).join('') : '<tr><td colspan="5" class="empty-row">暂无日志</td></tr>')
+        + '</tbody>';
+      pagerBox.innerHTML = '';
+      pagerBox.appendChild(renderPager(state, function (p) { state.page = p; load(); }));
+    }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  function render(container) {
+    var kw = h('input', { type: 'text', 'data-fkey': 'kw', placeholder: '用户/操作/IP 关键字,回车搜索' });
+    kw.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { state.keyword = kw.value.trim(); state.page = 1; load(); }
+    });
+    root.appendChild(h('div', { class: 'panel' },
+      h('div', { class: 'toolbar' },
+        h('div', { class: 'field-inline' }, h('label', { text: '检索' }), kw),
+        h('button', {
+          class: 'btn btn-ghost', text: '查询',
+          onclick: function () { state.keyword = kw.value.trim(); state.page = 1; load(); }
+        }),
+        h('div', { class: 'spacer' }),
+        h('span', { style: 'color:#8a97a8;font-size:13px', text: '自动记录:登录/登出/增删改/导入导出/备份' })),
+      h('div', { class: 'table-wrap' }, table),
+      pagerBox));
+    container.appendChild(root);
+    load();
+  }
+  return { render: render };
+}
+
+/* ================= 备份恢复视图 ================= */
+
+function fmtSize(bytes) {
+  if (bytes == null) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function backupView() {
+  var root = h('div', { class: 'loading-inline', text: '加载中…' });
+  var MODULES = [];   // [{key,label}]
+
+  function moduleLabel(key) {
+    for (var i = 0; i < MODULES.length; i++) {
+      if (MODULES[i].key === key) return MODULES[i].label;
+    }
+    return key;
+  }
+
+  /** 模块勾选组;返回 {el, get, setAll} */
+  function checkGroup(checkedKeys) {
+    var boxes = [];
+    var wrap = h('div', { class: 'chk-list' });
+    MODULES.forEach(function (m) {
+      var box = h('input', { type: 'checkbox', value: m.key });
+      box.checked = checkedKeys.indexOf(m.key) >= 0;
+      boxes.push(box);
+      wrap.appendChild(h('label', {}, box, m.label));
+    });
+    return {
+      el: wrap,
+      get: function () {
+        return boxes.filter(function (b) { return b.checked; })
+          .map(function (b) { return b.value; });
+      },
+      setAll: function (on) { boxes.forEach(function (b) { b.checked = !!on; }); }
+    };
+  }
+
+  function moduleBadges(mods) {
+    if (!mods) return '<span class="badge gray">未知</span>';
+    return Object.keys(mods).map(function (k) {
+      var rows = 0;
+      var tables = mods[k] || {};
+      Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
+      return '<span class="badge blue" title="' + rows + ' 条">' + esc(moduleLabel(k)) + '</span>';
+    }).join(' ');
+  }
+
+  function openRestore(bk) {
+    var avail = bk.modules ? Object.keys(bk.modules) : [];
+    if (!avail.length) {
+      toast('该备份没有模块信息,无法恢复', 'err');
+      return;
+    }
+    var group = checkGroup(avail);
+    var body = h('div');
+    body.appendChild(h('div', { class: 'backup-tip', text: '恢复会先清空所选模块的现有数据,再写入备份内容(每个模块独立执行)。例如只勾选“人员管理”则只覆盖人员,部门、装备等其他模块不受影响。管理员账号与密码不受影响。' }));
+    body.appendChild(h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:6px', text: '选择要恢复的模块:' }));
+    body.appendChild(group.el);
+    var m = openModal({
+      title: '恢复备份 - ' + bk.createdText,
+      body: body,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-danger', text: '开始恢复',
+          onclick: function () {
+            var mods = group.get();
+            if (!mods.length) { toast('请至少勾选一个模块', 'err'); return; }
+            POST('/api/backup/restore', { name: bk.name, modules: mods }).then(function (r) {
+              m.close();
+              var parts = (r.restored || []).map(function (x) {
+                var rows = 0;
+                var tables = x.tables || {};
+                Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
+                return moduleLabel(x.module) + '(' + rows + '条)';
+              });
+              toast('恢复完成:' + parts.join('、') + (r.photos ? ',照片' + r.photos + '张' : ''), 'ok');
+              refreshAll();
+              loadList();
+            }).catch(function (e) { toast(e.message, 'err'); });
+          }
+        })
+      ]
+    });
+  }
+
+  var listTable = h('table', { class: 'grid' });
+  listTable.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-act]');
+    if (!b) return;
+    var name = b.getAttribute('data-name');
+    var act = b.getAttribute('data-act');
+    if (act === 'restore') {
+      var bk = lastList.filter(function (x) { return x.name === name; })[0];
+      if (bk) openRestore(bk);
+    } else if (act === 'download') {
+      apiBlob('/api/backup/download?name=' + encodeURIComponent(name))
+        .then(function (r) { downloadBlob(r.blob, r.filename); })
+        .catch(function (e) { toast(e.message, 'err'); });
+    } else if (act === 'delete') {
+      confirmBox('确定删除备份文件 ' + name + ' 吗?删除后不可恢复。', true).then(function (yes) {
+        if (!yes) return;
+        POST('/api/backup/delete', { name: name }).then(function () {
+          toast('已删除'); loadList();
+        }).catch(function (e) { toast(e.message, 'err'); });
+      });
+    }
+  });
+
+  var lastList = [];
+  function loadList() {
+    GET('/api/backup/list').then(function (list) {
+      lastList = list || [];
+      listTable.innerHTML = '<thead><tr><th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th style="width:170px">操作</th></tr></thead><tbody>' +
+        (lastList.length ? lastList.map(function (bk) {
+          return '<tr><td>' + esc(bk.createdText) + '</td>' +
+            '<td>' + (bk.auto ? '<span class="badge green">自动</span>' : '<span class="badge blue">手动</span>') + '</td>' +
+            '<td>' + moduleBadges(bk.modules) + '</td>' +
+            '<td>' + fmtSize(bk.size) + '</td>' +
+            '<td title="' + esc(bk.name) + '">' + esc(bk.name) + '</td>' +
+            '<td class="actions">' +
+            '<button class="btn-link" data-act="restore" data-name="' + esc(bk.name) + '">恢复</button>' +
+            '<button class="btn-link" data-act="download" data-name="' + esc(bk.name) + '">下载</button>' +
+            '<button class="btn-link danger" data-act="delete" data-name="' + esc(bk.name) + '">删除</button>' +
+            '</td></tr>';
+        }).join('') : '<tr><td colspan="6" class="empty-row">暂无备份</td></tr>') + '</tbody>';
+    }).catch(function (e) {
+      toast(e.message, 'err');
+    });
+  }
+
+  function render(container) {
+    container.appendChild(root);
+    Promise.all([GET('/api/backup/modules'), GET('/api/backup/settings')])
+      .then(function (res) {
+        MODULES = res[0] || [];
+        var settings = res[1] || {};
+        root.className = '';
+        root.innerHTML = '';
+
+        /* ---- 自动备份设置 ---- */
+        var enabledBox = h('input', { type: 'checkbox' });
+        enabledBox.checked = !!settings.enabled;
+        var intervalInput = h('input', { type: 'number', min: '1', max: '720', step: '1' });
+        intervalInput.value = settings.intervalHours || 24;
+        var keepInput = h('input', { type: 'number', min: '1', max: '200', step: '1' });
+        keepInput.value = settings.keepCount || 10;
+        var autoGroup = checkGroup(settings.modules && settings.modules.length
+          ? settings.modules : MODULES.map(function (m) { return m.key; }));
+        var statusLine = h('div', { style: 'color:#66788c;font-size:13px;margin-top:10px' });
+        function syncStatusLine() {
+          statusLine.textContent = settings.enabled
+            ? (settings.autoLastRun
+              ? '上次自动备份:' + new Date(settings.autoLastRun).toLocaleString() + '(到点后自动执行)'
+              : '已开启,尚未执行过自动备份(到点后自动执行)')
+            : '自动备份当前:未开启';
+        }
+        syncStatusLine();
+
+        var autoCard = h('div', { class: 'chart-panel' },
+          h('h3', { text: '自动备份' }),
+          h('div', { class: 'form-inline' },
+            h('label', {}, enabledBox, ' 启用自动备份'),
+            h('label', {}, '每 '), intervalInput, h('span', { text: ' 小时备份一次' }),
+            h('label', {}, '自动备份保留最近 '), keepInput, h('span', { text: ' 份(超出自动删除)' })),
+          h('div', { style: 'font-size:13px;color:#66788c;margin:8px 0 2px', text: '自动备份包含的模块:' }),
+          autoGroup.el,
+          statusLine,
+          h('div', { style: 'margin-top:12px' },
+            h('button', {
+              class: 'btn btn-primary', text: '保存设置',
+              onclick: function () {
+                if (!autoGroup.get().length) { toast('自动备份至少选择一个模块', 'err'); return; }
+                POST('/api/backup/settings', {
+                  enabled: enabledBox.checked,
+                  intervalHours: Number(intervalInput.value) || 24,
+                  keepCount: Number(keepInput.value) || 10,
+                  modules: autoGroup.get()
+                }).then(function (s) {
+                  settings = s; syncStatusLine();
+                  toast('自动备份设置已保存');
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            })));
+
+        /* ---- 手动备份 ---- */
+        var manualGroup = checkGroup(MODULES.map(function (m) { return m.key; }));
+        var manualCard = h('div', { class: 'chart-panel' },
+          h('h3', { text: '手动备份' }),
+          h('div', { class: 'form-inline' },
+            h('button', { class: 'btn btn-ghost', text: '全选', onclick: function () { manualGroup.setAll(true); } }),
+            h('button', { class: 'btn btn-ghost', text: '全不选', onclick: function () { manualGroup.setAll(false); } }),
+            h('button', {
+              class: 'btn btn-primary', text: '立即备份',
+              onclick: function () {
+                var mods = manualGroup.get();
+                if (!mods.length) { toast('请至少选择一个要备份的模块', 'err'); return; }
+                toast('正在备份…', 'info');
+                POST('/api/backup/run', { modules: mods }).then(function (r) {
+                  toast('备份完成:' + fmtSize(r.size) + '(' + Object.keys(r.modules).map(moduleLabel).join('、') + ')');
+                  loadList();
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            })),
+          manualGroup.el,
+          h('div', { class: 'backup-tip', text: '备份文件保存在本机程序的 data/backup/ 文件夹;可下载后拷到 U 盘保存。恢复时可选只恢复其中部分模块。' }));
+
+        /* ---- 备份列表 ---- */
+        var listCard = h('div', { class: 'chart-panel', style: 'padding:0' },
+          h('div', { class: 'table-wrap' }, listTable));
+
+        root.appendChild(autoCard);
+        root.appendChild(manualCard);
+        listCard.insertBefore(h('h3', { style: 'padding:18px 20px 0;margin-bottom:10px', text: '备份文件' }), listCard.firstChild);
+        root.appendChild(listCard);
+        loadList();
+      })
+      .catch(function (e) {
+        root.className = '';
+        root.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
+      });
+  }
+  return { render: render };
+}
+
+/* ================= 登录页 ================= */
+
+function renderLogin(msg) {
+  var app = $('#app');
+  app.innerHTML = '';
+  if (msg) toast(msg, 'err');
+
+  var errBox = h('div', { class: 'login-error' });
+  var userInput = h('input', { type: 'text', placeholder: '请输入管理员账号', autocomplete: 'username' });
+  var pwInput = h('input', { type: 'password', placeholder: '请输入密码', autocomplete: 'current-password' });
+  var btn = h('button', { class: 'btn btn-primary login-btn', text: '登  录' });
+
+  function submit() {
+    var u = userInput.value.trim();
+    var p = pwInput.value;
+    if (!u || !p) { errBox.textContent = '请输入账号和密码'; return; }
+    btn.disabled = true; btn.textContent = '登录中…';
+    errBox.textContent = '';
+    api('POST', '/api/auth/login', { username: u, password: p }).then(function (data) {
+      saveSession(data.token, { username: data.username, displayName: data.displayName });
+      return refreshAll().then(renderShell);
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = '登  录';
+      errBox.textContent = e.message;
+    });
+  }
+  btn.addEventListener('click', submit);
+  pwInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+  userInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') pwInput.focus(); });
+
+  app.appendChild(h('div', { class: 'login-wrap' },
+    h('div', { class: 'login-card' },
+      h('div', { class: 'login-emblem', text: '★' }),
+      h('div', { class: 'login-title', text: '数智军营人员管理系统' }),
+      h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
+      h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
+      errBox,
+      btn,
+      h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
+  userInput.focus();
+}
+
+/* ================= 修改密码 ================= */
+
+function openChangePassword() {
+  var form = buildForm([
+    { key: 'oldPassword', label: '旧密码', required: true },
+    { key: 'newPassword', label: '新密码(至少6位)', required: true },
+    { key: 'confirm', label: '确认新密码', required: true }
+  ], {});
+  var m = openModal({
+    title: '修改密码',
+    body: form.el,
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+      h('button', {
+        class: 'btn btn-primary', text: '确定修改',
+        onclick: function () {
+          var data = form.get();
+          if (!data) return;
+          if (data.newPassword !== data.confirm) { form.setError('两次输入的新密码不一致'); return; }
+          POST('/api/auth/change-password', { oldPassword: data.oldPassword, newPassword: data.newPassword })
+            .then(function () { m.close(); toast('密码修改成功,下次登录请使用新密码'); })
+            .catch(function (e) { form.setError(e.message); });
+        }
+      })
+    ]
+  });
+}
+
+
 /* ================= 主框架 ================= */
 
 var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, fitnessCfg];
