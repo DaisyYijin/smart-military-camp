@@ -32,6 +32,9 @@ public class FitnessController {
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String item,
+                             @RequestParam(required = false) String grade,
+                             @RequestParam(required = false) String startDate,
+                             @RequestParam(required = false) String endDate,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "20") int size) {
         if (page < 1) {
@@ -40,8 +43,8 @@ public class FitnessController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<FitnessRecord> list = fitnessService.query(keyword, item, page, size);
-        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.count(keyword, item), list));
+        List<FitnessRecord> list = fitnessService.queryFiltered(keyword, item, grade, startDate, endDate, page, size);
+        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.countFiltered(keyword, item, grade, startDate, endDate), list));
     }
 
     @PostMapping

@@ -1346,6 +1346,24 @@ function parseIdCard(idCard) {
 }
 
 /** 根据出生日期计算年龄 */
+function calcAgeAt(birthDate, atDate) {
+  if (!birthDate) { return ''; }
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(birthDate);
+  if (!m) { return ''; }
+  var b = new Date(+m[1], +m[2] - 1, +m[3]);
+  var now;
+  if (atDate) {
+    var m2 = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(atDate);
+    now = m2 ? new Date(+m2[1], +m2[2] - 1, +m2[3]) : new Date();
+  } else {
+    now = new Date();
+  }
+  var age = now.getFullYear() - b.getFullYear();
+  var mo = now.getMonth() - b.getMonth();
+  if (mo < 0 || (mo === 0 && now.getDate() < b.getDate())) { age--; }
+  return age >= 0 && age < 150 ? String(age) : '';
+}
+
 function calcAge(birthDate) {
   if (!birthDate) { return ''; }
   var d = parseIdCard('000000' + birthDate.replace(/-/g, '') + '0');
@@ -1550,8 +1568,15 @@ function subRecordsPanel(kind, personnelId, opt) {
     r[c.key] = value;
     // 体能成绩失焦:按矩阵自动计算等级分数(需要知道本人年龄)
     if (c.key === 'score' && value && opt.age !== undefined) {
-      var g = calcFitnessGrade(r.item || '', value, opt.age);
+      var age = calcAgeAt(opt.birthday, r.test_date) || opt.age;
+      var g = calcFitnessGrade(r.item || '', value, age);
       if (g) { r.grade = g; }
+    }
+    // 考核日期变更后也重算等级(年龄可能跨档)
+    if (c.key === 'test_date' && r.score) {
+      var age2 = calcAgeAt(opt.birthday, value) || opt.age;
+      var g2 = calcFitnessGrade(r.item || '', r.score, age2);
+      if (g2) { r.grade = g2; }
     }
     // 身份证号失焦:自动填充性别和出生日期
     if (c.key === 'id_card' && value) {
@@ -2453,6 +2478,7 @@ var personnelCfg = {
     var fk;
     for (fk in FITNESS_SUB) { fitnessOpt[fk] = FITNESS_SUB[fk]; }
     fitnessOpt.age = row ? calcAge(row.birthday) : '';
+    fitnessOpt.birthday = row ? row.birthday : '';
     if (row && row.id) {
       return {
         panels: {
@@ -2675,7 +2701,10 @@ var fitnessCfg = {
   },
   filters: [
     { key: 'keyword', label: '检索' },
-    { key: 'item', label: '项目', type: 'select', options: function () { return dictLabels('fitness_item'); } }
+    { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
+    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下', '不及格'] },
+    { key: 'startDate', label: '起日期' },
+    { key: 'endDate', label: '止日期' }
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },

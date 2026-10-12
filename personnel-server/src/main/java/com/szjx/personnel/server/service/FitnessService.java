@@ -64,4 +64,85 @@ public class FitnessService {
             throw new IllegalArgumentException("请填写考核日期");
         }
     }
+
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    public List<FitnessRecord> queryFiltered(String keyword, String item, String grade,
+                                              String startDate, String endDate, int page, int size) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT f.*, p.name AS personnel_name FROM fitness_record f " +
+            "LEFT JOIN personnel p ON f.personnel_id=p.id WHERE 1=1");
+        List<Object> args = new java.util.ArrayList<Object>();
+        appendFilter(sql, args, keyword, item, grade, startDate, endDate);
+        sql.append(" ORDER BY f.test_date DESC, f.id DESC LIMIT ? OFFSET ?");
+        args.add(size); args.add((page - 1) * size);
+        return jdbc.query(sql.toString(), new FitnessRowMapper(), args.toArray());
+    }
+
+    public long countFiltered(String keyword, String item, String grade,
+                               String startDate, String endDate) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT COUNT(*) FROM fitness_record f " +
+            "LEFT JOIN personnel p ON f.personnel_id=p.id WHERE 1=1");
+        List<Object> args = new java.util.ArrayList<Object>();
+        appendFilter(sql, args, keyword, item, grade, startDate, endDate);
+        Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+        return n == null ? 0 : n;
+    }
+
+    private void appendFilter(StringBuilder sql, List<Object> args, String keyword,
+                               String item, String grade, String startDate, String endDate) {
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            sql.append(" AND (p.name LIKE ? OR f.item LIKE ? OR f.tester LIKE ?)");
+            String like = "%" + keyword.trim() + "%";
+            args.add(like); args.add(like); args.add(like);
+        }
+        if (item != null && !item.trim().isEmpty()) {
+            sql.append(" AND f.item = ?");
+            args.add(item.trim());
+        }
+        if (grade != null && !grade.trim().isEmpty()) {
+            String g = grade.trim();
+            if (g.contains("分以上")) {
+                sql.append(" AND CAST(f.grade AS REAL) >= ").append(g.replace("分以上", ""));
+            } else if (g.contains("分以下")) {
+                sql.append(" AND CAST(f.grade AS REAL) < ").append(g.replace("分以下", ""));
+            } else if (g.contains("-")) {
+                String[] parts = g.replace("分", "").split("-");
+                sql.append(" AND CAST(f.grade AS REAL) >= ? AND CAST(f.grade AS REAL) <= ?");
+                args.add(Double.parseDouble(parts[0]));
+                args.add(Double.parseDouble(parts[1]));
+            } else if ("不及格".equals(g)) {
+                sql.append(" AND CAST(f.grade AS REAL) < 60");
+            } else {
+                sql.append(" AND f.grade = ?");
+                args.add(g);
+            }
+        }
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            sql.append(" AND f.test_date >= ?");
+            args.add(startDate.trim());
+        }
+        if (endDate != null && !endDate.trim().isEmpty()) {
+            sql.append(" AND f.test_date <= ?");
+            args.add(endDate.trim());
+        }
+    }
+
+    private static class FitnessRowMapper implements org.springframework.jdbc.core.RowMapper<FitnessRecord> {
+        @Override
+        public FitnessRecord mapRow(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+            FitnessRecord r = new FitnessRecord();
+            r.setId(rs.getLong("id"));
+            r.setPersonnelId(rs.getLong("personnel_id"));
+            r.setPersonnelName(rs.getString("personnel_name"));
+            r.setItem(rs.getString("item"));
+            r.setScore(rs.getString("score"));
+            r.setGrade(rs.getString("grade"));
+            r.setTestDate(rs.getString("test_date"));
+            r.setTester(rs.getString("tester"));
+            r.setRemark(rs.getString("remark"));
+            return r;
+        }
+    }
 }
