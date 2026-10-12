@@ -383,6 +383,41 @@ public class SchemaInitializer implements CommandLineRunner {
         }
 
 
+        // 休假扩展:年度/路途/节假日
+        String[] leaveCols = {"year", "travel_days", "holiday_days"};
+        for (String col : leaveCols) {
+            try { jdbc.execute("ALTER TABLE leave_record ADD COLUMN " + col + " TEXT DEFAULT ''"); } catch (Exception ignore) {}
+        }
+
+        // 节假日日历
+        jdbc.execute("CREATE TABLE IF NOT EXISTS holiday_calendar (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "holiday_date TEXT NOT NULL," +
+                "holiday_name TEXT DEFAULT ''" +
+                ")");
+        Long hCount = jdbc.queryForObject("SELECT COUNT(*) FROM holiday_calendar", Long.class);
+        if (hCount == null || hCount == 0) {
+            String[][] holidays = {
+                {"2026-01-01", "元旦"}, {"2026-01-02", "元旦"}, {"2026-01-03", "元旦"},
+                {"2026-02-16", "春节"}, {"2026-02-17", "春节"}, {"2026-02-18", "春节"},
+                {"2026-02-19", "春节"}, {"2026-02-20", "春节"}, {"2026-02-21", "春节"}, {"2026-02-22", "春节"},
+                {"2026-04-04", "清明"}, {"2026-04-05", "清明"}, {"2026-04-06", "清明"},
+                {"2026-05-01", "劳动节"}, {"2026-05-02", "劳动节"}, {"2026-05-03", "劳动节"},
+                {"2026-05-04", "劳动节"}, {"2026-05-05", "劳动节"},
+                {"2026-06-19", "端午"}, {"2026-06-20", "端午"}, {"2026-06-21", "端午"},
+                {"2026-09-25", "中秋"}, {"2026-09-26", "中秋"}, {"2026-09-27", "中秋"},
+                {"2026-10-01", "国庆"}, {"2026-10-02", "国庆"}, {"2026-10-03", "国庆"},
+                {"2026-10-04", "国庆"}, {"2026-10-05", "国庆"}, {"2026-10-06", "国庆"}, {"2026-10-07", "国庆"},
+                {"2027-01-01", "元旦"},
+                {"2027-02-06", "春节"}, {"2027-02-07", "春节"}, {"2027-02-08", "春节"},
+                {"2027-02-09", "春节"}, {"2027-02-10", "春节"}, {"2027-02-11", "春节"}, {"2027-02-12", "春节"},
+            };
+            for (String[] h : holidays) {
+                jdbc.execute("INSERT INTO holiday_calendar(holiday_date, holiday_name) VALUES('" + h[0] + "','" + h[1] + "')");
+            }
+            log.info("已初始化节假日日历 {} 天", holidays.length);
+        }
+
         // 操作日志:谁、何时、从哪个 IP、做了什么
         jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

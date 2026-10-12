@@ -71,6 +71,26 @@ public class LeaveController {
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
 
+    /** 检查某人某年度是否已使用过路途天数 */
+    @GetMapping("/check-travel")
+    public ApiResponse checkTravel(@RequestParam Long personnelId, @RequestParam String year) {
+        java.util.List<java.util.Map<String, Object>> used = jdbc.queryForList(
+            "SELECT id, start_date, days FROM leave_record WHERE personnel_id=? AND year=? AND CAST(travel_days AS REAL) > 0 ORDER BY start_date DESC",
+            personnelId, year);
+        return ApiResponse.ok(used != null && !used.isEmpty() ? used : null);
+    }
+
+    /** 获取某年度的节假日列表(前端自动计算用) */
+    @GetMapping("/holidays")
+    public ApiResponse holidays(@RequestParam(required = false) String year) {
+        if (year != null && !year.trim().isEmpty()) {
+            return ApiResponse.ok(jdbc.queryForList(
+                "SELECT holiday_date, holiday_name FROM holiday_calendar WHERE holiday_date LIKE ? ORDER BY holiday_date",
+                year.trim() + "%"));
+        }
+        return ApiResponse.ok(jdbc.queryForList("SELECT holiday_date, holiday_name FROM holiday_calendar ORDER BY holiday_date"));
+    }
+
     @PostMapping
     public ApiResponse create(@RequestBody LeaveRecord r) {
         return ApiResponse.ok(leaveService.create(r));
