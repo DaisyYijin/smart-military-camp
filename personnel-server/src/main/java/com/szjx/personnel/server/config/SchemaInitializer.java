@@ -67,6 +67,10 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("marital_status", new String[]{"未婚", "已婚", "离异", "丧偶", "其他"});
         addDict("education", new String[]{"博士", "硕士", "本科", "大专", "高中及以下", "其他"});
         addDict("only_child", new String[]{"否", "是"});
+        addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
+        addDict("license_type", new String[]{"军本", "地方本"});
+        addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
+        addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
         log.info("已初始化默认数据字典");
     }
 
@@ -312,12 +316,6 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
-
-        // 补充字典类型(老库自动补充,已有的跳过)
-        addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
-        addDict("license_type", new String[]{"军本", "地方本"});
-        addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
-        addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
 
         // 子表补充列
         String[][] subExtra = {
