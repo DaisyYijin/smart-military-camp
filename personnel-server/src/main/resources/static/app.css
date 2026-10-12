@@ -666,18 +666,17 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
 /* ---------- 无限滚动 ---------- */
 .scroll-sentinel {
   height: 1px;
-  padding: 8px 0 16px;
+  padding: 8px 0 20px;
 }
 .scroll-indicator {
   text-align: center;
   color: #97a4b5;
   font-size: 13px;
   padding: 8px 0;
-  transition: opacity .2s;
+  white-space: nowrap;
+  overflow: visible;
 }
-.scroll-indicator.loading {
-  color: #2f6fd6;
-}
+.scroll-indicator.loading { color: #2f6fd6; }
 .scroll-indicator.loading::before {
   content: '';
   display: inline-block;
@@ -690,26 +689,29 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   margin-right: 6px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.scroll-indicator.done { color: #c0cad6; }
+.scroll-indicator.done { color: #b8c2ce; }
 
-/* 回到顶部 */
-.back-top {
+/* 回到顶部/底部按钮组 */
+.scroll-btns {
   position: fixed;
   right: 16px;
   bottom: 24px;
-  width: 40px; height: 40px;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scroll-btn {
+  width: 42px; height: 42px;
   border-radius: 50%;
   background: #2f6fd6;
   color: #fff;
-  font-size: 20px;
+  font-size: 18px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
-  z-index: 45;
   box-shadow: 0 4px 14px rgba(47,111,214,.35);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .2s, transform .2s;
-  transform: translateY(10px);
+  transition: background .15s, transform .15s;
+  user-select: none;
 }
-.back-top:hover { background: #2861bd; transform: translateY(6px); }
-.content:not(:has(.empty-row)) ~ .back-top { opacity: 0; } /* 隐藏逻辑在 JS 中控制 */
+.scroll-btn:hover { background: #2861bd; transform: scale(1.08); }
+.scroll-btn span { pointer-events: none; }

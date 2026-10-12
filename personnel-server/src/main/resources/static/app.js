@@ -1355,15 +1355,19 @@ function crudView(cfg) {
     }, { rootMargin: '200px' });
     io.observe(sentinel);
 
-    // 回到顶部按钮
-    var topBtn = h('div', {
-      class: 'back-top', text: '↑', title: '回到顶部',
-      onclick: function () {
-        var scrollEl = root.closest('.content') || root.parentElement;
-        if (scrollEl) { scrollEl.scrollTop = 0; }
-      }
-    });
-    root.appendChild(topBtn);
+    // 回到顶部/底部按钮组
+    $all('.scroll-btns', document).forEach(function (b) { b.remove(); });
+    var scrollEl = root.closest('.content') || root.parentElement;
+    var btns = h('div', { class: 'scroll-btns' },
+      h('div', {
+        class: 'scroll-btn', title: '回到顶部',
+        onclick: function () { if (scrollEl) scrollEl.scrollTop = 0; }
+      }, h('span', { text: '⬆' })),
+      h('div', {
+        class: 'scroll-btn', title: '跳到底部',
+        onclick: function () { if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight; }
+      }, h('span', { text: '⬇' })));
+    document.body.appendChild(btns);
 
     syncBatchBtn();
     load();
@@ -3569,8 +3573,9 @@ function renderShell() {
     Object.keys(menuItems).forEach(function (k) { menuItems[k].classList.remove('active'); });
     if (menuItems[view]) menuItems[view].classList.add('active');
 
-    // 切换页面时清理筛选按钮(非 CRUD 页面不显示)
+    // 切换页面时清理筛选按钮和滚动按钮(非 CRUD 页面不显示)
     $all('.filter-tab-btn', document).forEach(function (b) { b.remove(); });
+    $all('.scroll-btns', document).forEach(function (b) { b.remove(); });
 
     content.innerHTML = '';
     var comp;
