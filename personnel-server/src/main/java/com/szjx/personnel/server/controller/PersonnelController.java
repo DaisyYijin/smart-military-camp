@@ -39,6 +39,8 @@ public class PersonnelController {
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String name,
+                             @RequestParam(required = false) String idCard,
                              @RequestParam(required = false) Long departmentId,
                              @RequestParam(required = false) String status,
                              @RequestParam(required = false) String gender,
@@ -53,8 +55,8 @@ public class PersonnelController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<Personnel> list = personnelService.query(keyword, departmentId, status, gender, politicalStatus, rank, education, page, size);
-        long total = personnelService.count(keyword, departmentId, status, gender, politicalStatus, rank, education);
+        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education, page, size);
+        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education);
         return ApiResponse.ok(new PageResult<Personnel>(total, list));
     }
 
