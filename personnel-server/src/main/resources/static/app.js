@@ -872,6 +872,41 @@ function renderPager(state, onChange) {
 
 /* ================= 通用 CRUD 视图 ================= */
 
+/** 通用:身份证号反查人员,自动带出姓名(隐藏 pid 字段) */
+function setupPersonLookup(form, map) {
+  var idCardEl = form.inputs[map.idCard];
+  var nameEl = form.inputs[map.name];
+  var pidEl = form.inputs[map.pid];
+  if (!idCardEl) return;
+  function lookup() {
+    var v = String(idCardEl.value || '').trim();
+    if (!v) {
+      if (nameEl) nameEl.value = '';
+      if (pidEl) pidEl.value = '';
+      idCardEl.classList.remove('bad');
+      idCardEl.title = '';
+      return;
+    }
+    GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+      if (p) {
+        if (nameEl) nameEl.value = p.name || '';
+        if (pidEl) pidEl.value = String(p.id);
+        idCardEl.classList.remove('bad');
+        idCardEl.title = p.departmentName || '';
+      } else {
+        if (nameEl) nameEl.value = '';
+        if (pidEl) pidEl.value = '';
+        idCardEl.classList.add('bad');
+        idCardEl.title = '未找到对应人员';
+        if (form.setError) form.setError('未找到身份证号「' + v + '」对应的人员,请核对后重新输入');
+      }
+    }).catch(function () { /* 网络异常保持现状 */ });
+  }
+  idCardEl.addEventListener('change', lookup);
+  // 编辑时预填了身份证号 → 自动带出校验
+  if (String(idCardEl.value || '').trim()) setTimeout(lookup, 60);
+}
+
 /** 休假模块联动:身份证带出人员 + 路途年度限一次 + 结束日期/总天数自动计算 */
 function setupLeaveAutoCalc(form, row) {
   var startDateEl = form.inputs['startDate'];
@@ -1154,6 +1189,10 @@ function crudView(cfg) {
     // 休假模块特殊逻辑:自动计算 + 路途检查
     if (cfg.key === 'leave') {
       setupLeaveAutoCalc(form, row);
+    }
+    // 身份证反查人员(如车辆的驾驶员)
+    if (cfg.personLookup) {
+      setupPersonLookup(form, cfg.personLookup);
     }
 
     var m = openModal({
@@ -3017,6 +3056,7 @@ var materialCfg = {
 var vehicleCfg = {
   key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
   clickKey: 'plateNo', addLabel: '新增车辆',
+  personLookup: { idCard: 'driverIdCard', name: 'driverName', pid: 'driverId' },
   filters: [
     { key: 'plateNo', label: '车牌号' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
@@ -3024,28 +3064,46 @@ var vehicleCfg = {
   moreFilters: [
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
     { key: 'brand', label: '品牌型号' },
+    { key: 'vin', label: '车架号' },
     { key: 'driverName', label: '驾驶员' }
   ],
   columns: [
     { key: 'plateNo', label: '车牌号' },
+    { key: 'vin', label: '车架号', render: function (r) { return r.vin || '—'; } },
     { key: 'brand', label: '品牌型号' },
     { key: 'type', label: '车型' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
-    { key: 'driverName', label: '驾驶员' },
-    { key: 'seats', label: '核定人数' },
+    { key: 'driverName', label: '驾驶员', render: function (r) { return r.driverName || '—'; } },
+    { key: 'insuranceExpiry', label: '保险到期', render: function (r) { return r.insuranceExpiry || '—'; } },
+    { key: 'inspectionExpiry', label: '年检到期', render: function (r) { return r.inspectionExpiry || '—'; } },
     { key: 'mileage', label: '里程(km)' }
   ],
   rowTitle: function (r) { return r.plateNo; },
   form: [
     { key: 'plateNo', label: '车牌号', required: true },
+    { key: 'vin', label: '车架号', placeholder: '17位车辆识别代码' },
+    { key: 'engineNo', label: '发动机号' },
     { key: 'brand', label: '品牌型号' },
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
+    { key: 'color', label: '车身颜色' },
+    { key: 'fuelType', label: '燃料类型', type: 'select', options: function () { return dictLabels('vehicle_fuel'); } },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('vehicle_status'); } },
-    { key: 'driverId', label: '驾驶员', type: 'personnel' },
+    { key: 'driverIdCard', label: '驾驶员身份证', placeholder: '输入后自动带出姓名' },
+    { key: 'driverName', label: '驾驶员姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'driverId', type: 'hidden' },
     { key: 'seats', label: '核定人数', type: 'number', step: '1' },
     { key: 'mileage', label: '里程(km)', type: 'number', step: '0.1' },
+    { key: 'purchaseDate', label: '购置日期', type: 'date' },
+    { key: 'insuranceExpiry', label: '保险到期日', type: 'date' },
+    { key: 'inspectionExpiry', label: '年检到期日', type: 'date' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+  ],
+  beforeSave: function (data) {
+    // driverIdCard/driverName 仅用于表单展示,不提交
+    delete data.driverIdCard;
+    delete data.driverName;
+    return data;
+  }
 };
 
 var leaveCfg = {

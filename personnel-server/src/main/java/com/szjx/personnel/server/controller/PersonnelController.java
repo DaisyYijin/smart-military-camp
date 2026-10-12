@@ -31,10 +31,23 @@ public class PersonnelController {
 
     private final PersonnelService personnelService;
     private final DepartmentDao departmentDao;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public PersonnelController(PersonnelService personnelService, DepartmentDao departmentDao) {
+    public PersonnelController(PersonnelService personnelService, DepartmentDao departmentDao,
+                               org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.personnelService = personnelService;
         this.departmentDao = departmentDao;
+        this.jdbc = jdbc;
+    }
+
+    /** 按身份证号精确查找人员(各模块表单自动带出姓名用),找不到返回 null */
+    @GetMapping("/by-idcard")
+    public ApiResponse findByIdCard(@RequestParam String idCard) {
+        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(
+            "SELECT p.id, p.name, p.id_card AS idCard, d.name AS departmentName FROM personnel p " +
+            "LEFT JOIN department d ON p.department_id = d.id WHERE p.id_card = ? COLLATE NOCASE LIMIT 1",
+            idCard == null ? "" : idCard.trim());
+        return ApiResponse.ok(list.isEmpty() ? null : list.get(0));
     }
 
     @GetMapping

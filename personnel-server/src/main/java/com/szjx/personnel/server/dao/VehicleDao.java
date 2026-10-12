@@ -28,13 +28,20 @@ public class VehicleDao {
             Vehicle v = new Vehicle();
             v.setId(rs.getLong("id"));
             v.setPlateNo(rs.getString("plate_no"));
+            v.setVin(rs.getString("vin"));
+            v.setEngineNo(rs.getString("engine_no"));
             v.setBrand(rs.getString("brand"));
             v.setType(rs.getString("type"));
+            v.setColor(rs.getString("color"));
+            v.setFuelType(rs.getString("fuel_type"));
             v.setStatus(rs.getString("status"));
             v.setDriverId(rs.getLong("driver_id"));
             v.setDriverName(rs.getString("driver_name"));
             v.setSeats(rs.getObject("seats") == null ? null : rs.getInt("seats"));
             v.setMileage(rs.getObject("mileage") == null ? null : rs.getDouble("mileage"));
+            v.setPurchaseDate(rs.getString("purchase_date"));
+            v.setInsuranceExpiry(rs.getString("insurance_expiry"));
+            v.setInspectionExpiry(rs.getString("inspection_expiry"));
             v.setRemark(rs.getString("remark"));
             v.setCreatedAt(rs.getString("created_at"));
             v.setUpdatedAt(rs.getString("updated_at"));
@@ -86,19 +93,27 @@ public class VehicleDao {
 
     public long insert(Vehicle v) {
         return jdbc.queryForObject(
-                "INSERT INTO vehicle(plate_no, brand, type, status, driver_id, seats, mileage, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO vehicle(plate_no, vin, engine_no, brand, type, color, fuel_type, status, driver_id, " +
+                "seats, mileage, purchase_date, insurance_expiry, inspection_expiry, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
-                nvl(v.getPlateNo()), nvl(v.getBrand()), nvl(v.getType()), nvl(v.getStatus()),
-                v.getDriverId(), v.getSeats(), v.getMileage(), nvl(v.getRemark()));
+                nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
+                nvl(v.getBrand()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
+                v.getDriverId(), v.getSeats(), v.getMileage(),
+                nvl(v.getPurchaseDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
+                nvl(v.getRemark()));
     }
 
     public void update(Vehicle v) {
         jdbc.update(
-                "UPDATE vehicle SET plate_no=?, brand=?, type=?, status=?, driver_id=?, seats=?, mileage=?, " +
-                "remark=?, updated_at=datetime('now','localtime') WHERE id=?",
-                nvl(v.getPlateNo()), nvl(v.getBrand()), nvl(v.getType()), nvl(v.getStatus()),
-                v.getDriverId(), v.getSeats(), v.getMileage(), nvl(v.getRemark()), v.getId());
+                "UPDATE vehicle SET plate_no=?, vin=?, engine_no=?, brand=?, type=?, color=?, fuel_type=?, " +
+                "status=?, driver_id=?, seats=?, mileage=?, purchase_date=?, insurance_expiry=?, " +
+                "inspection_expiry=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
+                nvl(v.getBrand()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
+                v.getDriverId(), v.getSeats(), v.getMileage(),
+                nvl(v.getPurchaseDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
+                nvl(v.getRemark()), v.getId());
     }
 
     public void delete(Long id) {
