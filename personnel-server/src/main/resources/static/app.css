@@ -572,6 +572,13 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   z-index: 50;
   box-shadow: -4px 0 16px rgba(23,43,77,.08);
 }
+/* 面板打开时,主内容右移让出空间 */
+.content-main {
+  transition: padding-right .3s cubic-bezier(.4,0,.2,1);
+}
+.content-main.filter-padding {
+  padding-right: 270px;
+}
 
 .filter-panel-inner {
   padding: 16px;
@@ -579,10 +586,6 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-}
-.filter-panel-inner {
-  padding: 16px;
-  min-width: 270px;
 }
 .filter-panel h4 {
   font-size: 14px;

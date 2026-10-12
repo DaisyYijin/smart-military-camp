@@ -1064,15 +1064,20 @@ function crudView(cfg) {
         })));
       filterPanel.appendChild(inner);
 
-      // 工具栏筛选切换按钮
-      toolbar.appendChild(h('button', {
+      // 筛选切换按钮(放在右侧,spacer 之后)
+      var filterBtn = h('button', {
         class: 'btn btn-ghost filter-toggle-btn', text: '筛选',
         onclick: function () {
           var open = filterPanel.classList.contains('open');
           filterPanel.classList.toggle('open');
           this.textContent = open ? '筛选' : '收起';
+          // 主内容右移让出面板空间
+          var main = root.querySelector('.content-main');
+          if (main) {
+            main.classList.toggle('filter-padding', !open);
+          }
         }
-      }));
+      });
     }
 
     function getActiveCount() {
@@ -1231,6 +1236,10 @@ function crudView(cfg) {
       text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
       onclick: function () { openForm(null); }
     }));
+    // 筛选按钮放最右侧
+    if (typeof filterBtn !== 'undefined' && filterBtn) {
+      toolbar.appendChild(filterBtn);
+    }
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +
