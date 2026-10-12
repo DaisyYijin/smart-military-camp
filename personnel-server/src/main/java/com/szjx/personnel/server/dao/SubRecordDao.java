@@ -83,7 +83,8 @@ public class SubRecordDao {
         if (!"position_history".equals(table) && !"reward_punish".equals(table)
                 && !"child_info".equals(table) && !"family_member".equals(table)
                 && !"driver_license".equals(table) && !"personal_card".equals(table)
-                && !"private_vehicle".equals(table) && !"housing_info".equals(table)) {
+                && !"private_vehicle".equals(table) && !"housing_info".equals(table)
+                && !"fitness_record".equals(table)) {
             throw new IllegalArgumentException("非法的子记录表: " + table);
         }
     }
