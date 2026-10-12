@@ -1779,6 +1779,24 @@ var HOUSING_SUB = {
   ]
 };
 
+var FITNESS_SUB = {
+  name: '体能考核', kind: 'fitness',
+  columns: [
+    { key: 'item', label: '考核项目', required: true, w: 110 },
+    { key: 'score', label: '成绩', required: true, w: 90 },
+    { key: 'grade', label: '分数', w: 60, auto: true },
+    { key: '__level', label: '等级', w: 60, virtual: true, render: function (r) {
+        var s = parseFloat(r.grade);
+        if (isNaN(s)) { return r.grade || '—'; }
+        if (s >= 90) { return '<span class="badge green">优秀</span>'; }
+        if (s >= 80) { return '<span class="badge blue">良好</span>'; }
+        if (s >= 60) { return '<span class="badge orange">及格</span>'; }
+        return '<span class="badge red">不及格</span>';
+      } },
+    { key: 'test_date', label: '考核日期', type: 'date', required: true, w: 100 }
+  ]
+};
+
 var REWARD_SUB = {
   name: '奖惩记录', kind: 'reward-punish',
   columns: [
