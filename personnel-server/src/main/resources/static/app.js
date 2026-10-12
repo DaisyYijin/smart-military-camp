@@ -1066,12 +1066,11 @@ function crudView(cfg) {
 
       // 工具栏筛选切换按钮
       toolbar.appendChild(h('button', {
-        class: 'btn btn-ghost filter-toggle-btn', html: '筛选 <span class="badge blue" data-count>0</span>',
+        class: 'btn btn-ghost filter-toggle-btn', text: '筛选',
         onclick: function () {
           var open = filterPanel.classList.contains('open');
           filterPanel.classList.toggle('open');
-          this.innerHTML = open ? '筛选 <span class="badge blue" data-count>' + getActiveCount() + '</span>'
-                                 : '收起 <span class="badge blue" data-count>' + getActiveCount() + '</span>';
+          this.textContent = open ? '筛选' : '收起';
         }
       }));
     }
