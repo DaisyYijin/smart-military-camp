@@ -2112,9 +2112,8 @@ function openFitnessStdManager() {
               currentItem = name;
               loadMatrix(name);
               reloadFitnessMatrix();
-                toast('项目「' + name + '」已创建(已保存,关闭不丢失)');
-              }).catch(function (e) { toast(e.message, 'err'); });
-            }
+              toast('项目「' + name + '」已创建(已保存,关闭不丢失)');
+            }).catch(function (e) { toast(e.message, 'err'); });
           }
         })
       ]
