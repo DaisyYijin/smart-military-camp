@@ -233,7 +233,13 @@ table.grid td.empty-row { text-align: center; }
 
 /* ---------- 字典页 ---------- */
 .dict-layout { display: flex; gap: 16px; align-items: flex-start; }
-.dict-types { width: 210px; flex: none; padding: 10px 6px; }
+/* 左侧类型列表吸顶:滚动右侧选项时保持可见;类型过多时内部滚动 */
+.dict-types {
+  width: 210px; flex: none; padding: 10px 6px;
+  position: sticky; top: 0;
+  max-height: calc(100vh - 92px);
+  overflow-y: auto;
+}
 .dict-type-item {
   padding: 9px 12px; border-radius: 5px; cursor: pointer; display: flex;
   justify-content: space-between; align-items: center; color: #445262;
@@ -293,7 +299,7 @@ table.grid td.empty-row { text-align: center; }
   .menu-item { justify-content: center; }
   .form-grid { grid-template-columns: 1fr; }
   .dict-layout { flex-direction: column; }
-  .dict-types { width: 100%; display: flex; flex-wrap: wrap; }
+  .dict-types { width: 100%; display: flex; flex-wrap: wrap; position: static; max-height: none; overflow: visible; }
 }
 
 /* ---------- 侧边栏收起 ---------- */
