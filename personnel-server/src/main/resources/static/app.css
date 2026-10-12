@@ -303,6 +303,10 @@ table.grid td.empty-row { text-align: center; }
   transition: transform .3s cubic-bezier(.4,0,.2,1);
 }
 .sidebar.collapsed { transform: translateX(-144px); }
+/* 盒子左移的同时,内部内容右移等量抵消:图标屏幕位置不动,
+   可见的 64px 窗口(盒子坐标 144..208)正好呈现图标列 */
+.sidebar > * { transition: transform .3s cubic-bezier(.4,0,.2,1); }
+.sidebar.collapsed > * { transform: translateX(144px); }
 
 /* 文字淡入淡出(仅 opacity,合成层属性) */
 .sidebar .menu-item span.txt,
