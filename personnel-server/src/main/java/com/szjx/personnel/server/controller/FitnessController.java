@@ -31,6 +31,8 @@ public class FitnessController {
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String personnelName,
+                             @RequestParam(required = false) String idCard,
                              @RequestParam(required = false) String item,
                              @RequestParam(required = false) String grade,
                              @RequestParam(required = false) String startDate,
@@ -39,15 +41,11 @@ public class FitnessController {
                              @RequestParam(required = false) String minScore,
                              @RequestParam(required = false) String maxScore,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "20") int size) {
-        if (page < 1) {
-            page = 1;
-        }
-        if (size < 1 || size > 200) {
-            size = 20;
-        }
-        List<FitnessRecord> list = fitnessService.queryFiltered(keyword, item, grade, startDate, endDate, departmentId, minScore, maxScore, page, size);
-        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.countFiltered(keyword, item, grade, startDate, endDate, departmentId, minScore, maxScore), list));
+                             @RequestParam(defaultValue = "50") int size) {
+        if (page < 1) page = 1;
+        if (size < 1 || size > 200) size = 50;
+        List<FitnessRecord> list = fitnessService.queryFiltered2(personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore, page, size);
+        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.countFiltered2(personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore), list));
     }
 
     @GetMapping("/stats")

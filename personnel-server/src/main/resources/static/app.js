@@ -2912,11 +2912,14 @@ var fitnessCfg = {
     }));
   },
   filters: [
-    { key: 'keyword', label: '检索' },
-    { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号' },
+    { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } }
+  ],
+  moreFilters: [
     { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下', '不及格'] },
-    { key: 'startDate', label: '起日期' },
-    { key: 'endDate', label: '止日期' }
+    { key: 'startDate', label: '起日期', type: 'date' },
+    { key: 'endDate', label: '止日期', type: 'date' }
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },

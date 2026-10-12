@@ -68,6 +68,79 @@ public class FitnessService {
         }
     }
 
+    public List<FitnessRecord> queryFiltered2(String personnelName, String idCard,
+                                               String item, String grade, String startDate, String endDate,
+                                               Long departmentId, String minScore, String maxScore,
+                                               int page, int size) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT f.*, p.name AS personnel_name FROM fitness_record f " +
+            "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE 1=1");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore);
+        sql.append(" ORDER BY f.test_date DESC, f.id DESC LIMIT ? OFFSET ?");
+        args.add(size); args.add((page - 1) * size);
+        return jdbc.query(sql.toString(), new FitnessRowMapper(), args.toArray());
+    }
+
+    public long countFiltered2(String personnelName, String idCard,
+                                String item, String grade, String startDate, String endDate,
+                                Long departmentId, String minScore, String maxScore) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT COUNT(*) FROM fitness_record f " +
+            "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE 1=1");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore);
+        Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+        return n == null ? 0 : n;
+    }
+
+    private void appendFilter2(StringBuilder sql, java.util.List<Object> args,
+                                String personnelName, String idCard,
+                                String item, String grade, String startDate, String endDate,
+                                Long departmentId, String minScore, String maxScore) {
+        if (personnelName != null && !personnelName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
+        }
+        if (idCard != null && !idCard.trim().isEmpty()) {
+            sql.append(" AND p.id_card LIKE ?"); args.add("%" + idCard.trim() + "%");
+        }
+        if (item != null && !item.trim().isEmpty()) {
+            sql.append(" AND f.item = ?"); args.add(item.trim());
+        }
+        if (grade != null && !grade.trim().isEmpty()) {
+            String g = grade.trim();
+            if (g.contains("分以上")) {
+                sql.append(" AND CAST(f.grade AS REAL) >= ").append(g.replace("分以上", ""));
+            } else if (g.contains("分以下")) {
+                sql.append(" AND CAST(f.grade AS REAL) < ").append(g.replace("分以下", ""));
+            } else if (g.contains("-")) {
+                String[] parts = g.replace("分", "").split("-");
+                sql.append(" AND CAST(f.grade AS REAL) >= ? AND CAST(f.grade AS REAL) <= ?");
+                args.add(Double.parseDouble(parts[0]));
+                args.add(Double.parseDouble(parts[1]));
+            } else if ("不及格".equals(g)) {
+                sql.append(" AND CAST(f.grade AS REAL) < 60");
+            } else {
+                sql.append(" AND f.grade = ?"); args.add(g);
+            }
+        }
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            sql.append(" AND f.test_date >= ?"); args.add(startDate.trim());
+        }
+        if (endDate != null && !endDate.trim().isEmpty()) {
+            sql.append(" AND f.test_date <= ?"); args.add(endDate.trim());
+        }
+        if (departmentId != null && departmentId > 0) {
+            sql.append(" AND p.department_id = ?"); args.add(departmentId);
+        }
+        if (minScore != null && !minScore.trim().isEmpty()) {
+            try { sql.append(" AND CAST(f.grade AS REAL) >= ?"); args.add(Double.parseDouble(minScore.trim())); } catch (NumberFormatException ignore) {}
+        }
+        if (maxScore != null && !maxScore.trim().isEmpty()) {
+            try { sql.append(" AND CAST(f.grade AS REAL) <= ?"); args.add(Double.parseDouble(maxScore.trim())); } catch (NumberFormatException ignore) {}
+        }
+    }
+
     public List<FitnessRecord> queryFiltered(String keyword, String item, String grade,
                                               String startDate, String endDate,
                                               Long departmentId, String minScore, String maxScore,
