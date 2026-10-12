@@ -3184,40 +3184,6 @@ var fitnessCfg = {
     { key: 'startDate', label: '起日期' },
     { key: 'endDate', label: '止日期' }
   ],
-  afterTable: function (rootEl) {
-    var toolbar = rootEl.querySelector('.toolbar');
-    if (!toolbar || toolbar.querySelector('.quick-tags')) { return; }
-    var now = new Date();
-    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
-    var q = Math.floor(now.getMonth() / 3) + 1;
-    var tags = [
-      { label: '本月', f: { startDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-01', endDate: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-31' } },
-      { label: '本季度', f: { startDate: now.getFullYear() + '-' + pad2((q - 1) * 3 + 1) + '-01', endDate: now.getFullYear() + '-' + pad2(q * 3) + '-31' } },
-      { label: '本年度', f: { startDate: now.getFullYear() + '-01-01', endDate: now.getFullYear() + '-12-31' } },
-      { label: '仅及格', f: { minScore: '60' } },
-      { label: '仅不及格', f: { maxScore: '59' } },
-      { label: '仅优秀', f: { minScore: '90' } },
-    ];
-    var tagRow = h('div', { class: 'quick-tags', style: 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%;margin-top:4px' });
-    tagRow.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '快捷:' }));
-    tags.forEach(function (t) {
-      tagRow.appendChild(h('button', {
-        class: 'btn btn-ghost btn-sm', text: t.label,
-        style: 'font-size:12px;padding:3px 12px;border-radius:12px',
-        onclick: function () {
-          Object.keys(t.f).forEach(function (k) {
-            var el = rootEl.querySelector('[data-fkey="' + k + '"]');
-            if (el) { el.value = t.f[k] || ''; }
-          });
-          var queryBtn = Array.from(toolbar.querySelectorAll('.btn')).find(function (b) {
-            return b.textContent.trim() === '查询';
-          });
-          if (queryBtn) { queryBtn.click(); }
-        }
-      }));
-    });
-    toolbar.appendChild(tagRow);
-  },
   columns: [
     { key: 'personnelName', label: '姓名' },
     { key: 'item', label: '考核项目' },
