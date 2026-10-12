@@ -671,6 +671,14 @@ function buildForm(fields, values, extraPanels) {
   }
 
   function addField(panel, f) {
+    // 隐藏字段:只存值不显示(如身份证反查出的 personnelId)
+    if (f.type === 'hidden') {
+      var hi = h('input', { type: 'hidden' });
+      hi.value = values[f.key] === undefined || values[f.key] === null ? '' : String(values[f.key]);
+      inputs[f.key] = hi;
+      panel.appendChild(hi);
+      return;
+    }
     var wrap = h('div', { class: 'form-item' + (f.span === 'full' ? ' full' : '') });
     wrap.appendChild(h('label', { html: esc(f.label) + (f.required ? '<span class="req">*</span>' : '') }));
 
@@ -709,7 +717,22 @@ function buildForm(fields, values, extraPanels) {
       var type = f.type === 'number' ? 'number' : 'text';
       el = h('input', { type: type, placeholder: f.placeholder || '' });
       if (f.step) el.setAttribute('step', f.step);
+      if (f.min !== undefined) el.setAttribute('min', f.min);
+      if (f.max !== undefined) el.setAttribute('max', f.max);
       if (val !== undefined && val !== null) el.value = val;
+    }
+    // 只读字段:自动计算/自动带出的值不允许手改
+    if (f.readonly) {
+      if (el.classList && el.classList.contains('cal')) {
+        var calInp = el.querySelector('input');
+        if (calInp) calInp.readOnly = true;
+        var calBtn = el.querySelector('.cal-icon');
+        if (calBtn) calBtn.style.display = 'none';
+        el.classList.add('ro');
+      } else {
+        try { el.readOnly = true; } catch (e) { /* ignore */ }
+        el.classList.add('ro');
+      }
     }
     inputs[f.key] = el;
     wrap.appendChild(el);
@@ -879,87 +902,145 @@ function countHolidaysInRange(startDate, baseDays) {
 function setupLeaveAutoCalc(form, row) {
   var startDateEl = form.inputs['startDate'];
   var daysEl = form.inputs['days'];
-  var travelEl = form.inputs['travel_days'];
-  var holidayEl = form.inputs['holiday_days'];
+  var travelEl = form.inputs['travelDays'];
+  var holidayEl = form.inputs['holidayDays'];
   var endDateEl = form.inputs['endDate'];
   var yearEl = form.inputs['year'];
-  var personEl = form.inputs['personnelId'];
+  var personEl = form.inputs['personnelId'];   // 隐藏字段,由身份证反查填充
+  var idCardEl = form.inputs['idCard'];
+  var nameEl = form.inputs['personnelName'];
+  var totalEl = form.inputs['yearTotal'];
   if (!startDateEl || !daysEl) return;
 
-  var travelUsed = false;
-  var travelInfo = '';
   var editId = row ? row.id : null;
 
+  function fmtNum(n) {
+    return Math.round(n * 10) / 10;
+  }
+
+  /* —— 身份证号 → 自动带出人员 —— */
+  function lookupIdCard() {
+    var v = idCardEl ? String(idCardEl.value || '').trim() : '';
+    if (!v) {
+      if (nameEl) nameEl.value = '';
+      if (personEl) personEl.value = '';
+      if (idCardEl) idCardEl.classList.remove('bad');
+      form.setError('');
+      refreshYear();
+      return;
+    }
+    GET('/api/leave/find-person?idCard=' + encodeURIComponent(v)).then(function (list) {
+      if (list && list.length) {
+        var p = list[0];
+        if (nameEl) nameEl.value = p.name || '';
+        if (personEl) personEl.value = String(p.id);
+        if (idCardEl) idCardEl.classList.remove('bad');
+        form.setError('');
+      } else {
+        if (nameEl) nameEl.value = '';
+        if (personEl) personEl.value = '';
+        if (idCardEl) {
+          idCardEl.classList.add('bad');
+          idCardEl.title = '未找到对应人员';
+        }
+        form.setError('未找到身份证号「' + v + '」对应的人员,请核对后重新输入');
+      }
+      refreshYear();
+    }).catch(function () { refreshYear(); });
+  }
+  if (idCardEl) {
+    idCardEl.addEventListener('change', lookupIdCard);
+    // 编辑时预填了身份证号 → 自动带出校验
+    if (String(idCardEl.value || '').trim()) setTimeout(lookupIdCard, 60);
+  }
+
+  /* —— 路途天数每年度限一次 —— */
   function checkTravel() {
-    travelUsed = false; travelInfo = '';
-    if (!personEl || !yearEl) return;
+    if (!personEl || !yearEl || !travelEl) return;
     var pid = personEl.value;
-    var yr = yearEl.value;
-    if (!pid || !yr) return;
-    GET('/api/leave/check-travel?personnelId=' + pid + '&year=' + yr).then(function (used) {
-      if (!used || !used.length) return;
+    var yr = String(yearEl.value || '').trim();
+    if (!pid || !yr) { unlockTravel(); return; }
+    GET('/api/leave/check-travel?personnelId=' + pid + '&year=' + encodeURIComponent(yr)).then(function (used) {
       // 编辑时排除自己
-      var others = used.filter(function (u) { return String(u.id) !== String(editId); });
+      var others = (used || []).filter(function (u) { return String(u.id) !== String(editId); });
       if (others.length > 0) {
-        travelUsed = true;
-        travelInfo = others[0].start_date || '';
-        if (travelEl) {
-          travelEl.value = '';
-          travelEl.readOnly = true;
-          travelEl.style.background = '#f0f0f0';
-          travelEl.title = travelInfo + ' 已使用路途天数';
-          var lbl = travelEl.parentElement.querySelector('label');
-          if (lbl && !lbl.querySelector('.travel-warn')) {
-            var w = document.createElement('span');
-            w.className = 'travel-warn';
-            w.style.cssText = 'color:#d9463e;font-size:12px;margin-left:6px';
-            w.textContent = '(' + yr + '年度路途已在 ' + travelInfo + ' 使用)';
-            lbl.appendChild(w);
-          }
+        var when = others[0].start_date || '';
+        travelEl.value = '';
+        travelEl.readOnly = true;
+        travelEl.classList.add('ro');
+        travelEl.title = when + ' 已使用路途天数';
+        var lbl = travelEl.parentElement.querySelector('label');
+        if (lbl) {
+          var old = lbl.querySelector('.travel-warn');
+          if (old) old.remove();
+          var w = document.createElement('span');
+          w.className = 'travel-warn';
+          w.style.cssText = 'color:#d9463e;font-size:12px;margin-left:6px';
+          w.textContent = '(' + yr + '年度路途已在 ' + when + ' 使用)';
+          lbl.appendChild(w);
         }
       } else {
-        if (travelEl) {
-          travelEl.readOnly = false;
-          travelEl.style.background = '';
-          travelEl.title = '';
-          var w2 = travelEl.parentElement.querySelector('.travel-warn');
-          if (w2) w2.remove();
-        }
+        unlockTravel();
       }
-    }).catch(function () {});
+    }).catch(function () { unlockTravel(); });
+  }
+  function unlockTravel() {
+    if (!travelEl) return;
+    travelEl.readOnly = false;
+    travelEl.classList.remove('ro');
+    travelEl.title = '';
+    var lbl = travelEl.parentElement ? travelEl.parentElement.querySelector('label') : null;
+    var w = lbl ? lbl.querySelector('.travel-warn') : null;
+    if (w) w.remove();
   }
 
-  if (personEl && yearEl) {
-    personEl.addEventListener('change', checkTravel);
-    yearEl.addEventListener('change', checkTravel);
-    setTimeout(checkTravel, 100);
-  }
-  // 编辑时也要检查(如果是编辑且已用路途,可以保留)
-  if (row && row.travel_days > 0) {
-    setTimeout(function () {
-      if (travelEl) { travelEl.readOnly = false; travelEl.style.background = ''; }
-      var w3 = travelEl ? travelEl.parentElement.querySelector('.travel-warn') : null;
-      if (w3) w3.remove();
-    }, 200);
+  /* —— 本年度休假总天数 —— */
+  function updateTotal() {
+    if (!totalEl) return;
+    var pid = personEl ? personEl.value : '';
+    var yr = yearEl ? String(yearEl.value || '').trim() : '';
+    if (!pid || !yr) { totalEl.value = ''; return; }
+    var url = '/api/leave/summary?personnelId=' + pid + '&year=' + encodeURIComponent(yr)
+      + (editId ? '&excludeId=' + editId : '');
+    GET(url).then(function (s) {
+      var existed = s && s.totalDays ? Number(s.totalDays) : 0;
+      var cur = (parseFloat(daysEl.value) || 0)
+        + (travelEl ? parseFloat(travelEl.value) || 0 : 0)
+        + (holidayEl ? parseFloat(holidayEl.value) || 0 : 0);
+      totalEl.value = fmtNum(existed + cur) + ' 天(已休 ' + fmtNum(existed) + ' + 本条 ' + fmtNum(cur) + ')';
+    }).catch(function () { totalEl.value = ''; });
   }
 
+  function refreshYear() { checkTravel(); updateTotal(); }
+
+  if (personEl) personEl.addEventListener('change', refreshYear);
+  if (yearEl) {
+    yearEl.addEventListener('change', refreshYear);
+    yearEl.addEventListener('input', updateTotal);
+  }
+  // 编辑打开时:预填的年度/人员需要触发一次检查与统计
+  setTimeout(refreshYear, 150);
+
+  /* —— 节假日加假 + 结束日期自动计算 —— */
   function calc() {
     loadHolidays().then(function () {
       var sd = startDateEl.value;
       var bd = parseFloat(daysEl.value) || 0;
-      var td = parseFloat(travelEl ? travelEl.value : 0) || 0;
-      if (!sd || bd <= 0) return;
-      var hd = countHolidaysInRange(sd, bd);
-      if (holidayEl) holidayEl.value = hd || '';
-      if (endDateEl) {
-        var total = bd + hd + td;
-        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
-        if (m) {
-          var d = new Date(+m[1], +m[2] - 1, +m[3]);
-          d.setDate(d.getDate() + Math.round(total) - 1);
-          endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      var td = travelEl ? parseFloat(travelEl.value) || 0 : 0;
+      if (sd && bd > 0) {
+        var hd = countHolidaysInRange(sd, bd);
+        if (holidayEl) holidayEl.value = hd || '';
+        if (endDateEl) {
+          var total = bd + hd + td;
+          var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
+          if (m) {
+            var d = new Date(+m[1], +m[2] - 1, +m[3]);
+            d.setDate(d.getDate() + Math.round(total) - 1);
+            endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          }
         }
       }
+      updateTotal();
     });
   }
 
@@ -1123,6 +1204,11 @@ function crudView(cfg) {
           onclick: function () {
             var data = form.get();
             if (!data) return;
+            // 保存前转换钩子(剔除仅用于展示的虚拟字段等)
+            if (cfg.beforeSave) {
+              var transformed = cfg.beforeSave(data, row);
+              if (transformed) data = transformed;
+            }
             if (extra && extra.get) {
               var ex = extra.get();
               if (!ex) return;
@@ -3007,38 +3093,46 @@ var leaveCfg = {
     { key: 'leaveType', label: '休假类型', type: 'select', options: function () { return dictLabels('leave_type'); } }
   ],
   moreFilters: [
-    { key: 'year', label: '年度', type: 'select', options: function () { return ['2026', '2027', '2028']; } },
+    { key: 'year', label: '年度', placeholder: '如 2026' },
     { key: 'startDate', label: '开始日期', type: 'date' },
     { key: 'endDate', label: '结束日期', type: 'date' }
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
     { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
     { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },
     { key: 'startDate', label: '开始日期' },
     { key: 'endDate', label: '结束日期' },
     { key: 'days', label: '基本天数' },
-    { key: 'travel_days', label: '路途', render: function (r) { return r.travel_days ? r.travel_days + '天' : '—'; } },
-    { key: 'holiday_days', label: '节假日', render: function (r) { return r.holiday_days ? r.holiday_days + '天' : '—'; } },
+    { key: 'travelDays', label: '路途', render: function (r) { return Number(r.travelDays) > 0 ? Number(r.travelDays) + '天' : '—'; } },
+    { key: 'holidayDays', label: '节假日', render: function (r) { return Number(r.holidayDays) > 0 ? Number(r.holidayDays) + '天' : '—'; } },
     { key: 'reason', label: '事由' }
   ],
   rowTitle: function (r) { return r.personnelName; },
   delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假记录吗?'; },
   form: [
-    { key: 'personnelId', label: '休假人员', type: 'personnel', required: true },
-    { key: 'year', label: '休假年度', type: 'select', required: true, options: function () {
-        var y = new Date().getFullYear();
-        return [String(y - 1), String(y), String(y + 1)];
-      } },
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'year', label: '休假年度', type: 'number', required: true, min: '1990', max: '2100', step: '1', placeholder: '如 2026' },
     { key: 'leaveType', label: '休假类型', type: 'select', required: true, options: function () { return dictLabels('leave_type'); } },
     { key: 'startDate', label: '开始日期', type: 'date', required: true },
     { key: 'days', label: '基本天数', type: 'number', step: '0.5', required: true, placeholder: '不含路途和节假日' },
-    { key: 'travel_days', label: '路途天数', type: 'number', step: '0.5', placeholder: '每年限一次' },
-    { key: 'holiday_days', label: '节假日加假', type: 'number', step: '0.5', placeholder: '自动计算' },
-    { key: 'endDate', label: '结束日期', type: 'date' },
+    { key: 'travelDays', label: '路途天数', type: 'number', step: '0.5', placeholder: '每年度限一次' },
+    { key: 'holidayDays', label: '节假日加假', type: 'number', step: '0.5', placeholder: '自动计算', readonly: true },
+    { key: 'endDate', label: '结束日期', type: 'date', placeholder: '自动计算', readonly: true },
+    { key: 'yearTotal', label: '本年度休假总天数', readonly: true, placeholder: '自动统计' },
     { key: 'reason', label: '事由', span: 'full' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+  ],
+  beforeSave: function (data) {
+    // idCard/personnelName/yearTotal 仅用于表单展示,不提交
+    delete data.idCard;
+    delete data.personnelName;
+    delete data.yearTotal;
+    return data;
+  }
 };
 
 var fitnessCfg = {

@@ -35,6 +35,7 @@ public class LeaveController {
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String personnelName,
+                             @RequestParam(required = false) String year,
                              @RequestParam(required = false) String leaveType,
                              @RequestParam(required = false) String startDate,
                              @RequestParam(required = false) String endDate,
@@ -43,7 +44,11 @@ public class LeaveController {
         if (page < 1) page = 1;
         if (size < 1 || size > 200) size = 50;
         StringBuilder sql = new StringBuilder(
-            "SELECT l.*, p.name AS personnelName FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
+            "SELECT l.id, l.personnel_id AS personnelId, p.name AS personnelName, p.id_card AS idCard, " +
+            "l.year, l.leave_type AS leaveType, l.start_date AS startDate, l.end_date AS endDate, l.days, " +
+            "CAST(l.travel_days AS REAL) AS travelDays, CAST(l.holiday_days AS REAL) AS holidayDays, " +
+            "l.reason, l.remark, l.created_at AS createdAt, l.updated_at AS updatedAt " +
+            "FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
@@ -51,6 +56,10 @@ public class LeaveController {
         if (personnelName != null && !personnelName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
             csql.append(" AND p.name LIKE ?"); cargs.add("%" + personnelName.trim() + "%");
+        }
+        if (year != null && !year.trim().isEmpty()) {
+            sql.append(" AND CAST(l.year AS TEXT) = ?"); args.add(year.trim());
+            csql.append(" AND CAST(l.year AS TEXT) = ?"); cargs.add(year.trim());
         }
         if (leaveType != null && !leaveType.trim().isEmpty()) {
             sql.append(" AND l.leave_type = ?"); args.add(leaveType.trim());
@@ -75,9 +84,36 @@ public class LeaveController {
     @GetMapping("/check-travel")
     public ApiResponse checkTravel(@RequestParam Long personnelId, @RequestParam String year) {
         java.util.List<java.util.Map<String, Object>> used = jdbc.queryForList(
-            "SELECT id, start_date, days FROM leave_record WHERE personnel_id=? AND year=? AND CAST(travel_days AS REAL) > 0 ORDER BY start_date DESC",
+            "SELECT id, start_date, days FROM leave_record WHERE personnel_id=? AND CAST(year AS TEXT)=? AND CAST(travel_days AS REAL) > 0 ORDER BY start_date DESC",
             personnelId, year);
         return ApiResponse.ok(used != null && !used.isEmpty() ? used : null);
+    }
+
+    /** 按身份证号精确查找人员(休假表单自动带出姓名用) */
+    @GetMapping("/find-person")
+    public ApiResponse findPerson(@RequestParam String idCard) {
+        return ApiResponse.ok(jdbc.queryForList(
+            "SELECT p.id, p.name, p.id_card AS idCard, d.name AS departmentName FROM personnel p " +
+            "LEFT JOIN department d ON p.department_id = d.id WHERE p.id_card = ? COLLATE NOCASE",
+            idCard == null ? "" : idCard.trim()));
+    }
+
+    /** 某人某年度休假汇总:不含指定记录的基本+路途+节假日总天数 */
+    @GetMapping("/summary")
+    public ApiResponse summary(@RequestParam Long personnelId, @RequestParam String year,
+                               @RequestParam(required = false) Long excludeId) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT COUNT(*) AS cnt, IFNULL(SUM(IFNULL(CAST(days AS REAL),0) + IFNULL(CAST(travel_days AS REAL),0) + IFNULL(CAST(holiday_days AS REAL),0)), 0) AS totalDays " +
+            "FROM leave_record WHERE personnel_id=? AND CAST(year AS TEXT)=?");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        args.add(personnelId);
+        args.add(year == null ? "" : year.trim());
+        if (excludeId != null) {
+            sql.append(" AND id <> ?");
+            args.add(excludeId);
+        }
+        java.util.Map<String, Object> m = jdbc.queryForMap(sql.toString(), args.toArray());
+        return ApiResponse.ok(m);
     }
 
     /** 获取某年度的节假日列表(前端自动计算用) */

@@ -29,6 +29,9 @@ public class LeaveDao {
             r.setId(rs.getLong("id"));
             r.setPersonnelId(rs.getLong("personnel_id"));
             r.setPersonnelName(rs.getString("personnel_name"));
+            r.setYear(rs.getString("year"));
+            r.setTravelDays(rs.getObject("travel_days") == null ? null : rs.getDouble("travel_days"));
+            r.setHolidayDays(rs.getObject("holiday_days") == null ? null : rs.getDouble("holiday_days"));
             r.setLeaveType(rs.getString("leave_type"));
             r.setStartDate(rs.getString("start_date"));
             r.setEndDate(rs.getString("end_date"));
@@ -77,21 +80,27 @@ public class LeaveDao {
 
     public long insert(LeaveRecord r) {
         return jdbc.queryForObject(
-                "INSERT INTO leave_record(personnel_id, leave_type, start_date, end_date, days, reason, remark) " +
-                "VALUES(?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO leave_record(personnel_id, year, leave_type, start_date, end_date, days, " +
+                "travel_days, holiday_days, reason, remark) VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
-                r.getPersonnelId(),
+                r.getPersonnelId(), nvl(r.getYear()),
                 nvl(r.getLeaveType()), nvl(r.getStartDate()), nvl(r.getEndDate()),
-                r.getDays() == null ? 0 : r.getDays(), nvl(r.getReason()), nvl(r.getRemark()));
+                r.getDays() == null ? 0 : r.getDays(),
+                r.getTravelDays() == null ? 0 : r.getTravelDays(),
+                r.getHolidayDays() == null ? 0 : r.getHolidayDays(),
+                nvl(r.getReason()), nvl(r.getRemark()));
     }
 
     public void update(LeaveRecord r) {
         jdbc.update(
-                "UPDATE leave_record SET personnel_id=?, leave_type=?, start_date=?, end_date=?, days=?, " +
-                "reason=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
-                r.getPersonnelId(),
+                "UPDATE leave_record SET personnel_id=?, year=?, leave_type=?, start_date=?, end_date=?, days=?, " +
+                "travel_days=?, holiday_days=?, reason=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                r.getPersonnelId(), nvl(r.getYear()),
                 nvl(r.getLeaveType()), nvl(r.getStartDate()), nvl(r.getEndDate()),
-                r.getDays() == null ? 0 : r.getDays(), nvl(r.getReason()), nvl(r.getRemark()),
+                r.getDays() == null ? 0 : r.getDays(),
+                r.getTravelDays() == null ? 0 : r.getTravelDays(),
+                r.getHolidayDays() == null ? 0 : r.getHolidayDays(),
+                nvl(r.getReason()), nvl(r.getRemark()),
                 r.getId());
     }
 

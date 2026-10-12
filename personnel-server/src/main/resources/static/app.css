@@ -449,6 +449,13 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 }
 .cal-icon svg { width: 17px; height: 17px; }
 .cal-icon:hover { color: #2f6fd6; }
+
+/* ---------- 只读字段(自动计算/自动带出) ---------- */
+.form-item input.ro, .form-item textarea.ro {
+  background: #eef1f5; color: #5a6b7f; cursor: default;
+}
+.form-item .cal.ro input { background: #eef1f5; color: #5a6b7f; cursor: default; padding-right: 10px; }
+.travel-warn { font-weight: 400; }
 .cal-panel {
   position: absolute; left: 0; top: calc(100% + 4px); z-index: 320;
   width: 262px; background: #fff; border: 1px solid #dbe4ee; border-radius: 8px;

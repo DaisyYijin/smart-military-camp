@@ -106,10 +106,13 @@ public class ModuleExcelService {
         MODULES.put("leave", new ModuleDef("leave", "休假", "leave_record", "休假",
                 Arrays.asList(
                         new Col("人员姓名", "personnelId", "ref-personnel"),
+                        new Col("年度", "year", "text"),
                         new Col("休假类型", "leaveType", "text"),
                         new Col("开始日期", "startDate", "text"),
                         new Col("结束日期", "endDate", "text"),
                         new Col("天数", "days", "number"),
+                        new Col("路途天数", "travelDays", "number"),
+                        new Col("节假日加假", "holidayDays", "number"),
                         new Col("事由", "reason", "text"),
                         new Col("备注", "remark", "text")),
                 ""));
