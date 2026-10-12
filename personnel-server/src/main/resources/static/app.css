@@ -563,13 +563,16 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
 }
 .filter-panel.open {
   width: 270px;
-  position: sticky;
-  top: 0;
-  align-self: stretch;
-  max-height: calc(100vh - 120px);
+  position: fixed;
+  top: 52px;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
+  z-index: 50;
+  box-shadow: -4px 0 16px rgba(23,43,77,.08);
 }
+
 .filter-panel-inner {
   padding: 16px;
   min-width: 270px;
