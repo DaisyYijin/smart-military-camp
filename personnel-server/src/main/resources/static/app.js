@@ -2110,6 +2110,43 @@ function openFitnessStdManager() {
       h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 分数行', onclick: promptScoreRow }));
     right.appendChild(rightHead);
 
+    // 单位提示条:自动检测数据类型并显示
+    var isTimeType = false;
+    GET('/api/fitness-matrix?item=' + encodeURIComponent(currentItem)).then(function (rows) {
+      var maxV = 0;
+      (rows || []).forEach(function (r) { if (r.value > maxV) { maxV = r.value; } });
+      isTimeType = maxV > 300;
+      var unitLabel = isTimeType ? '时间型(秒)' : '次数型(次)';
+      var unitColor = isTimeType ? '#e8960e' : '#2f9e5b';
+      var hintText = isTimeType
+        ? "达标值填秒数,如750=12分30秒。成绩可填12分30秒或750。值越小越好。"
+        : "达标值填次数,如15=做15个。成绩填数字即可。值越多越好。";
+      right.appendChild(h('div', {
+        style: 'background:#fff;border:1px solid #dbe4ee;border-left:3px solid ' + unitColor +
+          ';border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#445262;display:flex;align-items:center;gap:10px'
+      },
+        h('span', {
+          style: 'flex:none;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;color:#fff;background:' + unitColor,
+          text: unitLabel
+        }),
+        h('span', { text: hintText })));
+
+      // 在表头加单位后缀
+      var ageHeads = $all('.mx-age-head', right);
+      ageHeads.forEach(function (th) {
+        var orig = th.textContent.trim();
+        var suffix = isTimeType ? '(秒)' : '(次)';
+        if (orig.indexOf('(') < 0) {
+          th.textContent = orig + suffix;
+        }
+      });
+
+      // 空单元格加 placeholder
+      $all('.mx-input', right).forEach(function (inp) {
+        inp.placeholder = isTimeType ? '秒' : '次';
+      });
+    });
+
     if (!ageGroups.length || !scores.length) {
       right.appendChild(h('div', { style: 'background:#fff;border-radius:8px;padding:40px;text-align:center;color:#97a4b5' },
         h('span', { text: '暂无标准,点击上方按钮添加年龄段和分数行' })));
