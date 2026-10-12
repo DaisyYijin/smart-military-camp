@@ -73,6 +73,25 @@ public class FitnessMatrixController {
         return ApiResponse.ok();
     }
 
+    /** 重命名项目 */
+    @PostMapping("/rename")
+    public ApiResponse rename(@RequestBody Map<String, Object> body) {
+        String oldItem = str(body.get("old_item"));
+        String newItem = str(body.get("new_item"));
+        if (oldItem.isEmpty() || newItem.isEmpty()) {
+            return ApiResponse.error("原名称和新名称不能为空");
+        }
+        if (!oldItem.equals(newItem)) {
+            Long exists = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM fitness_matrix WHERE item=?", Long.class, newItem);
+            if (exists != null && exists > 0) {
+                return ApiResponse.error("新名称已存在");
+            }
+            jdbc.update("UPDATE fitness_matrix SET item=? WHERE item=?", newItem, oldItem);
+        }
+        return ApiResponse.ok();
+    }
+
     /** 删除整个项目 */
     @DeleteMapping("/item")
     public ApiResponse deleteItem(@RequestParam String item) {
