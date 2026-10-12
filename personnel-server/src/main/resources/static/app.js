@@ -2444,6 +2444,297 @@ var personnelCfg = {
   ],
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
   form: [
+    { section: '基本信息' },
+    { key: 'name', label: '姓名', required: true },
+    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
+    { key: 'idCard', label: '身份证号' },
+    { key: 'birthday', label: '出生日期', type: 'date' },
+    { key: 'phone', label: '手机号' },
+    { key: 'departmentId', label: '部门', type: 'dept' },
+    { key: 'rank', label: '军衔/职级', type: 'select', options: function () { return dictLabels('rank'); } },
+    { key: 'post', label: '职务/岗位' },
+    { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
+    { key: 'entryDate', label: '入伍/入职日期', type: 'date' },
+    { section: '更多资料' },
+    { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
+    { key: 'nativePlace', label: '籍贯' },
+    { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
+    
+    
+    
+    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
+    { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
+    { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
+    { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
+    { key: 'address', label: '家庭住址', span: 'full' },
+    { section: '党团籍信息' },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
+    { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },
+    { key: 'partyActivistDate', label: '积极分子时间', type: 'date' },
+    { key: 'partyCandidateDate', label: '预备党员时间', type: 'date' },
+    { key: 'partyFullDate', label: '转正时间', type: 'date' },
+    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date', requiredIf: function (v) { return v.politicalStatus === '党员' || v.politicalStatus === '团员'; } },
+    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委', requiredIf: function (v) { return v.politicalStatus === '党员'; } },
+    { key: 'partyPost', label: '党内职务', placeholder: '如:支部委员、党委书记' },
+    { key: 'partyRemark', label: '党团备注', type: 'textarea', span: 'full' },
+    { section: '婚姻状况' },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'marriageDate', label: '结婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '已婚' || v.maritalStatus === '离异'; } },
+    { key: 'divorceDate', label: '离婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '离异'; } },
+    { key: 'followArmyDate', label: '随军时间', type: 'date' },
+    { key: 'followArmyStatus', label: '随军条件', type: 'select', options: function () { var l = dictLabels('follow_army_status'); return l.length ? l : ['符合', '不符合', '未申请']; } },
+    { key: 'marriageRemark', label: '婚姻备注', type: 'textarea', span: 'full' },
+    { section: '家庭信息' },
+{ section: '任职经历' },
+    { section: '奖惩情况' },
+    { section: '驾驶证' },
+    { section: '个人卡号' },
+    { section: '私家车' },
+    { section: '住房情况' }
+  ],
+  subPanels: function (row) {
+    var fitnessOpt = {};
+    var fk;
+    for (fk in FITNESS_SUB) { fitnessOpt[fk] = FITNESS_SUB[fk]; }
+    fitnessOpt.age = row ? calcAge(row.birthday) : '';
+    fitnessOpt.birthday = row ? row.birthday : '';
+    if (row && row.id) {
+      return {
+        panels: {
+          '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
+          '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB),
+          '家庭信息': subRecordsPanel(FAMILY_SUB.kind, row.id, FAMILY_SUB),
+          '驾驶证': subRecordsPanel(DRIVER_SUB.kind, row.id, DRIVER_SUB),
+          '个人卡号': subRecordsPanel(CARD_SUB.kind, row.id, CARD_SUB),
+          '私家车': subRecordsPanel(PVEHICLE_SUB.kind, row.id, PVEHICLE_SUB),
+          '住房情况': subRecordsPanel(HOUSING_SUB.kind, row.id, HOUSING_SUB),
+          '体能考核': subRecordsPanel(FITNESS_SUB.kind, row.id, fitnessOpt)
+        }
+      };
+    }
+    var pos = subRecordsPanel(POSITION_SUB.kind, null, POSITION_SUB);
+    var rew = subRecordsPanel(REWARD_SUB.kind, null, REWARD_SUB);
+    var fam = subRecordsPanel(FAMILY_SUB.kind, null, FAMILY_SUB);
+    var drv = subRecordsPanel(DRIVER_SUB.kind, null, DRIVER_SUB);
+    var card = subRecordsPanel(CARD_SUB.kind, null, CARD_SUB);
+    var pveh = subRecordsPanel(PVEHICLE_SUB.kind, null, PVEHICLE_SUB);
+    var hous = subRecordsPanel(HOUSING_SUB.kind, null, HOUSING_SUB);
+    var fit = subRecordsPanel(FITNESS_SUB.kind, null, fitnessOpt);
+    return {
+      panels: { '任职经历': pos, '奖惩情况': rew, '家庭信息': fam,
+        '驾驶证': drv, '个人卡号': card, '私家车': pveh, '住房情况': hous, '体能考核': fit },
+      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged,
+        'family': fam.__staged, 'driver': drv.__staged, 'card': card.__staged,
+        'pvehicle': pveh.__staged, 'housing': hous.__staged }
+    };
+  }
+};
+
+/* 人员表单顶部的照片选择区 */
+function personnelPhotoBlock(row) {
+  var st = {
+    base64: null,
+    removed: false,
+    existing: row && row.photo ? ('/api/personnel/' + row.id + '/photo') : null
+  };
+  var preview = h('div', { class: 'photo-preview', text: st.existing ? '' : '无照片' });
+  if (st.existing) {
+    apiBlob(st.existing).then(function (r) {
+      preview.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
+      preview.textContent = '';
+    }).catch(function () { preview.textContent = '无照片'; });
+  }
+
+  var fileInput = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files[0];
+    fileInput.value = '';
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { toast('照片不能超过 5MB', 'err'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      st.base64 = reader.result;
+      st.removed = false;
+      preview.style.backgroundImage = 'url(' + st.base64 + ')';
+      preview.textContent = '';
+    };
+    reader.readAsDataURL(f);
+  });
+
+  var box = h('div', { class: 'form-item full' });
+  box.appendChild(h('label', { text: '人员照片' }));
+  box.appendChild(h('div', { class: 'photo-box' }, preview,
+    h('div', {}, fileInput,
+      h('div', { style: 'display:flex;flex-direction:column;gap:8px' },
+        h('button', { class: 'btn btn-ghost btn-sm', text: '选择照片', onclick: function () { fileInput.click(); } }),
+        h('button', {
+          class: 'btn btn-ghost btn-sm', text: '移除照片',
+          onclick: function () {
+            st.base64 = null; st.removed = true; st.existing = null;
+            preview.style.backgroundImage = '';
+            preview.textContent = '无照片';
+          }
+        }),
+        h('div', { style: 'color:#a6b3c4;font-size:12px', text: '支持 jpg/png,不超过 5MB' })))));
+
+  return {
+    el: box,
+    get: function () {
+      if (st.base64) return { photoBase64: st.base64 };
+      if (st.removed) return { photo: '' };
+      return {};
+    }
+  };
+}
+
+var equipmentCfg = {
+  key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
+  clickKey: 'name', addLabel: '新增装备',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
+  ],
+  columns: [
+    { key: 'name', label: '装备名称' },
+    { key: 'code', label: '编号' },
+    { key: 'category', label: '类别' },
+    { key: 'model', label: '型号' },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'keeperName', label: '保管人' },
+    { key: 'location', label: '存放位置' },
+    { key: 'buyDate', label: '购置日期' }
+  ],
+  rowTitle: function (r) { return r.name; },
+  form: [
+    { key: 'name', label: '装备名称', required: true },
+    { key: 'code', label: '装备编号' },
+    { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
+    { key: 'model', label: '型号' },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('equipment_status'); } },
+    { key: 'keeperId', label: '保管人', type: 'personnel' },
+    { key: 'location', label: '存放位置' },
+    { key: 'buyDate', label: '购置日期', type: 'date' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var materialCfg = {
+  key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
+  clickKey: 'name', addLabel: '新增物资',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
+  ],
+  columns: [
+    { key: 'name', label: '物资名称' },
+    { key: 'category', label: '分类' },
+    { key: 'spec', label: '规格' },
+    { key: 'unit', label: '单位' },
+    {
+      label: '数量', render: function (r) {
+        var low = r.minQuantity != null && r.quantity != null && r.quantity <= r.minQuantity;
+        return low ? '<span class="warn-num">' + esc(r.quantity) + ' ⚠</span>' : esc(r.quantity);
+      }
+    },
+    { key: 'minQuantity', label: '预警下限' },
+    { key: 'keeperName', label: '责任人' },
+    { key: 'location', label: '存放位置' }
+  ],
+  rowTitle: function (r) { return r.name; },
+  form: [
+    { key: 'name', label: '物资名称', required: true },
+    { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } },
+    { key: 'spec', label: '规格' },
+    { key: 'unit', label: '单位', placeholder: '个/箱/件…' },
+    { key: 'quantity', label: '数量', type: 'number', step: '0.01' },
+    { key: 'minQuantity', label: '库存预警下限', type: 'number', step: '0.01' },
+    { key: 'keeperId', label: '责任人', type: 'personnel' },
+    { key: 'location', label: '存放位置' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var vehicleCfg = {
+  key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
+  clickKey: 'plateNo', addLabel: '新增车辆',
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('vehicle_status'); } }
+  ],
+  columns: [
+    { key: 'plateNo', label: '车牌号' },
+    { key: 'brand', label: '品牌型号' },
+    { key: 'type', label: '车型' },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'driverName', label: '驾驶员' },
+    { key: 'seats', label: '核定人数' },
+    { key: 'mileage', label: '里程(km)' }
+  ],
+  rowTitle: function (r) { return r.plateNo; },
+  form: [
+    { key: 'plateNo', label: '车牌号', required: true },
+    { key: 'brand', label: '品牌型号' },
+    { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('vehicle_status'); } },
+    { key: 'driverId', label: '驾驶员', type: 'personnel' },
+    { key: 'seats', label: '核定人数', type: 'number', step: '1' },
+    { key: 'mileage', label: '里程(km)', type: 'number', step: '0.1' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var leaveCfg = {
+  key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
+  clickKey: 'personnelName', addLabel: '新增休假',
+  filters: [{ key: 'keyword', label: '检索' }],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },
+    { key: 'startDate', label: '开始日期' },
+    { key: 'endDate', label: '结束日期' },
+    { key: 'days', label: '天数' },
+    { key: 'reason', label: '事由' }
+  ],
+  rowTitle: function (r) { return r.personnelName; },
+  delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假记录吗?'; },
+  form: [
+    { key: 'personnelId', label: '休假人员', type: 'personnel', required: true },
+    { key: 'leaveType', label: '休假类型', type: 'select', required: true, options: function () { return dictLabels('leave_type'); } },
+    { key: 'startDate', label: '开始日期', type: 'date', required: true },
+    { key: 'endDate', label: '结束日期', type: 'date', required: true },
+    { key: 'days', label: '天数', type: 'number', step: '0.5' },
+    { key: 'reason', label: '事由', span: 'full' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+
+var fitnessCfg = {
+  key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
+  clickKey: 'personnelName', addLabel: '新增考核记录',
+  toolbarExtra: function (bar, act) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '体能标准',
+      title: '查看体能考核评分标准',
+      onclick: function () { openFitnessStdManager(); }
+    }));
+  },
+  filters: [
+    { key: 'keyword', label: '检索' },
+    { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
+    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下', '不及格'] },
+    { key: 'startDate', label: '起日期' },
+    { key: 'endDate', label: '止日期' }
+  ],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'item', label: '考核项目' },
+    { key: 'score', label: '成绩' },
+    { key: 'grade', label: '等级', render: function (r) { return badge(r.grade); } },
+    { key: 'testDate', label: '考核日期' },
+    { key: 'tester', label: '考核人' }
+  ],
+  rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
+  form: [
     { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
     { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
     { key: 'score', label: '成绩', placeholder: '如 12\'30 或 45 次' },
@@ -2776,7 +3067,8 @@ function fmtSize(bytes) {
 
 function backupView() {
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
-  var MODULES = [];   // [{key,label}]
+  
+var MODULES = [];   // [{key,label}]
 
   function moduleLabel(key) {
     for (var i = 0; i < MODULES.length; i++) {
