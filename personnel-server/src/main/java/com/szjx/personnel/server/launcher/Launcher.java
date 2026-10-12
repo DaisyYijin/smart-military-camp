@@ -36,6 +36,8 @@ import java.util.List;
  */
 public class Launcher {
 
+    static javax.swing.JFrame OWNER_FRAME;
+
     public static void main(String[] args) throws Exception {
         boolean forceNoUi = hasFlag(args, "--no-ui");
         boolean ui = !forceNoUi && !GraphicsEnvironment.isHeadless();
@@ -44,6 +46,12 @@ public class Launcher {
 
         if (ui) {
             System.setProperty("java.awt.headless", "false");
+            // 隐藏的 owner frame:给 JOptionPane 等弹窗提供任务栏图标
+            javax.swing.JFrame ownerFrame = new javax.swing.JFrame();
+            ownerFrame.setUndecorated(true);
+            ownerFrame.setSize(0, 0);
+            ownerFrame.setIconImage(AppIcons.appIcon());
+            OWNER_FRAME = ownerFrame;
             try {
                 // 现代扁平外观(FlatLaf),失败时回退系统外观
                 com.formdev.flatlaf.FlatIntelliJLaf.setup();
@@ -74,7 +82,7 @@ public class Launcher {
             // 已有实例在跑:不重复启动,直接带用户进系统
             String url = "http://127.0.0.1:" + port;
             if (ui) {
-                JOptionPane.showMessageDialog(null,
+                JOptionPane.showMessageDialog(OWNER_FRAME,
                         "程序已经在运行(端口 " + port + "),即将在浏览器中打开系统。",
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
                 TrayManager.openBrowser(url);
@@ -138,7 +146,7 @@ public class Launcher {
             String msg = "服务启动超时(端口 " + port + "),详情请查看 logs/personnel-server.log";
             System.err.println(msg);
             if (ui) {
-                JOptionPane.showMessageDialog(null, msg, "启动失败", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(OWNER_FRAME, msg, "启动失败", JOptionPane.ERROR_MESSAGE);
             }
             System.exit(1);
             return;
@@ -158,7 +166,7 @@ public class Launcher {
         } catch (Exception e) {
             System.err.println("[启动] 管理员账号/密码设置失败: " + e.getMessage());
             if (ui) {
-                JOptionPane.showMessageDialog(null,
+                JOptionPane.showMessageDialog(OWNER_FRAME,
                         "管理员账号设置失败:" + e.getMessage() + "\n可登录后在托盘菜单修改。",
                         "账号设置失败", JOptionPane.WARNING_MESSAGE);
             }
@@ -169,7 +177,7 @@ public class Launcher {
 
         if (ui) {
             if (firstRun) {
-                JOptionPane.showMessageDialog(null,
+                JOptionPane.showMessageDialog(OWNER_FRAME,
                         "初始设置完成,系统已启动!\n\n本机浏览器即将自动打开,请使用账号 " + adminUser
                                 + " 和你设置的密码登录。\n局域网其他电脑访问地址:" + lanUrl,
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);

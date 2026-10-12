@@ -2,7 +2,7 @@ package com.szjx.personnel.server.launcher;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JDialog;
+import javax.swing.JFrame;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -33,7 +33,7 @@ import java.util.Map;
  * - 设置管理员账号与密码(首次必填,之后账号可改、密码留空表示不修改)
  * - 选择端口(可检测占用、可从空闲端口列表挑选,选定后持久化)
  */
-public class SetupWizard extends JDialog {
+public class SetupWizard extends javax.swing.JDialog {
 
     public static class Result {
         public int port;
@@ -54,7 +54,7 @@ public class SetupWizard extends JDialog {
     private JLabel banner;
 
     private SetupWizard(boolean firstRun, int initialPort, String occupier, String initialUsername) {
-        super((JFrame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
+        super(createOwner(), firstRun ? "数智军营人员管理系统 - 首次运行设置"
                 : "数智军营人员管理系统 - 启动设置", true);
         this.firstRun = firstRun;
         setIconImage(AppIcons.appIcon());
@@ -366,6 +366,15 @@ public class SetupWizard extends JDialog {
      * 放大 Swing 全局字体(所有界面元素按 1.35 倍放大,最小 15 号),
      * 须在创建任何界面组件之前调用。
      */
+    /** 创建带图标的隐藏 owner frame,让 JDialog 在任务栏显示正确图标 */
+    private static JFrame createOwner() {
+        JFrame f = new JFrame();
+        f.setUndecorated(true);
+        f.setSize(0, 0);
+        f.setIconImage(AppIcons.appIcon());
+        return f;
+    }
+
     public static void applyGlobalFontSize() {
         float scale = 1.7f;
         int minSize = 19;

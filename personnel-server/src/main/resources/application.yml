@@ -17,10 +17,10 @@ spring:
       max-request-size: 20MB
   datasource:
     # SQLite 数据库文件(相对运行目录),可改用绝对路径
-    url: jdbc:sqlite:file:data/personnel.db?busy_timeout=5000&journal_mode=WAL&foreign_keys=on
+    url: jdbc:sqlite:file:data/personnel.db?busy_timeout=30000&journal_mode=WAL&foreign_keys=on
     driver-class-name: org.sqlite.JDBC
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: 2
       minimum-idle: 1
       connection-timeout: 10000
 

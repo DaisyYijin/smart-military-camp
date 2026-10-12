@@ -35,6 +35,17 @@ public class Personnel {
     private String spouseIdCard;  // 配偶身份证号
     private String spouseJob;     // 配偶职业
     private String marriageDate;  // 结婚日期
+    private String partyOrgLocation; // 党团组织关系所在地
+    private String partyPost;     // 党内职务
+    private String partyRemark;   // 党团备注
+    private String divorceDate;   // 离婚日期
+    private String marriageRemark; // 婚姻备注
+    private String partyApplyDate;    // 提交入党申请书时间
+    private String partyActivistDate; // 入党积极分子时间
+    private String partyCandidateDate; // 预备党员时间
+    private String partyFullDate;      // 转正时间
+    private String followArmyDate;     // 随军时间
+    private String followArmyStatus;   // 随军条件
     private Double height;        // 身高(cm)
     private Double weight;        // 体重(kg)
     private String createdAt;
@@ -287,6 +298,29 @@ public class Personnel {
     public void setSpouseJob(String spouseJob) {
         this.spouseJob = spouseJob;
     }
+
+    public String getPartyOrgLocation() { return partyOrgLocation; }
+    public void setPartyOrgLocation(String v) { this.partyOrgLocation = v; }
+    public String getPartyPost() { return partyPost; }
+    public void setPartyPost(String v) { this.partyPost = v; }
+    public String getPartyRemark() { return partyRemark; }
+    public void setPartyRemark(String v) { this.partyRemark = v; }
+    public String getDivorceDate() { return divorceDate; }
+    public void setDivorceDate(String v) { this.divorceDate = v; }
+    public String getMarriageRemark() { return marriageRemark; }
+    public void setMarriageRemark(String v) { this.marriageRemark = v; }
+    public String getPartyApplyDate() { return partyApplyDate; }
+    public void setPartyApplyDate(String v) { this.partyApplyDate = v; }
+    public String getPartyActivistDate() { return partyActivistDate; }
+    public void setPartyActivistDate(String v) { this.partyActivistDate = v; }
+    public String getPartyCandidateDate() { return partyCandidateDate; }
+    public void setPartyCandidateDate(String v) { this.partyCandidateDate = v; }
+    public String getPartyFullDate() { return partyFullDate; }
+    public void setPartyFullDate(String v) { this.partyFullDate = v; }
+    public String getFollowArmyDate() { return followArmyDate; }
+    public void setFollowArmyDate(String v) { this.followArmyDate = v; }
+    public String getFollowArmyStatus() { return followArmyStatus; }
+    public void setFollowArmyStatus(String v) { this.followArmyStatus = v; }
 
     public String getMarriageDate() {
         return marriageDate;

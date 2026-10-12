@@ -28,9 +28,12 @@ import java.util.Map;
 public class ModuleExcelController {
 
     private final ModuleExcelService excelService;
+    private final com.szjx.personnel.server.service.PersonnelFullExcel fullExcel;
 
-    public ModuleExcelController(ModuleExcelService excelService) {
+    public ModuleExcelController(ModuleExcelService excelService,
+                                 com.szjx.personnel.server.service.PersonnelFullExcel fullExcel) {
         this.excelService = excelService;
+        this.fullExcel = fullExcel;
     }
 
     @GetMapping("/api/{module}/export")
@@ -51,7 +54,11 @@ public class ModuleExcelController {
         }
         byte[] bytes;
         try {
-            bytes = excelService.export(module, idList);
+            if ("personnel".equals(module)) {
+                bytes = fullExcel.export(idList);
+            } else {
+                bytes = excelService.export(module, idList);
+            }
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -75,6 +82,25 @@ public class ModuleExcelController {
                 .body(bytes);
     }
 
+    @GetMapping("/api/{module}/template")
+    public ResponseEntity<byte[]> template(@PathVariable String module) {
+        if (!"personnel".equals(module)) {
+            return ResponseEntity.notFound().build();
+        }
+        try {
+            byte[] bytes = fullExcel.template();
+            String fileName = "人员信息导入模板.xlsx";
+            String encoded = URLEncoder.encode(fileName, "UTF-8").replace("+", "%20");
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename*=UTF-8''" + encoded)
+                    .contentType(new MediaType("application",
+                            "vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(bytes);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).build();
+        }
+    }
+
     @PostMapping("/api/{module}/import-excel")
     public ApiResponse importExcel(@PathVariable String module,
                                    @RequestParam("file") MultipartFile file) {
@@ -85,7 +111,12 @@ public class ModuleExcelController {
             return ApiResponse.error("请选择要导入的 Excel 文件");
         }
         try {
-            Map<String, Object> result = excelService.importExcel(module, file.getInputStream());
+            Map<String, Object> result;
+            if ("personnel".equals(module)) {
+                result = fullExcel.importAll(file.getInputStream());
+            } else {
+                result = excelService.importExcel(module, file.getInputStream());
+            }
             return ApiResponse.ok(result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());

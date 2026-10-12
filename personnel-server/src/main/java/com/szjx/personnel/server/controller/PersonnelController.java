@@ -59,7 +59,7 @@ public class PersonnelController {
         return ApiResponse.ok(personnelService.findAllOptions());
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     public ApiResponse get(@PathVariable Long id) {
         Personnel p = personnelService.findById(id);
         if (p == null) {
@@ -71,7 +71,7 @@ public class PersonnelController {
     /**
      * 人员照片下载
      */
-    @GetMapping("/{id}/photo")
+    @GetMapping("/{id:\\d+}/photo")
     public ResponseEntity<byte[]> photo(@PathVariable Long id) {
         Personnel p = personnelService.findById(id);
         if (p == null || p.getPhoto() == null || p.getPhoto().isEmpty()) {
@@ -96,12 +96,12 @@ public class PersonnelController {
         return ApiResponse.ok(personnelService.create(p));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     public ApiResponse update(@PathVariable Long id, @RequestBody Personnel p) {
         return ApiResponse.ok(personnelService.update(id, p));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     public ApiResponse delete(@PathVariable Long id) {
         personnelService.delete(id);
         return ApiResponse.ok();

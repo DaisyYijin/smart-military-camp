@@ -43,9 +43,26 @@ public class SubRecordController {
         COLS.put("children", new String[]{"name", "id_card", "gender", "birth_date", "remark"});
 
         TABLES.put("family", "family_member");
+        TABLES.put("driver", "driver_license");
+        TABLES.put("card", "personal_card");
+        TABLES.put("pvehicle", "private_vehicle");
+        TABLES.put("housing", "housing_info");
         ORDER.put("family", "id");
         COLS.put("family", new String[]{"relationship", "name", "id_card", "gender",
                 "birth_date", "political_status", "work_info", "phone", "remark"});
+
+        ORDER.put("driver", "id");
+        COLS.put("driver", new String[]{"license_type", "license_no", "vehicle_class",
+                "issue_date", "expiry_date", "issuing_auth", "license_status", "review_date", "remark"});
+
+        ORDER.put("card", "id");
+        COLS.put("card", new String[]{"card_type", "card_no", "bank_name", "branch_name", "open_date", "card_status", "remark"});
+
+        ORDER.put("pvehicle", "id");
+        COLS.put("pvehicle", new String[]{"plate_no", "brand", "color", "purchase_date", "price", "insurance_date", "vehicle_status", "owner_name", "remark"});
+
+        ORDER.put("housing", "id");
+        COLS.put("housing", new String[]{"housing_type", "address", "area", "house_nature", "has_cert", "loan_status", "purchase_date", "owner_name", "remark"});
     }
 
     private final SubRecordDao dao;
@@ -138,6 +155,20 @@ public class SubRecordController {
             if (!idc2.isEmpty() && !idc2.matches("[0-9]{17}[0-9Xx]") && !idc2.matches("[0-9]{15}")) {
                 return "身份证号格式不正确(15 或 18 位)";
             }
+            return null;
+        } else if ("driver".equals(kind)) {
+            if (f.get("license_type").isEmpty()) { return "请选择驾照类型(军本/地方本)"; }
+            if (f.get("license_no").isEmpty()) { return "请填写证号"; }
+            return null;
+        } else if ("card".equals(kind)) {
+            if (f.get("card_type").isEmpty()) { return "请选择卡类型"; }
+            if (f.get("card_no").isEmpty()) { return "请填写卡号"; }
+            return null;
+        } else if ("pvehicle".equals(kind)) {
+            if (f.get("plate_no").isEmpty()) { return "请填写车牌号"; }
+            return null;
+        } else if ("housing".equals(kind)) {
+            if (f.get("address").isEmpty()) { return "请填写住房地址"; }
             return null;
         } else if ("children".equals(kind)) {
             if (f.get("name").isEmpty()) {

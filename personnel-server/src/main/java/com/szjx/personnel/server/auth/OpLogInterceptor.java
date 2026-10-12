@@ -24,6 +24,10 @@ public class OpLogInterceptor implements HandlerInterceptor {
         MODULE_NAMES.put("reward-punish", "奖惩情况");
         MODULE_NAMES.put("children", "子女信息");
         MODULE_NAMES.put("family", "家庭成员");
+        MODULE_NAMES.put("driver", "驾驶证");
+        MODULE_NAMES.put("card", "个人卡号");
+        MODULE_NAMES.put("pvehicle", "私家车");
+        MODULE_NAMES.put("housing", "住房情况");
         MODULE_NAMES.put("departments", "部门管理");
         MODULE_NAMES.put("dict", "数据字典");
         MODULE_NAMES.put("equipment", "装备管理");

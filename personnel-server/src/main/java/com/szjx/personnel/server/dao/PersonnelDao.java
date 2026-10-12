@@ -128,8 +128,8 @@ public class PersonnelDao {
     public long insert(Personnel p) {
         return jdbc.queryForObject(
                 "INSERT INTO personnel(name, gender, id_card, birthday, phone, department_id, rank, post, status, entry_date, address, photo, remark, " +
-                "blood_type, nation, political_status, party_join_date, marital_status, education, only_child, native_place, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "blood_type, nation, political_status, party_join_date, marital_status, education, only_child, native_place, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getRank()), nvl(p.getPost()),
@@ -148,7 +148,7 @@ public class PersonnelDao {
                 "UPDATE personnel SET name=?, gender=?, id_card=?, birthday=?, phone=?, department_id=?, " +
                 "rank=?, post=?, status=?, entry_date=?, address=?, photo=?, remark=?, " +
                 "blood_type=?, nation=?, political_status=?, party_join_date=?, marital_status=?, education=?, only_child=?, " +
-                "native_place=?, height=?, weight=?, spouse_name=?, spouse_work=?, spouse_phone=?, spouse_id_card=?, spouse_job=?, marriage_date=?, updated_at=datetime('now','localtime') " +
+                "native_place=?, height=?, weight=?, spouse_name=?, spouse_work=?, spouse_phone=?, spouse_id_card=?, spouse_job=?, marriage_date=?, party_org_location=?, party_post=?, party_remark=?, divorce_date=?, marriage_remark=?, party_apply_date=?, party_activist_date=?, party_candidate_date=?, party_full_date=?, follow_army_date=?, follow_army_status=?, updated_at=datetime('now','localtime') " +
                 "WHERE id=?",
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getRank()), nvl(p.getPost()),

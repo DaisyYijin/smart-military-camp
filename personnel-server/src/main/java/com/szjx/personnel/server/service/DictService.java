@@ -38,6 +38,17 @@ public class DictService {
         TYPE_NAMES.put("marital_status", "婚姻状况");
         TYPE_NAMES.put("education", "学历");
         TYPE_NAMES.put("only_child", "是否独生子女");
+        TYPE_NAMES.put("family_relation", "家庭关系");
+        TYPE_NAMES.put("license_type", "驾驶证类型");
+        TYPE_NAMES.put("card_type", "卡类型");
+        TYPE_NAMES.put("housing_type", "住房类型");
+        TYPE_NAMES.put("follow_army_status", "随军条件");
+        TYPE_NAMES.put("license_status", "驾驶证状态");
+        TYPE_NAMES.put("card_status", "卡状态");
+        TYPE_NAMES.put("vehicle_status_sub", "私家车状态");
+        TYPE_NAMES.put("house_nature", "房屋性质");
+        TYPE_NAMES.put("has_cert", "是否有房产证");
+        TYPE_NAMES.put("loan_status", "贷款情况");
     }
 
     /**

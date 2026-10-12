@@ -255,6 +255,7 @@ function makeDateField() {
 
   iconBtn.addEventListener('click', function (e) {
     e.stopPropagation();
+    $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
     if (wrap.classList.contains('open')) {
       wrap.classList.remove('open');
     } else {
@@ -263,6 +264,7 @@ function makeDateField() {
   });
   input.addEventListener('click', function (e) {
     e.stopPropagation();
+    $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
     if (!wrap.classList.contains('open')) {
       openPanel();
     }
@@ -279,6 +281,77 @@ function makeDateField() {
   });
 
   return wrap;
+}
+
+/** 进度弹窗:返回 {close, setProgress(pct), setStatus(text)} */
+function showProgressModal(title) {
+  var fill = h('div', { class: 'pg-fill', style: 'width:0%' });
+  var bar = h('div', { class: 'pg-bar' }, fill);
+  var status = h('div', { style: 'margin:10px 0 6px;font-size:13px;color:#66788c', text: '准备中…' });
+  var pctText = h('div', { style: 'font-size:12px;color:#97a4b5;text-align:right', text: '0%' });
+  var m = openModal({
+    title: title,
+    body: h('div', {}, status, bar, pctText)
+  });
+  return {
+    close: function () { m.close(); },
+    setProgress: function (pct) {
+      fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+      pctText.textContent = Math.round(pct) + '%';
+    },
+    setStatus: function (text) { status.textContent = text; }
+  };
+}
+
+/** XHR 下载 blob(带进度回调) */
+function apiBlobWithProgress(url, onProgress) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    if (TOKEN) { xhr.setRequestHeader('X-Auth-Token', TOKEN); }
+    xhr.responseType = 'blob';
+    xhr.onprogress = function (e) {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round(e.loaded / e.total * 100));
+      }
+    };
+    xhr.onload = function () {
+      if (xhr.status === 401) { reject(new Error('登录已过期')); return; }
+      if (xhr.status !== 200) { reject(new Error('下载失败(' + xhr.status + ')')); return; }
+      var cd = xhr.getResponseHeader('Content-Disposition') || '';
+      var m = /filename\*=UTF-8''([^;]+)/.exec(cd);
+      var filename = m ? decodeURIComponent(m[1]) : 'export.bin';
+      resolve({ blob: xhr.response, filename: filename });
+    };
+    xhr.onerror = function () { reject(new Error('网络错误')); };
+    xhr.send();
+  });
+}
+
+/** XHR 上传(带进度回调) */
+function postFormWithProgress(url, formData, onProgress) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    if (TOKEN) { xhr.setRequestHeader('X-Auth-Token', TOKEN); }
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round(e.loaded / e.total * 100));
+      }
+    };
+    xhr.onload = function () {
+      if (xhr.status === 401) { reject(new Error('登录已过期')); return; }
+      try {
+        var data = JSON.parse(xhr.responseText);
+        if (data.code !== 0) { reject(new Error(data.message || '导入失败')); return; }
+        resolve(data.data);
+      } catch (e) {
+        reject(new Error('响应解析失败'));
+      }
+    };
+    xhr.onerror = function () { reject(new Error('网络错误')); };
+    xhr.send(formData);
+  });
 }
 
 /**
@@ -340,7 +413,7 @@ function makeDropdown(opts, placeholder) {
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
     var opening = !wrap.classList.contains('open');
-    $all('.dd.open, .cal.open').forEach(function (d) { if (d !== wrap) d.classList.remove('open'); });
+    $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
     wrap.classList.toggle('open', opening);
     if (!opening) {
       return;
@@ -349,7 +422,9 @@ function makeDropdown(opts, placeholder) {
     var r = btn.getBoundingClientRect();
     list.style.position = 'fixed';
     list.style.left = r.left + 'px';
-    list.style.width = r.width + 'px';
+    list.style.minWidth = r.width + 'px';
+    list.style.maxWidth = (window.innerWidth - r.left - 10) + 'px';
+    list.style.width = 'auto';
     var lh = list.offsetHeight || 200;
     var below = r.bottom + 6 + lh <= window.innerHeight;
     list.style.top = (below ? r.bottom + 5 : Math.max(6, r.top - lh - 5)) + 'px';
@@ -359,6 +434,40 @@ function makeDropdown(opts, placeholder) {
 
   return wrap;
 }
+
+// 标签栏鼠标拖动横向滚动
+(function tabsDragInit() {
+  document.addEventListener('mousedown', function (e) {
+    var tabs = e.target.closest('.tabs');
+    if (!tabs) { return; }
+    var startX = e.clientX;
+    var startScroll = tabs.scrollLeft;
+    var dragging = false;
+    function onMove(ev) {
+      var dx = ev.clientX - startX;
+      if (Math.abs(dx) > 3) { dragging = true; }
+      tabs.scrollLeft = startScroll - dx;
+      ev.preventDefault();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (dragging) {
+        tabs.__suppressClick = true;
+        setTimeout(function () { tabs.__suppressClick = false; }, 100);
+      }
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  document.addEventListener('click', function (e) {
+    var tabs = e.target.closest('.tabs');
+    if (tabs && tabs.__suppressClick) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
+})();
 
 // 全局:点空白/按 Esc 关闭所有下拉(一次注册,避免泄漏)
 document.addEventListener('click', function () {
@@ -672,22 +781,24 @@ function buildForm(fields, values, extraPanels) {
       var out = {};
       var missing = [];
       var firstBadKey = null;
+      // 先收集全部值(条件必填需要读取其他字段的值)
       fields.forEach(function (f) {
-        if (f.section) {
-          return;
-        }
+        if (f.section) { return; }
         var el = inputs[f.key];
         if (f.type === 'number') {
           out[f.key] = el.value === '' ? null : Number(el.value);
-          return;
+        } else {
+          out[f.key] = String(el.value || '').trim();
         }
-        var v = String(el.value || '').trim();
-        out[f.key] = v;
-        if (f.required && v === '') {
+      });
+      // 再校验(含条件必填)
+      fields.forEach(function (f) {
+        if (f.section) { return; }
+        var v = out[f.key];
+        var need = f.required || (f.requiredIf && f.requiredIf(out));
+        if (need && !v) {
           missing.push(f.label);
-          if (!firstBadKey) {
-            firstBadKey = f.key;
-          }
+          if (!firstBadKey) { firstBadKey = f.key; }
         }
       });
       if (missing.length) {
@@ -958,34 +1069,94 @@ function crudView(cfg) {
       if (!f) return;
       var fd = new FormData();
       fd.append('file', f);
-      toast('正在导入…', 'info');
-      POST(cfg.endpoint + '/import-excel', fd).then(function (r) {
-        var msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
-        if (r.errors && r.errors.length) {
-          msg += ';失败明细:' + r.errors.join('、');
+      var pm = showProgressModal('导入 Excel');
+      pm.setStatus('正在上传 ' + f.name + '(' + (f.size / 1024).toFixed(1) + 'KB)…');
+      postFormWithProgress(cfg.endpoint + '/import-excel', fd,
+        function (pct) {
+          pm.setProgress(pct * 0.5); // 上传占前半
+          pm.setStatus('正在上传… ' + pct + '%');
         }
+      ).then(function (r) {
+        pm.setProgress(80);
+        pm.setStatus('正在处理数据…');
+        var msg;
+        if (r.subTotal !== undefined) {
+          msg = '导入完成:人员 ' + r.mainCount + ' 条,子记录 ' + r.subTotal + ' 条';
+          var parts = [];
+          for (var k in r) {
+            if (k !== 'mainCount' && k !== 'subTotal' && r[k] > 0) {
+              parts.push(k + ' ' + r[k] + '条');
+            }
+          }
+          if (parts.length) { msg += '(' + parts.join(',') + ')'; }
+        } else {
+          msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
+          if (r.errors && r.errors.length) {
+            msg += ';失败明细:' + r.errors.join('、');
+          }
+        }
+        pm.setProgress(100);
+        pm.setStatus('导入完成');
+        pm.close();
         toast(msg, r.failed ? 'info' : 'ok');
         load();
-      }).catch(function (e) { toast(e.message, 'err'); });
+      }).catch(function (e) {
+        pm.close();
+        toast(e.message, 'err');
+      });
     });
     toolbar.appendChild(importInput);
+    if (cfg.key === 'personnel') {
+      toolbar.appendChild(h('button', {
+        class: 'btn btn-ghost', text: '下载模板',
+        title: '下载多 Sheet 导入模板(含人员/任职经历/奖惩/家庭成员等)',
+        onclick: function () {
+          var pm = showProgressModal('下载模板');
+          pm.setStatus('正在生成模板…');
+          apiBlobWithProgress(cfg.endpoint + '/template', function (pct) {
+            pm.setProgress(pct);
+          }).then(function (r) {
+            pm.setProgress(100);
+            pm.setStatus('下载完成');
+            downloadBlob(r.blob, r.filename);
+            setTimeout(function () { pm.close(); }, 500);
+          }).catch(function (e) {
+            pm.close();
+            toast(e.message, 'err');
+          });
+        }
+      }));
+    }
     toolbar.appendChild(h('button', {
       class: 'btn btn-ghost', text: '导入 Excel',
       title: '导入 Excel(第一行为列头,建议用导出的文件作模板)',
       onclick: function () { importInput.click(); }
     }));
-    // 导出:仅导出勾选的记录;未勾选时提示
+    // 导出:仅导出勾选的记录;未勾选时提示;带进度条
     toolbar.appendChild(h('button', {
-      class: 'btn btn-ghost', text: '导出 Excel',
+      class: 'btn btn-ghost', text: '导出 Excel(含子表)',
       onclick: function () {
         var ids = Object.keys(state.selected);
         if (!ids.length) {
           toast('请先勾选要导出的数据(可点表格左上角全选本页)', 'err');
           return;
         }
-        apiBlob(cfg.endpoint + '/export?ids=' + ids.join(',')).then(function (r) {
+        var pm = showProgressModal('导出 Excel');
+        pm.setStatus('正在导出 ' + ids.length + ' 条数据…');
+        apiBlobWithProgress(cfg.endpoint + '/export?ids=' + ids.join(','),
+          function (pct) {
+            pm.setProgress(pct * 0.9); // 留 10% 给处理
+            pm.setStatus('正在下载… ' + pct + '%');
+          }
+        ).then(function (r) {
+          pm.setProgress(100);
+          pm.setStatus('导出完成');
           downloadBlob(r.blob, r.filename);
-        }).catch(function (e) { toast(e.message, 'err'); });
+          setTimeout(function () { pm.close(); }, 600);
+        }).catch(function (e) {
+          pm.close();
+          toast(e.message, 'err');
+        });
       }
     }));
     var actions = {
@@ -1266,7 +1437,7 @@ function subRecordsPanel(kind, personnelId, opt) {
     }
     var v2 = r[c.key] || '';
     if (!String(v2).trim()) {
-      return c.required ? '<span class="cell-empty-hint">双击填写</span>' : '<span style="color:#c6cfda">—</span>';
+      return c.required ? '<span class="cell-empty-hint">*</span>' : '<span style="color:#c6cfda">—</span>';
     }
     if (c.render) {
       return c.render(r);
@@ -1283,7 +1454,7 @@ function subRecordsPanel(kind, personnelId, opt) {
     var body = rows.map(function (r) {
       var cls = r.__pending ? ' class="pending-row"' : '';
       var tds = opt.columns.map(function (c) {
-        var tip = String(r[c.key] || '').trim() || '双击编辑';
+        var tip = String(r[c.key] || '').trim();
         return '<td data-row="' + r.__id + '" data-col="' + c.key + '" title="' + esc(tip) + '">'
           + fmtCell(r, c) + '</td>';
       }).join('');
@@ -1319,7 +1490,8 @@ function subRecordsPanel(kind, personnelId, opt) {
       }
       editor.addEventListener('change', function () { commit(r, c, editor.value); });
     } else if (c.type === 'select') {
-      editor = makeDropdown(c.options || [], '请选择');
+      var ddOpts = typeof c.options === 'function' ? c.options() : (c.options || []);
+      editor = makeDropdown(ddOpts, '请选择');
       if (r[c.key]) {
         editor.value = r[c.key];
       }
@@ -1347,13 +1519,34 @@ function subRecordsPanel(kind, personnelId, opt) {
     }
   }
 
+  /** 全部字段为空的行自动移除(点了添加又没填任何内容) */
+  function autoRemoveIfEmpty(r) {
+    var allEmpty = true;
+    opt.columns.forEach(function (c) {
+      if (!c.virtual && String(r[c.key] || '').trim()) {
+        allEmpty = false;
+      }
+    });
+    if (allEmpty) {
+      rows = rows.filter(function (x) { return x !== r; });
+      return true;
+    }
+    return false;
+  }
+
   function commit(r, c, value) {
     value = String(value == null ? '' : value).trim();
     if (String(r[c.key] || '') === value) {
+      autoRemoveIfEmpty(r);
       deferredRender();
       return;
     }
     r[c.key] = value;
+    // 体能成绩失焦:按矩阵自动计算等级分数(需要知道本人年龄)
+    if (c.key === 'score' && value && opt.age !== undefined) {
+      var g = calcFitnessGrade(r.item || '', value, opt.age);
+      if (g) { r.grade = g; }
+    }
     // 身份证号失焦:自动填充性别和出生日期
     if (c.key === 'id_card' && value) {
       var parsed = parseIdCard(value);
@@ -1373,7 +1566,11 @@ function subRecordsPanel(kind, personnelId, opt) {
     var body = snapshot(r);
     if (r.__pending) {
       if (!rowValid(r)) {
-        deferredRender(); // 必填未填完,黄色行挂着,填完自动入库
+        if (autoRemoveIfEmpty(r)) {
+          deferredRender();
+          return;
+        }
+        deferredRender(); // 有部分内容但必填未齐,黄色行挂着
         return;
       }
       body.personnelId = personnelId;
@@ -1455,7 +1652,7 @@ function subRecordsPanel(kind, personnelId, opt) {
         setTimeout(function () { openEditor(r, firstReq); }, 30);
       }
     }),
-    h('span', { style: 'color:#a6b3c4;font-size:12px', text: '双击单元格编辑,失焦保存;黄色行=必填未填完' })));
+    h('span', { style: 'color:#a6b3c4;font-size:12px', text: '黄色行=必填未填完' })));
   box.appendChild(h('div', { class: 'table-wrap' }, table));
 
   box.__staged = function () {
@@ -1481,15 +1678,72 @@ var FAMILY_RELATIONS = ['配偶', '子女', '父亲', '母亲', '岳父', '岳�
 var FAMILY_SUB = {
   name: '家庭成员', kind: 'family',
   columns: [
-    { key: 'relationship', label: '关系', type: 'select', options: FAMILY_RELATIONS, required: true, w: 70 },
-    { key: 'name', label: '姓名', required: true, w: 80 },
-    { key: 'id_card', label: '身份证号', w: 155 },
-    { key: 'gender', label: '性别', w: 50, auto: true },
-    { key: 'birth_date', label: '出生日期', w: 95, auto: true },
-    { key: '__age', label: '年龄', w: 45, virtual: true },
-    { key: 'political_status', label: '政治面貌', type: 'select', w: 75 },
-    { key: 'work_info', label: '工作单位及职务', w: 140 },
-    { key: 'phone', label: '联系电话', w: 110 },
+    { key: 'relationship', label: '关系', type: 'select', options: FAMILY_RELATIONS, required: true, w: 62 },
+    { key: 'name', label: '姓名', required: true, w: 70 },
+    { key: 'id_card', label: '身份证号', w: 140 },
+    { key: 'gender', label: '性别', w: 42, auto: true },
+    { key: '__age', label: '年龄', w: 38, virtual: true },
+    { key: 'political_status', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); }, w: 68 },
+    { key: 'work_info', label: '工作单位及职务' },
+    { key: 'phone', label: '联系电话', w: 100 },
+    { key: 'remark', label: '备注', w: 90 }
+  ]
+};
+
+var DRIVER_SUB = {
+  name: '驾驶证', kind: 'driver',
+  columns: [
+    { key: 'license_type', label: '类型', type: 'select', options: ['军本', '地方本'], required: true, w: 60 },
+    { key: 'license_no', label: '证号', required: true, w: 150 },
+    { key: 'vehicle_class', label: '准驾车型', w: 80, placeholder: '如:B2、C1' },
+    { key: 'issue_date', label: '初领日期', type: 'date', w: 95 },
+    { key: 'expiry_date', label: '有效期至', type: 'date', w: 95 },
+    { key: 'issuing_auth', label: '发证机关' },
+    { key: 'license_status', label: '状态', type: 'select', options: function () { var l = dictLabels('license_status'); return l.length ? l : ['有效', '过期', '吊销']; }, w: 55 },
+    { key: 'review_date', label: '年审日期', type: 'date', w: 90 },
+    { key: 'remark', label: '备注', w: 90 }
+  ]
+};
+
+var CARD_SUB = {
+  name: '卡号', kind: 'card',
+  columns: [
+    { key: 'card_type', label: '卡类型', type: 'select', required: true, w: 110, options: function () { var l = dictLabels('card_type'); return l.length ? l : ['保障卡号', '保障卡银行卡号', '银行卡号', '其他']; } },
+    { key: 'card_no', label: '卡号', required: true, w: 170 },
+    { key: 'bank_name', label: '开户行', w: 110, placeholder: '如:工商银行' },
+    { key: 'branch_name', label: '开户支行' },
+    { key: 'open_date', label: '开户日期', type: 'date', w: 90 },
+    { key: 'card_status', label: '卡状态', type: 'select', options: function () { var l = dictLabels('card_status'); return l.length ? l : ['正常', '挂失', '注销']; }, w: 55 },
+    { key: 'remark', label: '备注', w: 90 }
+  ]
+};
+
+var PVEHICLE_SUB = {
+  name: '私家车', kind: 'pvehicle',
+  columns: [
+    { key: 'plate_no', label: '车牌号', required: true, w: 95 },
+    { key: 'brand', label: '品牌型号', w: 100 },
+    { key: 'color', label: '颜色', w: 55 },
+    { key: 'purchase_date', label: '购置日期', type: 'date', w: 90 },
+    { key: 'price', label: '价格(万)', w: 70 },
+    { key: 'insurance_date', label: '保险到期', type: 'date', w: 90 },
+    { key: 'vehicle_status', label: '状态', type: 'select', options: function () { var l = dictLabels('vehicle_status_sub'); return l.length ? l : ['正常', '出售', '报废']; }, w: 55 },
+    { key: 'owner_name', label: '登记在谁名下', w: 100 },
+    { key: 'remark', label: '备注' }
+  ]
+};
+
+var HOUSING_SUB = {
+  name: '住房', kind: 'housing',
+  columns: [
+    { key: 'housing_type', label: '类型', type: 'select', options: ['自有住房', '按揭住房', '部队公寓', '租房', '其他'], w: 75 },
+    { key: 'address', label: '地址', required: true, w: 180 },
+    { key: 'area', label: '面积', w: 55 },
+    { key: 'house_nature', label: '性质', type: 'select', options: function () { var l = dictLabels('house_nature'); return l.length ? l : ['商品房', '房改房', '自建房', '其他']; }, w: 65 },
+    { key: 'has_cert', label: '房产证', type: 'select', options: function () { var l = dictLabels('has_cert'); return l.length ? l : ['有', '无']; }, w: 50 },
+    { key: 'loan_status', label: '贷款', type: 'select', options: function () { var l = dictLabels('loan_status'); return l.length ? l : ['全款', '按揭中', '已还清']; }, w: 60 },
+    { key: 'purchase_date', label: '购置时间', type: 'date', w: 90 },
+    { key: 'owner_name', label: '产权人', w: 80 },
     { key: 'remark', label: '备注' }
   ]
 };
@@ -1620,6 +1874,217 @@ function batchImportPhotos(fileList) {
   });
 }
 
+/** 体能评分标准缓存(从服务端加载) */
+var FITNESS_STD_CACHE = [];
+
+function reloadFitnessStandards() {
+  GET('/api/fitness-standard').then(function (list) {
+    FITNESS_STD_CACHE = list || [];
+  }).catch(function () { FITNESS_STD_CACHE = []; });
+}
+
+function parseFitnessScore(scoreType, text) {
+  text = String(text || '').trim();
+  if (!text) { return null; }
+  if (scoreType === 'time') {
+    var m = /(\d+)['′:](\d+)/.exec(text);
+    if (m) { return +m[1] * 60 + +m[2]; }
+    m = /(\d+)\s*秒/.exec(text);
+    if (m) { return +m[1]; }
+    m = /(\d+(?:\.\d+)?)/.exec(text);
+    if (m) { return +m[1]; }
+  } else {
+    var m2 = /(\d+)/.exec(text);
+    if (m2) { return +m2[1]; }
+  }
+  return null;
+}
+
+function calcFitnessGrade(item, scoreText) {
+  var std = null;
+  for (var i = 0; i < FITNESS_STD_CACHE.length; i++) {
+    if (FITNESS_STD_CACHE[i].item === item) { std = FITNESS_STD_CACHE[i]; break; }
+  }
+  if (!std) { return ''; }
+  var v = parseFitnessScore(std.score_type, scoreText);
+  if (v === null) { return ''; }
+  var isTime = std.score_type === 'time';
+  if (isTime) {
+    if (v <= std.excellent) { return '优秀'; }
+    if (v <= std.good) { return '良好'; }
+    if (v <= std.pass) { return '及格'; }
+    return '不及格';
+  }
+  if (v >= std.excellent) { return '优秀'; }
+  if (v >= std.good) { return '良好'; }
+  if (v >= std.pass) { return '及格'; }
+  return '不及格';
+}
+
+reloadFitnessStandards();
+
+/** 体能标准管理器:行内编辑表格(与子记录表同交互) */
+function openFitnessStdManager() {
+  var rows = [];
+  var table = h('table', { class: 'grid sub-grid' });
+  var renderTimer = null;
+  var uid = 0;
+
+  var COLS = [
+    { key: 'item', label: '考核项目', required: true, w: 120 },
+    { key: 'score_type', label: '计分方式', type: 'select', required: true, w: 140,
+      options: [{ v: 'time', l: '时间(越短越好)' }, { v: 'count', l: '次数(越多越好)' }] },
+    { key: 'excellent', label: '优秀', required: true, w: 70 },
+    { key: 'good', label: '良好', required: true, w: 70 },
+    { key: 'pass', label: '及格', required: true, w: 70 }
+  ];
+
+  function rowValid(r) {
+    return r.item && r.score_type && String(r.excellent).trim() !== ''
+      && String(r.good).trim() !== '' && String(r.pass).trim() !== '';
+  }
+
+  function fmtCell(r, c) {
+    if (c.key === 'score_type') {
+      return r.score_type === 'time' ? '时间型' : (r.score_type === 'count' ? '次数型' : '—');
+    }
+    var v = r[c.key];
+    if (!String(v || '').trim()) {
+      return c.required ? '<span class="cell-empty-hint">*</span>' : '—';
+    }
+    return esc(v);
+  }
+
+  function render() {
+    var head = '<thead><tr>'
+      + COLS.map(function (c) {
+        return '<th' + (c.w ? ' style="width:' + c.w + 'px"' : '') + '>' + esc(c.label) + '</th>';
+      }).join('')
+      + '<th style="width:56px">操作</th></tr></thead>';
+    var body = rows.map(function (r) {
+      var tds = COLS.map(function (c) {
+        return '<td data-row="' + r.__id + '" data-col="' + c.key + '">' + fmtCell(r, c) + '</td>';
+      }).join('');
+      return '<tr' + (r.__pending ? ' class="pending-row"' : '') + '>' + tds
+        + '<td class="actions"><button class="btn-link danger" data-del="' + r.__id + '">删除</button></td></tr>';
+    }).join('');
+    if (!rows.length) {
+      body = '<tr><td colspan="6" class="empty-row">暂无标准,点上方按钮添加</td></tr>';
+    }
+    table.innerHTML = head + '<tbody>' + body + '</tbody>';
+  }
+
+  function deferredRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(render, 0);
+  }
+
+  function openEditor(r, c) {
+    var td = table.querySelector('td[data-row="' + r.__id + '"][data-col="' + c.key + '"]');
+    if (!td) { return; }
+    td.innerHTML = '';
+    td.classList.add('editing');
+    var editor;
+    if (c.type === 'select') {
+      editor = makeDropdown(c.options, '请选择');
+      if (r[c.key]) { editor.value = r[c.key]; }
+      editor.addEventListener('change', function () { commit(r, c, editor.value); });
+      var btn = editor.querySelector('.dd-btn');
+      if (btn) {
+        btn.addEventListener('blur', function () {
+          setTimeout(function () { commit(r, c, r[c.key]); }, 150);
+        });
+      }
+    } else {
+      editor = h('input', { type: 'text', style: 'width:100%' });
+      editor.value = r[c.key] || '';
+      editor.addEventListener('blur', function () { commit(r, c, editor.value); });
+      editor.addEventListener('keydown', function (e) { if (e.key === 'Enter') { editor.blur(); } });
+    }
+    td.appendChild(editor);
+    var el = editor.tagName === 'INPUT' ? editor : editor.querySelector('.dd-btn');
+    if (el) { setTimeout(function () { el.focus(); }, 0); }
+  }
+
+  function commit(r, c, value) {
+    value = String(value == null ? '' : value).trim();
+    if (String(r[c.key] || '') === value) { deferredRender(); return; }
+    r[c.key] = value;
+    saveRow(r);
+  }
+
+  function saveRow(r) {
+    if (!rowValid(r)) { deferredRender(); return; }
+    var body = { item: r.item, score_type: r.score_type,
+      excellent: r.excellent, good: r.good, pass: r.pass };
+    var done = r.id ? PUT('/api/fitness-standard/' + r.id, body)
+                    : POST('/api/fitness-standard', body);
+    done.then(function (saved) {
+      if (saved && saved.id) { r.id = saved.id; r.__id = 's' + saved.id; r.__pending = false; }
+      deferredRender();
+      reloadFitnessStandards();
+    }).catch(function (e) {
+      toast(e.message, 'err');
+      deferredRender();
+    });
+  }
+
+  table.addEventListener('dblclick', function (e) {
+    var td = e.target.closest('td[data-row][data-col]');
+    if (!td) { return; }
+    var r = rows.filter(function (x) { return x.__id === td.getAttribute('data-row'); })[0];
+    var c = COLS.filter(function (x) { return x.key === td.getAttribute('data-col'); })[0];
+    if (r && c) { openEditor(r, c); }
+  });
+
+  table.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-del]');
+    if (!b) { return; }
+    var r = rows.filter(function (x) { return x.__id === b.getAttribute('data-del'); })[0];
+    if (!r) { return; }
+    if (r.__pending || !r.id) {
+      rows = rows.filter(function (x) { return x !== r; });
+      render();
+      return;
+    }
+    confirmBox('确定删除「' + r.item + '」的评分标准吗?', true).then(function (yes) {
+      if (!yes) { return; }
+      DEL('/api/fitness-standard/' + r.id).then(function () {
+        rows = rows.filter(function (x) { return x !== r; });
+        render();
+        reloadFitnessStandards();
+        toast('已删除');
+      }).catch(function (err) { toast(err.message, 'err'); });
+    });
+  });
+
+  var m = openModal({
+    title: '体能评分标准管理',
+    body: h('div', {},
+      h('div', { style: 'margin-bottom:10px;display:flex;align-items:center;gap:12px' },
+        h('button', {
+          class: 'btn btn-ghost btn-sm', text: '＋ 添加标准',
+          onclick: function () {
+            var r = { __id: 'n' + (++uid), __pending: true,
+              item: '', score_type: '', excellent: '', good: '', pass: '' };
+            rows.push(r);
+            render();
+            setTimeout(function () { openEditor(r, COLS[0]); }, 30);
+          }
+        }),
+        h('span', { style: 'color:#a6b3c4;font-size:12px',
+          text: '双击编辑;时间型填秒数(如750),次数型填次数(如45);黄色行=必填未填完' })),
+      h('div', { class: 'table-wrap' }, table)),
+    wide: true,
+    footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })]
+  });
+
+  GET('/api/fitness-standard').then(function (list) {
+    rows = (list || []).map(function (r) { r.__id = 's' + r.id; r.__pending = false; return r; });
+    render();
+  }).catch(function (e) { toast(e.message, 'err'); });
+}
+
 function statusOptions() {
   var l = dictLabels('personnel_status');
   return l.length ? l : ['在职', '休假', '培训', '借调', '离职', '其他'];
@@ -1689,34 +2154,72 @@ var personnelCfg = {
     { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
     { key: 'nativePlace', label: '籍贯' },
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
-    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
-    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date' },
-    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    
+    
+    
     { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
     { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
     { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
     { key: 'address', label: '家庭住址', span: 'full' },
+    { section: '党团籍信息' },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
+    { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },
+    { key: 'partyActivistDate', label: '积极分子时间', type: 'date' },
+    { key: 'partyCandidateDate', label: '预备党员时间', type: 'date' },
+    { key: 'partyFullDate', label: '转正时间', type: 'date' },
+    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date', requiredIf: function (v) { return v.politicalStatus === '党员' || v.politicalStatus === '团员'; } },
+    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委', requiredIf: function (v) { return v.politicalStatus === '党员'; } },
+    { key: 'partyPost', label: '党内职务', placeholder: '如:支部委员、党委书记' },
+    { key: 'partyRemark', label: '党团备注', type: 'textarea', span: 'full' },
+    { section: '婚姻状况' },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'marriageDate', label: '结婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '已婚' || v.maritalStatus === '离异'; } },
+    { key: 'divorceDate', label: '离婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '离异'; } },
+    { key: 'followArmyDate', label: '随军时间', type: 'date' },
+    { key: 'followArmyStatus', label: '随军条件', type: 'select', options: function () { var l = dictLabels('follow_army_status'); return l.length ? l : ['符合', '不符合', '未申请']; } },
+    { key: 'marriageRemark', label: '婚姻备注', type: 'textarea', span: 'full' },
     { section: '家庭信息' },
 { section: '任职经历' },
-    { section: '奖惩情况' }
+    { section: '奖惩情况' },
+    { section: '驾驶证' },
+    { section: '个人卡号' },
+    { section: '私家车' },
+    { section: '住房情况' }
   ],
   subPanels: function (row) {
+    var fitnessOpt = {};
+    var fk;
+    for (fk in FITNESS_SUB) { fitnessOpt[fk] = FITNESS_SUB[fk]; }
+    fitnessOpt.age = row ? calcAge(row.birthday) : '';
     if (row && row.id) {
       return {
         panels: {
           '任职经历': subRecordsPanel(POSITION_SUB.kind, row.id, POSITION_SUB),
           '奖惩情况': subRecordsPanel(REWARD_SUB.kind, row.id, REWARD_SUB),
-          '家庭信息': subRecordsPanel(FAMILY_SUB.kind, row.id, FAMILY_SUB)
+          '家庭信息': subRecordsPanel(FAMILY_SUB.kind, row.id, FAMILY_SUB),
+          '驾驶证': subRecordsPanel(DRIVER_SUB.kind, row.id, DRIVER_SUB),
+          '个人卡号': subRecordsPanel(CARD_SUB.kind, row.id, CARD_SUB),
+          '私家车': subRecordsPanel(PVEHICLE_SUB.kind, row.id, PVEHICLE_SUB),
+          '住房情况': subRecordsPanel(HOUSING_SUB.kind, row.id, HOUSING_SUB),
+          '体能考核': subRecordsPanel(FITNESS_SUB.kind, row.id, fitnessOpt)
         }
       };
     }
     var pos = subRecordsPanel(POSITION_SUB.kind, null, POSITION_SUB);
     var rew = subRecordsPanel(REWARD_SUB.kind, null, REWARD_SUB);
     var fam = subRecordsPanel(FAMILY_SUB.kind, null, FAMILY_SUB);
+    var drv = subRecordsPanel(DRIVER_SUB.kind, null, DRIVER_SUB);
+    var card = subRecordsPanel(CARD_SUB.kind, null, CARD_SUB);
+    var pveh = subRecordsPanel(PVEHICLE_SUB.kind, null, PVEHICLE_SUB);
+    var hous = subRecordsPanel(HOUSING_SUB.kind, null, HOUSING_SUB);
+    var fit = subRecordsPanel(FITNESS_SUB.kind, null, fitnessOpt);
     return {
-      panels: { '任职经历': pos, '奖惩情况': rew, '家庭信息': fam },
-      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged, 'family': fam.__staged }
+      panels: { '任职经历': pos, '奖惩情况': rew, '家庭信息': fam,
+        '驾驶证': drv, '个人卡号': card, '私家车': pveh, '住房情况': hous, '体能考核': fit },
+      staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged,
+        'family': fam.__staged, 'driver': drv.__staged, 'card': card.__staged,
+        'pvehicle': pveh.__staged, 'housing': hous.__staged }
     };
   }
 };
@@ -1902,6 +2405,13 @@ var leaveCfg = {
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
   clickKey: 'personnelName', addLabel: '新增考核记录',
+  toolbarExtra: function (bar, act) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '体能标准',
+      title: '查看体能考核评分标准',
+      onclick: function () { openFitnessStdManager(); }
+    }));
+  },
   filters: [
     { key: 'keyword', label: '检索' },
     { key: 'item', label: '项目', type: 'select', options: function () { return dictLabels('fitness_item'); } }

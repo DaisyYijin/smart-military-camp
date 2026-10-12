@@ -338,14 +338,14 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 .dd-btn .txt.ph { color: #97a4b5; }
 .dd-arrow { color: #8a97a8; font-size: 12px; margin-left: 8px; flex: none; }
 .dd-list {
-  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 300;
+  position: absolute; top: calc(100% + 4px); z-index: 300;
   background: #fff; border: 1px solid #dbe4ee; border-radius: 6px;
   max-height: 264px; overflow-y: auto; padding: 4px 0; display: none;
   box-shadow: 0 6px 18px rgba(23, 43, 77, .18);
 }
 .dd.up .dd-list { top: auto; bottom: calc(100% + 4px); }
 .dd.open .dd-list { display: block; }
-.dd-item { padding: 9px 12px; cursor: pointer; font-size: 14px; color: #26313d; }
+.dd-item { padding: 9px 12px; cursor: pointer; font-size: 14px; color: #26313d; white-space: nowrap; }
 .dd-item:hover { background: #f0f5fd; }
 .dd-item.cur { color: #2f6fd6; font-weight: 600; background: #eef4ff; }
 .toolbar .dd { width: 150px; }
@@ -395,8 +395,8 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 .cal-foot-btn.cal-clear:hover { border-color: #d9463e; color: #d9463e; }
 
 /* ---------- 表单标签页 ---------- */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid #e2e8f0; margin-bottom: 14px; }
-.tab {
+.tabs { display: flex; flex-wrap: nowrap; gap: 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 14px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -ms-overflow-style: none; }
+.tab { flex-shrink: 0;
   padding: 9px 18px; cursor: pointer; color: #5a6b80; font-size: 14px;
   border-bottom: 2px solid transparent; margin-bottom: -1px; user-select: none;
 }
@@ -417,9 +417,10 @@ input.bad, textarea.bad { border-color: #d9463e; box-shadow: 0 0 0 2px rgba(217,
 .pg-fill { height: 100%; background: #2f6fd6; transition: width .2s; }
 
 /* 子记录行内编辑(紧凑:13号字,编辑态不改变行高) */
-table.sub-grid { table-layout: fixed; width: 100%; font-size: 13px; min-width: 900px; }
-table.sub-grid th { font-size: 12px; }
+table.sub-grid { table-layout: fixed; width: 100%; font-size: 13px; }
+table.sub-grid th { font-size: 12px; white-space: nowrap; padding: 8px 6px; }
 table.sub-grid td:not(.actions) { overflow: hidden; text-overflow: ellipsis; }
+table.sub-grid td[data-col="__age"] { overflow: visible; text-overflow: clip; text-align: center; }
 table.sub-grid td.actions { overflow: visible; text-overflow: clip; padding: 6px 8px; text-align: center; }
 table.sub-grid td.editing { padding: 2px 4px; }
 table.sub-grid td.editing input[type="text"] { height: 28px; font-size: 13px; padding: 0 6px; }
@@ -427,4 +428,8 @@ table.sub-grid td.editing .dd-btn { height: 28px; font-size: 13px; }
 table.sub-grid td.editing .cal input { height: 28px; font-size: 13px; padding: 0 30px 0 6px; }
 tr.pending-row { background: #fffbe8; }
 tr.pending-row:hover { background: #fdf3d0 !important; }
-.cell-empty-hint { color: #c9b458; font-size: 12px; }
+.cell-empty-hint { color: #d9463e; font-size: 14px; font-weight: bold; }
+/* 标签页横向滚动条 */
+.tabs::-webkit-scrollbar { height: 3px; }
+.tabs::-webkit-scrollbar-track { background: transparent; }
+.tabs::-webkit-scrollbar-thumb { background: #d0d8e2; border-radius: 2px; }

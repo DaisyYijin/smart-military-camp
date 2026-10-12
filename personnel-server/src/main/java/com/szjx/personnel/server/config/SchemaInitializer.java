@@ -244,6 +244,145 @@ public class SchemaInitializer implements CommandLineRunner {
             // 列已存在则跳过
         }
 
+        // 人员表补充列:党团籍与婚姻扩展字段(老库自动升级)
+        String[] extraCols = {"party_org_location", "party_post", "party_remark",
+                "divorce_date", "marriage_remark",
+                "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
+                "follow_army_date", "follow_army_status"};
+        for (String col : extraCols) {
+            try {
+                jdbc.execute("ALTER TABLE personnel ADD COLUMN " + col + " TEXT DEFAULT ''");
+            } catch (Exception ignore) {
+                // 列已存在
+            }
+        }
+
+
+        // 驾驶证(军本/地方本)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS driver_license (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "license_type TEXT DEFAULT ''," +
+                "license_no TEXT DEFAULT ''," +
+                "vehicle_class TEXT DEFAULT ''," +
+                "issue_date TEXT DEFAULT ''," +
+                "expiry_date TEXT DEFAULT ''," +
+                "issuing_auth TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
+        // 个人卡号(保障卡/银行卡等)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS personal_card (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "card_type TEXT DEFAULT ''," +
+                "card_no TEXT DEFAULT ''," +
+                "bank_name TEXT DEFAULT ''," +
+                "branch_name TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
+        // 私家车
+        jdbc.execute("CREATE TABLE IF NOT EXISTS private_vehicle (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "plate_no TEXT DEFAULT ''," +
+                "brand TEXT DEFAULT ''," +
+                "purchase_date TEXT DEFAULT ''," +
+                "owner_name TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
+        // 住房情况
+        jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "housing_type TEXT DEFAULT ''," +
+                "address TEXT DEFAULT ''," +
+                "area TEXT DEFAULT ''," +
+                "purchase_date TEXT DEFAULT ''," +
+                "owner_name TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
+        // 补充字典类型(老库自动补充,已有的跳过)
+        addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
+        addDict("license_type", new String[]{"军本", "地方本"});
+        addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
+        addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
+
+        // 子表补充列
+        String[][] subExtra = {
+            {"personal_card", "open_date"},
+            {"personal_card", "card_status"},
+            {"private_vehicle", "color"},
+            {"private_vehicle", "price"},
+            {"private_vehicle", "insurance_date"},
+            {"private_vehicle", "vehicle_status"},
+            {"housing_info", "house_nature"},
+            {"housing_info", "has_cert"},
+            {"housing_info", "loan_status"},
+            {"driver_license", "license_status"},
+            {"driver_license", "review_date"},
+        };
+        for (String[] se : subExtra) {
+            try {
+                jdbc.execute("ALTER TABLE " + se[0] + " ADD COLUMN " + se[1] + " TEXT DEFAULT ''");
+            } catch (Exception ignore) { }
+        }
+
+        addDict("follow_army_status", new String[]{"符合", "不符合", "未申请"});
+        addDict("license_status", new String[]{"有效", "过期", "吊销"});
+        addDict("card_status", new String[]{"正常", "挂失", "注销"});
+        addDict("vehicle_status_sub", new String[]{"正常", "出售", "报废"});
+        addDict("house_nature", new String[]{"商品房", "房改房", "自建房", "其他"});
+        addDict("has_cert", new String[]{"有", "无"});
+        addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
+
+        // 体能评分矩阵:项目 x 年龄段 x 分数 → 达标值(用户可自行维护)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_matrix (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "item TEXT NOT NULL," +
+                "age_group TEXT NOT NULL," +
+                "score INTEGER NOT NULL," +
+                "value REAL DEFAULT 0," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        // 种子:引体向上示例(用户可自行调整)
+        Long fmCount = jdbc.queryForObject("SELECT COUNT(*) FROM fitness_matrix", Long.class);
+        if (fmCount == null || fmCount == 0) {
+            Object[][] seed = {
+                {"100", 30, 28, 26, 23, 20, 17},
+                {"95", 27, 25, 23, 20, 17, 15},
+                {"90", 24, 22, 20, 17, 14, 13},
+                {"85", 21, 19, 17, 15, 12, 11},
+                {"80", 18, 16, 15, 13, 11, 10},
+                {"75", 15, 14, 13, 11, 10, 9},
+                {"70", 14, 13, 11, 10, 9, 8},
+                {"65", 12, 11, 10, 9, 8, 7},
+                {"60", 11, 10, 9, 8, 7, 6},
+                {"55", 10, 9, 8, 7, 6, 5},
+            };
+            String[] ages = {"24岁以下", "25-27", "28-30", "31-33", "34-36", "37-39"};
+            for (Object[] row : seed) {
+                for (int a = 0; a < ages.length; a++) {
+                    jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value) VALUES(?,?,?,?)",
+                            "引体向上", ages[a], Integer.parseInt((String) row[0]), ((Number) row[a + 1]).doubleValue());
+                }
+            }
+            log.info("已初始化体能评分矩阵示例(引体向上)");
+        }
+
+
         // 操作日志:谁、何时、从哪个 IP、做了什么
         jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
