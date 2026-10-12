@@ -776,6 +776,7 @@ function buildForm(fields, values, extraPanels) {
 
   return {
     el: container,
+    inputs: inputs,
     setError: function (msg) { err.textContent = msg || ''; },
     get: function () {
       var out = {};
