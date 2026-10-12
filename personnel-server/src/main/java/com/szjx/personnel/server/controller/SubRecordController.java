@@ -47,6 +47,7 @@ public class SubRecordController {
         TABLES.put("card", "personal_card");
         TABLES.put("pvehicle", "private_vehicle");
         TABLES.put("housing", "housing_info");
+        TABLES.put("fitness", "fitness_record");
         ORDER.put("family", "id");
         COLS.put("family", new String[]{"relationship", "name", "id_card", "gender",
                 "birth_date", "political_status", "work_info", "phone", "remark"});
@@ -63,6 +64,9 @@ public class SubRecordController {
 
         ORDER.put("housing", "id");
         COLS.put("housing", new String[]{"housing_type", "address", "area", "house_nature", "has_cert", "loan_status", "purchase_date", "owner_name", "remark"});
+
+        ORDER.put("fitness", "test_date");
+        COLS.put("fitness", new String[]{"item", "score", "grade", "test_date", "tester", "remark"});
     }
 
     private final SubRecordDao dao;
@@ -169,6 +173,10 @@ public class SubRecordController {
             return null;
         } else if ("housing".equals(kind)) {
             if (f.get("address").isEmpty()) { return "请填写住房地址"; }
+            return null;
+        } else if ("fitness".equals(kind)) {
+            if (f.get("item").isEmpty()) { return "请填写考核项目"; }
+            if (f.get("test_date").isEmpty()) { return "请填写考核日期"; }
             return null;
         } else if ("children".equals(kind)) {
             if (f.get("name").isEmpty()) {
