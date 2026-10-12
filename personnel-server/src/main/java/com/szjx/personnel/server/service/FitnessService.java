@@ -16,10 +16,13 @@ public class FitnessService {
 
     private final FitnessDao fitnessDao;
     private final PersonnelDao personnelDao;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public FitnessService(FitnessDao fitnessDao, PersonnelDao personnelDao) {
+    public FitnessService(FitnessDao fitnessDao, PersonnelDao personnelDao,
+                          org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.fitnessDao = fitnessDao;
         this.personnelDao = personnelDao;
+        this.jdbc = jdbc;
     }
 
     public List<FitnessRecord> query(String keyword, String item, int page, int size) {
@@ -64,8 +67,6 @@ public class FitnessService {
             throw new IllegalArgumentException("请填写考核日期");
         }
     }
-
-    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public List<FitnessRecord> queryFiltered(String keyword, String item, String grade,
                                               String startDate, String endDate, int page, int size) {
