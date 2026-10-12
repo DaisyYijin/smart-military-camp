@@ -35,6 +35,9 @@ public class FitnessController {
                              @RequestParam(required = false) String grade,
                              @RequestParam(required = false) String startDate,
                              @RequestParam(required = false) String endDate,
+                             @RequestParam(required = false) Long departmentId,
+                             @RequestParam(required = false) String minScore,
+                             @RequestParam(required = false) String maxScore,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "20") int size) {
         if (page < 1) {
@@ -43,8 +46,20 @@ public class FitnessController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<FitnessRecord> list = fitnessService.queryFiltered(keyword, item, grade, startDate, endDate, page, size);
-        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.countFiltered(keyword, item, grade, startDate, endDate), list));
+        List<FitnessRecord> list = fitnessService.queryFiltered(keyword, item, grade, startDate, endDate, departmentId, minScore, maxScore, page, size);
+        return ApiResponse.ok(new PageResult<FitnessRecord>(fitnessService.countFiltered(keyword, item, grade, startDate, endDate, departmentId, minScore, maxScore), list));
+    }
+
+    @GetMapping("/stats")
+    public ApiResponse stats(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String item,
+                             @RequestParam(required = false) String grade,
+                             @RequestParam(required = false) String startDate,
+                             @RequestParam(required = false) String endDate,
+                             @RequestParam(required = false) Long departmentId,
+                             @RequestParam(required = false) String minScore,
+                             @RequestParam(required = false) String maxScore) {
+        return ApiResponse.ok(fitnessService.statsFiltered(keyword, item, grade, startDate, endDate, departmentId, minScore, maxScore));
     }
 
     @PostMapping

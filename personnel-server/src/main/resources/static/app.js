@@ -2700,9 +2700,17 @@ var fitnessCfg = {
     }));
   },
   filters: [
-    { key: 'keyword', label: '检索' },
+    { key: 'departmentId', label: '部门', type: 'select', options: function () {
+        return Ctx.deptFlat.map(function (d) {
+          var prefix = '';
+          for (var i = 0; i < d.depth; i++) { prefix += '　'; }
+          return { v: String(d.id), l: prefix + d.name };
+        });
+      } },
     { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
-    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下', '不及格'] },
+    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下'] },
+    { key: 'minScore', label: '最低分' },
+    { key: 'maxScore', label: '最高分' },
     { key: 'startDate', label: '起日期' },
     { key: 'endDate', label: '止日期' }
   ],
