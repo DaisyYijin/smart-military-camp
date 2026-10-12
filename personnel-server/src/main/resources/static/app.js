@@ -553,6 +553,30 @@ function POST(p, b) { return api('POST', p, b); }
 function PUT(p, b) { return api('PUT', p, b); }
 function DEL(p) { return api('DELETE', p); }
 
+/**
+ * FLIP 滑动:布局瞬时切换到终态,再施加反向 transform 从旧视觉位置平滑滑入。
+ * 只动画 transform(合成层,GPU 加速),避免逐帧 width/margin 重排大表格造成卡顿。
+ */
+function slideFrom(el, deltaX, duration) {
+  if (!el || !deltaX) return;
+  var ms = duration || 300;
+  el.style.transition = 'none';
+  el.style.transform = 'translateX(' + deltaX + 'px)';
+  void el.offsetWidth; // 强制回流,让起始位置先生效
+  el.style.transition = 'transform ' + ms + 'ms cubic-bezier(.4,0,.2,1)';
+  el.style.transform = 'translateX(0)';
+  var done = false;
+  function clear() {
+    if (done) return;
+    done = true;
+    el.style.transition = '';
+    el.style.transform = '';
+    el.removeEventListener('transitionend', clear);
+  }
+  el.addEventListener('transitionend', clear);
+  setTimeout(clear, ms + 100);
+}
+
 function apiBlob(path) {
   var headers = {};
   if (TOKEN) headers['X-Auth-Token'] = TOKEN;
@@ -1326,14 +1350,25 @@ function crudView(cfg) {
       filterBtn = h('div', {
         class: 'filter-tab-btn', text: '筛 选',
         onclick: function () {
-          var open = filterPanel.classList.contains('open');
-          filterPanel.classList.toggle('open');
-          this.classList.toggle('panel-open', !open);
-          this.textContent = !open ? '收 起' : '筛 选';
+          var opening = !filterPanel.classList.contains('open');
           var main = root.querySelector('.content-main');
-          if (main) {
-            main.classList.toggle('filter-padding', !open);
+          if (opening) {
+            // 布局瞬时切换,transform 滑入(合成层,不逐帧重排表格)
+            filterPanel.classList.add('open');
+            slideFrom(filterPanel, 270);
+            if (main) { main.classList.add('filter-padding'); slideFrom(main, 270); }
+          } else {
+            filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
+            filterPanel.style.transform = 'translateX(100%)';
+            if (main) { main.classList.remove('filter-padding'); slideFrom(main, -270); }
+            setTimeout(function () {
+              filterPanel.classList.remove('open');
+              filterPanel.style.transition = '';
+              filterPanel.style.transform = '';
+            }, 310);
           }
+          this.classList.toggle('panel-open', opening);
+          this.textContent = opening ? '收 起' : '筛 选';
         }
       });
       document.body.appendChild(filterBtn);
@@ -3908,18 +3943,26 @@ function renderShell() {
     menu,
     h('div', { class: 'sidebar-toggle' }, toggleBtn));
 
+  var mainEl = h('div', { class: 'main' }, topbar, content);
+  var SIDEBAR_W = 208, SIDEBAR_MINI = 64;
+
   function setCollapsed(collapsed) {
+    var was = sideEl.classList.contains('collapsed');
     sideEl.classList.toggle('collapsed', collapsed);
     localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
-    toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronR' : 'chevronL');
+    toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronL' : 'chevronR');
     toggleTxt.textContent = collapsed ? '展开菜单' : '收起菜单';
     toggleBtn.setAttribute('data-tip', collapsed ? '展开菜单' : '收起菜单');
+    // 宽度瞬时切换 + FLIP transform 滑动(侧边栏与主区同步平移,合成层动画不卡顿)
+    if (was !== collapsed) {
+      var dx = collapsed ? (SIDEBAR_W - SIDEBAR_MINI) : -(SIDEBAR_W - SIDEBAR_MINI);
+      slideFrom(sideEl, dx);
+      slideFrom(mainEl, dx);
+    }
   }
   setCollapsed(localStorage.getItem('sidebarCollapsed') === '1');
 
-  app.appendChild(h('div', { class: 'layout' },
-    sideEl,
-    h('div', { class: 'main' }, topbar, content)));
+  app.appendChild(h('div', { class: 'layout' }, sideEl, mainEl));
 
   // 浏览器前进/后退键切换模块
   window.addEventListener('hashchange', function () {
