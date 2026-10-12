@@ -73,28 +73,32 @@ public class PersonnelDao {
      */
     public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status,
                                  String gender, String politicalStatus, String rank, String education,
+                                 String maritalStatus, String nation, String bloodType, String onlyChild,
+                                 String entryDateStart, String entryDateEnd,
                                  int page, int size) {
         StringBuilder sql = new StringBuilder(BASE_SELECT).append(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
         sql.append(" ORDER BY p.updated_at DESC, p.id DESC LIMIT ? OFFSET ? ");
         args.add(size);
         args.add((page - 1) * size);
         return jdbc.query(sql.toString(), MAPPER, args.toArray());
     }
 
-    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String rank, String education) {
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String rank, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM personnel p WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
         return n == null ? 0 : n;
     }
 
     private void appendFilter(StringBuilder sql, List<Object> args,
                               String keyword, String name, String idCard, Long departmentId, String status,
-                              String gender, String politicalStatus, String rank, String education) {
+                              String gender, String politicalStatus, String rank, String education,
+                              String maritalStatus, String nation, String bloodType, String onlyChild,
+                              String entryDateStart, String entryDateEnd) {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String kw = "%" + keyword.trim() + "%";
             sql.append(" AND (p.name LIKE ? OR p.id_card LIKE ? OR p.phone LIKE ? OR p.post LIKE ?) ");
@@ -114,6 +118,30 @@ public class PersonnelDao {
         if (departmentId != null && departmentId > 0) {
             sql.append(" AND p.department_id = ? ");
             args.add(departmentId);
+        }
+        if (maritalStatus != null && !maritalStatus.trim().isEmpty()) {
+            sql.append(" AND p.marital_status = ? ");
+            args.add(maritalStatus.trim());
+        }
+        if (nation != null && !nation.trim().isEmpty()) {
+            sql.append(" AND p.nation = ? ");
+            args.add(nation.trim());
+        }
+        if (bloodType != null && !bloodType.trim().isEmpty()) {
+            sql.append(" AND p.blood_type = ? ");
+            args.add(bloodType.trim());
+        }
+        if (onlyChild != null && !onlyChild.trim().isEmpty()) {
+            sql.append(" AND p.only_child = ? ");
+            args.add(onlyChild.trim());
+        }
+        if (entryDateStart != null && !entryDateStart.trim().isEmpty()) {
+            sql.append(" AND p.entry_date >= ? ");
+            args.add(entryDateStart.trim());
+        }
+        if (entryDateEnd != null && !entryDateEnd.trim().isEmpty()) {
+            sql.append(" AND p.entry_date <= ? ");
+            args.add(entryDateEnd.trim());
         }
         if (gender != null && !gender.trim().isEmpty()) {
             sql.append(" AND p.gender = ? ");

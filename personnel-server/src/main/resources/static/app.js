@@ -1031,6 +1031,48 @@ function crudView(cfg) {
         onclick: function () { state.page = 1; load(); }
       }));
     }
+    // 更多筛选(折叠面板)
+    if (cfg.moreFilters && cfg.moreFilters.length) {
+      var moreBox = h('div', { class: 'toolbar more-filters', style: 'display:none;width:100%;margin-top:6px;padding:0' });
+      cfg.moreFilters.forEach(function (f) {
+        var inline = h('div', { class: 'field-inline' });
+        inline.appendChild(h('label', { text: f.label }));
+        var el;
+        if (f.type === 'select') {
+          var fopts = (typeof f.options === 'function' ? f.options() : f.options) || [];
+          var ddItems = [{ v: '', l: '全部' }].concat(fopts.map(function (o) {
+            if (o && o.v !== undefined) {
+              return { v: String(o.v), l: String(o.l !== undefined ? o.l : o.v) };
+            }
+            return { v: String(o), l: String(o) };
+          }));
+          el = makeDropdown(ddItems, '全部');
+          el.setAttribute('data-fkey', f.key);
+          el.addEventListener('change', function () { state.page = 1; load(); });
+        } else if (f.type === 'date') {
+          el = makeDateField();
+          el.setAttribute('data-fkey', f.key);
+          el.style.width = '140px';
+          el.addEventListener('change', function () { state.page = 1; load(); });
+        } else {
+          el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '' });
+          el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { state.page = 1; load(); }
+          });
+        }
+        inline.appendChild(el);
+        moreBox.appendChild(inline);
+      });
+      toolbar.appendChild(moreBox);
+      toolbar.appendChild(h('button', {
+        class: 'btn btn-ghost btn-sm more-toggle', text: '▼ 更多筛选',
+        onclick: function () {
+          var visible = moreBox.style.display !== 'none';
+          moreBox.style.display = visible ? 'none' : 'flex';
+          this.textContent = visible ? '▼ 更多筛选' : '▲ 收起筛选';
+        }
+      }));
+    }
     toolbar.appendChild(h('div', { class: 'spacer' }));
     var batchBtn = h('button', {
       class: 'btn btn-ghost', text: '删除所选', disabled: true,
@@ -1365,6 +1407,19 @@ function calcAgeAt(birthDate, atDate) {
   var mo = now.getMonth() - b.getMonth();
   if (mo < 0 || (mo === 0 && now.getDate() < b.getDate())) { age--; }
   return age >= 0 && age < 150 ? String(age) : '';
+}
+
+/** 军龄计算:自入伍日期至今的年数 */
+function calcServiceYears(entryDate) {
+  if (!entryDate) { return ''; }
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(entryDate);
+  if (!m) { return ''; }
+  var start = new Date(+m[1], +m[2] - 1, +m[3]);
+  var now = new Date();
+  var years = now.getFullYear() - start.getFullYear();
+  var mo = now.getMonth() - start.getMonth();
+  if (mo < 0 || (mo === 0 && now.getDate() < start.getDate())) { years--; }
+  return years >= 0 && years < 100 ? String(years) : '';
 }
 
 function calcAge(birthDate) {
@@ -2410,11 +2465,19 @@ var personnelCfg = {
           for (var i = 0; i < d.depth; i++) { prefix += '　'; }
           return { v: String(d.id), l: prefix + d.name };
         });
-      } },
+      } }
+  ],
+  moreFilters: [
     { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'rank', label: '军衔', type: 'select', options: function () { return dictLabels('rank'); } },
-    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } }
+    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
+    { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
+    { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
+    { key: 'entryDateStart', label: '入伍起', type: 'date' },
+    { key: 'entryDateEnd', label: '入伍止', type: 'date' }
   ],
   columns: [
     {
@@ -2432,7 +2495,8 @@ var personnelCfg = {
     { key: 'post', label: '职务' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'phone', label: '手机号' },
-    { key: 'entryDate', label: '入伍日期' }
+    { key: 'entryDate', label: '入伍日期' },
+    { key: '__service', label: '军龄', render: function (r) { var y = calcServiceYears(r.entryDate); return y ? y + '年' : '—'; } }
   ],
   rowTitle: function (r) { return r.name; },
   onView: function (row, act) { openDetailModal(personnelCfg, row, act); },
