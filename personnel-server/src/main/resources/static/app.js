@@ -2414,11 +2414,22 @@ var personnelCfg = {
   delTip: function (r) { return '确定删除人员「' + r.name + '」吗?相关休假、体能、装备保管记录将一并解除关联,删除后不可恢复。'; },
   columns: [
     { key: 'personnelName', label: '姓名' },
+    { key: '__age', label: '年龄', render: function (r) {
+        var age = calcAgeAt(r.birthday, r.testDate);
+        return age || '—';
+      } },
+    { key: 'testDate', label: '考核日期' },
     { key: 'item', label: '考核项目' },
     { key: 'score', label: '成绩' },
-    { key: 'grade', label: '等级', render: function (r) { return badge(r.grade); } },
-    { key: 'testDate', label: '考核日期' },
-    { key: 'tester', label: '考核人' }
+    { key: 'grade', label: '分数' },
+    { key: '__level', label: '等级', render: function (r) {
+        var s = parseFloat(r.grade);
+        if (isNaN(s)) { return r.grade || '—'; }
+        if (s >= 90) { return '<span class="badge green">优秀</span>'; }
+        if (s >= 80) { return '<span class="badge blue">良好</span>'; }
+        if (s >= 60) { return '<span class="badge orange">及格</span>'; }
+        return '<span class="badge red">不及格</span>';
+      } }
   ],
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
   form: [
@@ -3189,11 +3200,22 @@ var fitnessCfg = {
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
+    { key: '__age', label: '年龄', render: function (r) {
+        var age = calcAgeAt(r.birthday, r.testDate);
+        return age || '—';
+      } },
+    { key: 'testDate', label: '考核日期' },
     { key: 'item', label: '考核项目' },
     { key: 'score', label: '成绩' },
-    { key: 'grade', label: '等级', render: function (r) { return badge(r.grade); } },
-    { key: 'testDate', label: '考核日期' },
-    { key: 'tester', label: '考核人' }
+    { key: 'grade', label: '分数' },
+    { key: '__level', label: '等级', render: function (r) {
+        var s = parseFloat(r.grade);
+        if (isNaN(s)) { return r.grade || '—'; }
+        if (s >= 90) { return '<span class="badge green">优秀</span>'; }
+        if (s >= 80) { return '<span class="badge blue">良好</span>'; }
+        if (s >= 60) { return '<span class="badge orange">及格</span>'; }
+        return '<span class="badge red">不及格</span>';
+      } }
   ],
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
   form: [

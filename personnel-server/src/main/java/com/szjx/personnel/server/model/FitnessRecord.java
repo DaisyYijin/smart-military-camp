@@ -13,7 +13,8 @@ public class FitnessRecord {
     private String grade;           // 评定等级:优秀/良好/及格/不及格
     private String testDate;        // 考核日期
     private String tester;          // 考核人
-    private String remark;          // 备注
+    private String remark;
+    private String birthday; // 从人员表 JOIN 获取,不存库;          // 备注
     private String createdAt;
     private String updatedAt;
 
@@ -81,6 +82,8 @@ public class FitnessRecord {
         this.tester = tester;
     }
 
+    public String getBirthday() { return birthday; }
+    public void setBirthday(String birthday) { this.birthday = birthday; }
     public String getRemark() {
         return remark;
     }
