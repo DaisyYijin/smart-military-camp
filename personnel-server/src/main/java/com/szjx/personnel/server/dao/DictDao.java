@@ -28,6 +28,7 @@ public class DictDao {
             d.setId(rs.getLong("id"));
             d.setDictType(rs.getString("dict_type"));
             d.setDictLabel(rs.getString("dict_label"));
+            d.setParentId(rs.getLong("parent_id"));
             d.setSort(rs.getInt("sort"));
             d.setEnabled(rs.getInt("enabled") == 1);
             d.setRemark(rs.getString("remark"));
@@ -67,20 +68,22 @@ public class DictDao {
 
     public long insert(DictItem d) {
         return jdbc.queryForObject(
-                "INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark) VALUES(?,?,?,?,?) RETURNING id",
+                "INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 d.getDictType(),
                 d.getDictLabel(),
+                d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getEnabled() != null && d.getEnabled() ? 1 : 0,
                 d.getRemark() == null ? "" : d.getRemark());
     }
 
     public void update(DictItem d) {
-        jdbc.update("UPDATE sys_dict SET dict_type=?, dict_label=?, sort=?, enabled=?, remark=?, " +
+        jdbc.update("UPDATE sys_dict SET dict_type=?, dict_label=?, sort=?, enabled=?, remark=?, parent_id=?, " +
                         "updated_at=datetime('now','localtime') WHERE id=?",
                 d.getDictType(),
                 d.getDictLabel(),
+                d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getEnabled() != null && d.getEnabled() ? 1 : 0,
                 d.getRemark() == null ? "" : d.getRemark(),
@@ -89,6 +92,12 @@ public class DictDao {
 
     public void delete(Long id) {
         jdbc.update("DELETE FROM sys_dict WHERE id=?", id);
+    }
+
+    /** 某字典项的下级数量 */
+    public int countChildren(Long parentId) {
+        Long n = jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict WHERE parent_id=?", Long.class, parentId);
+        return n == null ? 0 : n.intValue();
     }
 
     public long countAll() {

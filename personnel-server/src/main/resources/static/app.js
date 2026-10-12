@@ -410,6 +410,38 @@ function makeDropdown(opts, placeholder) {
     set: function (v) { cur = v == null ? '' : String(v); refresh(); }
   });
 
+  // 动态更新选项(级联下拉用):当前值不在新选项中时自动清空
+  wrap.setOptions = function (newOpts) {
+    items = (newOpts || []).map(function (o) {
+      if (o && o.v !== undefined) {
+        return { v: String(o.v), t: String(o.l !== undefined ? o.l : o.v) };
+      }
+      return { v: String(o), t: String(o) };
+    });
+    if (!items.length || items[0].v !== '') {
+      items.unshift({ v: '', t: ph });
+    }
+    list.innerHTML = '';
+    items.forEach(function (it) {
+      list.appendChild(h('div', {
+        class: 'dd-item', text: it.t, 'data-v': it.v,
+        onclick: (function (v) {
+          return function () {
+            wrap.value = v;
+            wrap.classList.remove('open');
+            wrap.dispatchEvent(new CustomEvent('change'));
+          };
+        })(it.v)
+      }));
+    });
+    var stillThere = cur === '';
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].v === cur) { stillThere = true; break; }
+    }
+    if (!stillThere) cur = '';
+    refresh();
+  };
+
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
     var opening = !wrap.classList.contains('open');
@@ -670,6 +702,7 @@ function buildForm(fields, values, extraPanels) {
   var inputs = {};
   var sectionOf = {};
   var datalistSeq = 0;
+  var pendingDepends = []; // 级联下拉字段,全部字段创建完毕后统一绑定
 
   // 按 section 分组;两组及以上渲染为标签页(切页仅隐藏面板,已填数据不丢失)
   var groups = [];
@@ -721,7 +754,7 @@ function buildForm(fields, values, extraPanels) {
           return { v: String(d.id), l: new Array(d.depth + 1).join('　') + d.name };
         });
       }
-      el = makeDropdown(ddOpts, f.type === 'dept' && !f.required ? '(不指定)' : '请选择');
+      el = makeDropdown(ddOpts, f.placeholder || (f.type === 'dept' && !f.required ? '(不指定)' : '请选择'));
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
     } else if (f.type === 'date') {
       el = makeDateField();
@@ -761,6 +794,11 @@ function buildForm(fields, values, extraPanels) {
     inputs[f.key] = el;
     wrap.appendChild(el);
     panel.appendChild(wrap);
+
+    // 级联下拉:父字段选定后,本字段选项过滤为该父项的下级(如 品牌→型号)
+    if (f.depends && f.type === 'select') {
+      pendingDepends.push(f);
+    }
   }
 
   groups.forEach(function (g, gi) {
@@ -790,6 +828,36 @@ function buildForm(fields, values, extraPanels) {
       panel.appendChild(extraPanels[g.title]);
     }
     panels.push(panel);
+  });
+
+  // 绑定级联下拉(此时全部 inputs 已就绪)
+  pendingDepends.forEach(function (f) {
+    var childEl = inputs[f.key];
+    var parentEl = inputs[f.depends.field];
+    if (!childEl || !parentEl || !childEl.setOptions) return;
+    var dep = f.depends;
+    var saved = values[f.key];
+    function childOptions() {
+      var pv = String(parentEl.value || '');
+      if (!pv) return [];
+      var parentDict = dep.parentDict || dep.dict;
+      var parent = null;
+      dictItems(parentDict).forEach(function (d) {
+        if (d.dictLabel === pv) parent = d;
+      });
+      if (!parent) return [];
+      return dictItems(dep.dict).filter(function (d) {
+        return d.parentId && String(d.parentId) === String(parent.id) && d.enabled !== false;
+      }).map(function (d) { return d.dictLabel; });
+    }
+    function refreshChild(keepSaved) {
+      childEl.setOptions(childOptions());
+      if (keepSaved && saved !== undefined && saved !== null && String(saved) !== '') {
+        childEl.value = String(saved);
+      }
+    }
+    parentEl.addEventListener('change', function () { refreshChild(false); });
+    refreshChild(true);
   });
 
   var err = h('div', { class: 'form-err' });
@@ -3121,7 +3189,8 @@ var vehicleCfg = {
     { key: 'vin', label: '车架号', placeholder: '17位车辆识别代码' },
     { key: 'engineNo', label: '发动机号' },
     { key: 'brand', label: '品牌', type: 'select', options: function () { return dictLabels('vehicle_brand'); } },
-    { key: 'model', label: '型号', placeholder: '如 EQ2050' },
+    { key: 'model', label: '型号', type: 'select', placeholder: '先选品牌',
+      depends: { field: 'brand', dict: 'vehicle_model', parentDict: 'vehicle_brand' } },
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
     { key: 'color', label: '车身颜色' },
     { key: 'fuelType', label: '燃料类型', type: 'select', options: function () { return dictLabels('vehicle_fuel'); } },
@@ -3368,23 +3437,81 @@ function dictView() {
     }
     var g = typeGroup(currentType) || { items: [] };
     var items = g.items || [];
+    var byId = {};
+    items.forEach(function (d) { byId[String(d.id)] = d; });
+
+    // 层级排序:同类型下级紧跟父项(缩进);跨类型下级(如 型号→品牌)按上级分组追加
+    var ordered = [];
+    var seen = {};
+    items.forEach(function (d) {
+      if (d.parentId) return;
+      ordered.push(d);
+      seen[String(d.id)] = true;
+      items.forEach(function (c) {
+        if (String(c.parentId) === String(d.id)) {
+          ordered.push(c);
+          seen[String(c.id)] = true;
+        }
+      });
+    });
+    var cross = items.filter(function (d) { return d.parentId && !seen[String(d.id)]; });
+    if (cross.length) {
+      var groups = {};
+      cross.forEach(function (c) {
+        var pl = '';
+        Ctx.dictTypes.forEach(function (g2) {
+          (g2.items || []).forEach(function (x) {
+            if (String(x.id) === String(c.parentId)) pl = x.dictLabel;
+          });
+        });
+        c._parentLabel = pl || '未指定上级';
+        (groups[c._parentLabel] = groups[c._parentLabel] || []).push(c);
+      });
+      Object.keys(groups).sort().forEach(function (pl) {
+        groups[pl].forEach(function (c) { ordered.push(c); });
+      });
+    }
+    function globalChildCount(d) {
+      var n = 0;
+      Ctx.dictTypes.forEach(function (g2) {
+        (g2.items || []).forEach(function (x) {
+          if (String(x.parentId) === String(d.id)) n++;
+        });
+      });
+      return n;
+    }
 
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th style="width:110px">操作</th></tr></thead><tbody>' +
-      (items.length ? items.map(function (d) {
-        return '<tr><td>' + esc(d.dictLabel) + '</td><td>' + esc(d.sort) + '</td>' +
+    table.innerHTML = '<thead><tr><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th style="width:150px">操作</th></tr></thead><tbody>' +
+      (ordered.length ? ordered.map(function (d) {
+        var isChild = !!d.parentId;
+        var childCount = globalChildCount(d);
+        var label;
+        if (d._parentLabel) {
+          label = '<span class="dict-child">↳ ' + esc(d._parentLabel) + ' · ' + esc(d.dictLabel) + '</span>';
+        } else if (isChild) {
+          label = '<span class="dict-child">└ ' + esc(d.dictLabel) + '</span>';
+        } else {
+          label = esc(d.dictLabel) + (childCount ? ' <span class="badge blue">' + childCount + '个下级</span>' : '');
+        }
+        return '<tr><td>' + label + '</td><td>' + esc(d.sort) + '</td>' +
           '<td>' + (d.enabled === false ? '<span class="badge gray">停用</span>' : '<span class="badge green">启用</span>') + '</td>' +
           '<td>' + esc(d.remark) + '</td>' +
-          '<td class="actions"><button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
+          '<td class="actions">' +
+          (isChild ? '' : '<button class="btn-link" data-sub="' + d.id + '">＋下级</button>') +
+          '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
       }).join('') : '<tr><td colspan="5" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
     table.addEventListener('click', function (e) {
       var b = e.target.closest('button');
       if (!b) return;
-      var id = b.getAttribute('data-edit') || b.getAttribute('data-del');
-      var item = items.filter(function (x) { return String(x.id) === String(id); })[0];
+      var subId = b.getAttribute('data-sub');
+      var id = b.getAttribute('data-edit') || b.getAttribute('data-del') || subId;
+      var item = byId[String(id)];
       if (!item) return;
-      if (b.hasAttribute('data-del')) {
+      if (subId) {
+        openForm(null, item);
+      } else if (b.hasAttribute('data-del')) {
         confirmBox('确定删除选项「' + item.dictLabel + '」吗?已有数据中的该值将保留,但不再出现在下拉选项中。', true)
           .then(function (yes) {
             if (!yes) return;
@@ -3406,17 +3533,60 @@ function dictView() {
       h('div', { class: 'table-wrap' }, table)));
   }
 
-  function openForm(item) {
-    var form = buildForm([
+  /** item=编辑对象;parentItem=新增下级时的父项 */
+  function openForm(item, parentItem) {
+    var items = (typeGroup(currentType) || {}).items || [];
+    // 检测上级引用类型:本类型下级的父项若属于其他类型(如 车辆型号→车辆品牌),表单提供上级下拉
+    var refType = null;
+    items.forEach(function (d) {
+      if (!d.parentId) return;
+      Ctx.dictTypes.forEach(function (g2) {
+        (g2.items || []).forEach(function (x) {
+          if (String(x.id) === String(d.parentId) && g2.type !== currentType) refType = g2.type;
+        });
+      });
+    });
+    var hasHierarchy = items.some(function (d) { return d.parentId; }) || !!parentItem;
+    var parentTypeForForm = refType || currentType;
+    function labelForId(pid) {
+      var found = '';
+      dictItems(parentTypeForForm).forEach(function (d) { if (String(d.id) === String(pid)) found = d.dictLabel; });
+      return found;
+    }
+    function idForLabel(lb) {
+      var found = 0;
+      dictItems(parentTypeForForm).forEach(function (d) { if (d.dictLabel === lb) found = d.id; });
+      return found;
+    }
+    var parentOptions = dictItems(parentTypeForForm).filter(function (d) {
+      if (d.enabled === false) return false;
+      // 同类型时只能选顶级项,且不能选自己
+      if (parentTypeForForm === currentType) return !d.parentId && String(d.id) !== String(item ? item.id : '');
+      return true;
+    }).map(function (d) { return d.dictLabel; });
+
+    var fields = [
       { key: 'dictLabel', label: '选项内容', required: true },
+      { key: '_parent', label: '上级', type: 'select', options: function () { return parentOptions; },
+        placeholder: parentTypeForForm === currentType ? '无(顶级)' : ('请选择' + ((typeGroup(parentTypeForForm) || {}).name || '')) },
       { key: 'sort', label: '排序号', type: 'number', step: '1' },
       { key: 'enabled', label: '状态', type: 'select', required: true, options: [{ v: '1', l: '启用' }, { v: '0', l: '停用' }] },
       { key: 'remark', label: '备注', span: 'full' }
-    ], item
+    ];
+    if (!hasHierarchy) fields.splice(1, 1); // 该类型尚无下级时不显示上级选择
+
+    var preset = item
       ? { dictLabel: item.dictLabel, sort: item.sort, enabled: item.enabled === false ? '0' : '1', remark: item.remark }
-      : { enabled: '1', sort: 0 });
+      : { enabled: '1', sort: 0 };
+    if (hasHierarchy) {
+      preset._parent = item && item.parentId ? labelForId(item.parentId)
+        : (parentItem ? (parentItem.dictType === parentTypeForForm ? parentItem.dictLabel : labelForId(parentItem.id)) : '');
+    }
+    var form = buildForm(fields, preset);
     var m = openModal({
-      title: item ? '编辑选项 - ' + item.dictLabel : '新增选项 · ' + (typeGroup(currentType) || {}).name,
+      title: item
+        ? '编辑选项 - ' + item.dictLabel
+        : (parentItem ? '新增下级 · ' + parentItem.dictLabel + ' 之下' : '新增选项 · ' + (typeGroup(currentType) || {}).name),
       body: form.el,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
@@ -3428,6 +3598,12 @@ function dictView() {
             data.dictType = currentType;
             data.enabled = data.enabled !== '0';
             if (data.sort === null) data.sort = 0;
+            if (hasHierarchy) {
+              data.parentId = data._parent ? idForLabel(data._parent) : 0;
+            } else {
+              data.parentId = item ? (item.parentId || 0) : (parentItem ? parentItem.id : 0);
+            }
+            delete data._parent;
             var done = item ? PUT('/api/dict/' + item.id, data) : POST('/api/dict', data);
             done.then(function () {
               m.close();

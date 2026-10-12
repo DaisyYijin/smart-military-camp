@@ -8,6 +8,7 @@ public class DictItem {
     private Long id;
     private String dictType;   // 字典类型:leave_type / fitness_item / fitness_grade / personnel_status / rank
     private String dictLabel;  // 显示值
+    private Long parentId;     // 上级字典项ID(级联下级,0/空=顶级)
     private Integer sort;      // 排序
     private Boolean enabled;   // 是否启用
     private String remark;
@@ -20,6 +21,14 @@ public class DictItem {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public Long getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(Long parentId) {
+        this.parentId = parentId;
     }
 
     public String getDictType() {

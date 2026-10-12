@@ -630,6 +630,12 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   flex: 1;
 }
 
+/* 字典下级项:缩进浅色展示 */
+.dict-child {
+  color: #66788c;
+  padding-left: 18px;
+}
+
 .filter-toggle-btn .badge {
   font-size: 11px;
   padding: 1px 6px;

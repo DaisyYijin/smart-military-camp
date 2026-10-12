@@ -49,6 +49,10 @@ public class DictService {
         TYPE_NAMES.put("house_nature", "房屋性质");
         TYPE_NAMES.put("has_cert", "是否有房产证");
         TYPE_NAMES.put("loan_status", "贷款情况");
+        TYPE_NAMES.put("vehicle_brand", "车辆品牌");
+        TYPE_NAMES.put("vehicle_fuel", "车辆燃料");
+        TYPE_NAMES.put("vehicle_model", "车辆型号");
+        TYPE_NAMES.put("holiday_type", "节假日");
     }
 
     /**
@@ -164,6 +168,9 @@ public class DictService {
         DictItem old = dictDao.findById(id);
         if (old == null) {
             throw new IllegalArgumentException("字典项不存在");
+        }
+        if (dictDao.countChildren(id) > 0) {
+            throw new IllegalArgumentException("该选项下有 " + dictDao.countChildren(id) + " 个下级项,请先删除下级");
         }
         dictDao.delete(id);
         int cleared = 0;

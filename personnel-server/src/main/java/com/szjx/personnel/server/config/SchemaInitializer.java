@@ -59,6 +59,10 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("vehicle_fuel", new String[]{"汽油", "柴油", "电", "混合动力", "其他"});
         addDict("vehicle_brand", new String[]{"东风", "解放", "陕汽", "中国重汽", "北汽", "猎豹", "长城", "上汽大通",
                 "丰田", "三菱", "日产", "本田", "大众", "别克", "福特", "奔驰", "其他"});
+        // 车辆型号(下级示例):挂在品牌下,表单里选品牌后级联过滤
+        addDictChildren("vehicle_brand", "东风", "vehicle_model", new String[]{"猛士EQ2050", "猛士EQ2081", "东风天锦"});
+        addDictChildren("vehicle_brand", "北汽", "vehicle_model", new String[]{"勇士BJ2022", "BJ80"});
+        addDictChildren("vehicle_brand", "丰田", "vehicle_model", new String[]{"普拉多", "考斯特", "兰德酷路泽"});
         addDict("blood_type", new String[]{"未知", "A", "B", "AB", "O"});
         addDict("nation", new String[]{"汉族", "蒙古族", "回族", "藏族", "维吾尔族", "苗族", "彝族", "壮族",
                 "布依族", "朝鲜族", "满族", "侗族", "瑶族", "白族", "土家族", "哈尼族", "哈萨克族", "傣族",
@@ -89,6 +93,25 @@ public class SchemaInitializer implements CommandLineRunner {
         for (int i = 0; i < labels.length; i++) {
             jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark) VALUES(?,?,?,1,'')",
                     type, labels[i], i);
+        }
+    }
+
+    /** 在 parentType+parentLabel 定位的字典项下挂子项(级联下级) */
+    private void addDictChildren(String parentType, String parentLabel, String type, String[] labels) {
+        Long pid;
+        try {
+            pid = jdbc.queryForObject("SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=?",
+                    Long.class, parentType, parentLabel);
+        } catch (Exception e) {
+            return;
+        }
+        if (pid == null) {
+            return;
+        }
+        for (int i = 0; i < labels.length; i++) {
+            jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                            "VALUES(?,?,?,1,'',?)",
+                    type, labels[i], i, pid);
         }
     }
 
@@ -444,6 +467,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "UNIQUE(dict_type, dict_label)" +
                 ")");
+        // 字典下级(级联选择:如 车辆品牌→型号),0=顶级
+        try { jdbc.execute("ALTER TABLE sys_dict ADD COLUMN parent_id INTEGER DEFAULT 0"); } catch (Exception ignore) {}
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS equipment (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
