@@ -169,7 +169,7 @@ public class ModuleExcelService {
         }
         if ("personnel".equals(moduleKey)) {
             List<com.szjx.personnel.server.model.Personnel> all =
-                    personnelService.query(null, null, null, 1, 100000);
+                    personnelService.query(null, null, null, null, null, null, null, 1, 100000);
             List<com.szjx.personnel.server.model.Personnel> selected =
                     new ArrayList<com.szjx.personnel.server.model.Personnel>();
             for (com.szjx.personnel.server.model.Personnel p : all) {
