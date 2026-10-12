@@ -1875,213 +1875,265 @@ function batchImportPhotos(fileList) {
 }
 
 /** 体能评分标准缓存(从服务端加载) */
-var FITNESS_STD_CACHE = [];
+/** 体能评分矩阵缓存:item → [{age_group, score, value}] */
+var FITNESS_MATRIX_CACHE = {};
 
-function reloadFitnessStandards() {
-  GET('/api/fitness-standard').then(function (list) {
-    FITNESS_STD_CACHE = list || [];
-  }).catch(function () { FITNESS_STD_CACHE = []; });
+function reloadFitnessMatrix() {
+  GET('/api/fitness-matrix/items').then(function (items) {
+    var jobs = (items || []).map(function (item) {
+      return GET('/api/fitness-matrix?item=' + encodeURIComponent(item)).then(function (rows) {
+        FITNESS_MATRIX_CACHE[item] = rows || [];
+      });
+    });
+    return Promise.all(jobs);
+  }).catch(function () { FITNESS_MATRIX_CACHE = {}; });
 }
 
-function parseFitnessScore(scoreType, text) {
-  text = String(text || '').trim();
-  if (!text) { return null; }
-  if (scoreType === 'time') {
-    var m = /(\d+)['′:](\d+)/.exec(text);
-    if (m) { return +m[1] * 60 + +m[2]; }
-    m = /(\d+)\s*秒/.exec(text);
-    if (m) { return +m[1]; }
-    m = /(\d+(?:\.\d+)?)/.exec(text);
-    if (m) { return +m[1]; }
-  } else {
-    var m2 = /(\d+)/.exec(text);
-    if (m2) { return +m2[1]; }
+/** 年龄 → 年龄段标签(从矩阵列中匹配) */
+function matchAgeGroup(ageGroups, age) {
+  if (age === '' || age === null || age === undefined) { return null; }
+  age = +age;
+  for (var i = 0; i < ageGroups.length; i++) {
+    var label = ageGroups[i];
+    var nums = label.match(/\d+/g);
+    if (!nums) { continue; }
+    var a = +nums[0];
+    var b = nums[1] ? +nums[1] : a;
+    var hit;
+    if (label.indexOf('以下') >= 0) { hit = age <= a; }
+    else if (label.indexOf('以上') >= 0) { hit = age >= a; }
+    else { hit = age >= a && age <= b; }
+    if (hit) { return label; }
   }
   return null;
 }
 
-function calcFitnessGrade(item, scoreText) {
-  var std = null;
-  for (var i = 0; i < FITNESS_STD_CACHE.length; i++) {
-    if (FITNESS_STD_CACHE[i].item === item) { std = FITNESS_STD_CACHE[i]; break; }
-  }
-  if (!std) { return ''; }
-  var v = parseFitnessScore(std.score_type, scoreText);
-  if (v === null) { return ''; }
-  var isTime = std.score_type === 'time';
+/** 根据项目+年龄+成绩文本 → 分数(100/95/.../55),无法计算返回 '' */
+function calcFitnessGrade(item, scoreText, age) {
+  var matrix = FITNESS_MATRIX_CACHE[item];
+  if (!matrix || !matrix.length) { return ''; }
+  var maxV = 0;
+  matrix.forEach(function (r) { if (r.value > maxV) { maxV = r.value; } });
+  var isTime = maxV > 300;
+  var text = String(scoreText || '').trim();
+  if (!text) { return ''; }
+  var perf = null;
   if (isTime) {
-    if (v <= std.excellent) { return '优秀'; }
-    if (v <= std.good) { return '良好'; }
-    if (v <= std.pass) { return '及格'; }
-    return '不及格';
+    var m = /(\d+)['\u2032:](\d+)/.exec(text);
+    if (m) { perf = +m[1] * 60 + +m[2]; }
+    if (perf === null) {
+      var m2 = /(\d+)\s*秒/.exec(text);
+      if (m2) { perf = +m2[1]; }
+    }
+    if (perf === null) {
+      var m3 = /(\d+(?:\.\d+)?)/.exec(text);
+      if (m3) { perf = +m3[1]; }
+    }
+  } else {
+    var m4 = /(\d+)/.exec(text);
+    if (m4) { perf = +m4[1]; }
   }
-  if (v >= std.excellent) { return '优秀'; }
-  if (v >= std.good) { return '良好'; }
-  if (v >= std.pass) { return '及格'; }
-  return '不及格';
+  if (perf === null) { return ''; }
+  var groups = [];
+  matrix.forEach(function (r) {
+    if (groups.indexOf(r.age_group) < 0) { groups.push(r.age_group); }
+  });
+  var myGroup = matchAgeGroup(groups, age);
+  if (!myGroup) { return ''; }
+  var scored = matrix.filter(function (r) { return r.age_group === myGroup; });
+  scored.sort(function (a, b) { return b.score - a.score; });
+  for (var i = 0; i < scored.length; i++) {
+    var need = scored[i].value;
+    if (isTime ? perf <= need : perf >= need) {
+      return String(scored[i].score);
+    }
+  }
+  return '55';
 }
 
-reloadFitnessStandards();
-
-/** 体能标准管理器:行内编辑表格(与子记录表同交互) */
+/** 体能标准管理器:矩阵式编辑(项目选择 + 分数行 x 年龄段列) */
 function openFitnessStdManager() {
-  var rows = [];
-  var table = h('table', { class: 'grid sub-grid' });
-  var renderTimer = null;
-  var uid = 0;
-
-  var COLS = [
-    { key: 'item', label: '考核项目', required: true, w: 120 },
-    { key: 'score_type', label: '计分方式', type: 'select', required: true, w: 140,
-      options: [{ v: 'time', l: '时间(越短越好)' }, { v: 'count', l: '次数(越多越好)' }] },
-    { key: 'excellent', label: '优秀', required: true, w: 70 },
-    { key: 'good', label: '良好', required: true, w: 70 },
-    { key: 'pass', label: '及格', required: true, w: 70 }
-  ];
-
-  function rowValid(r) {
-    return r.item && r.score_type && String(r.excellent).trim() !== ''
-      && String(r.good).trim() !== '' && String(r.pass).trim() !== '';
-  }
-
-  function fmtCell(r, c) {
-    if (c.key === 'score_type') {
-      return r.score_type === 'time' ? '时间型' : (r.score_type === 'count' ? '次数型' : '—');
-    }
-    var v = r[c.key];
-    if (!String(v || '').trim()) {
-      return c.required ? '<span class="cell-empty-hint">*</span>' : '—';
-    }
-    return esc(v);
-  }
-
-  function render() {
-    var head = '<thead><tr>'
-      + COLS.map(function (c) {
-        return '<th' + (c.w ? ' style="width:' + c.w + 'px"' : '') + '>' + esc(c.label) + '</th>';
-      }).join('')
-      + '<th style="width:56px">操作</th></tr></thead>';
-    var body = rows.map(function (r) {
-      var tds = COLS.map(function (c) {
-        return '<td data-row="' + r.__id + '" data-col="' + c.key + '">' + fmtCell(r, c) + '</td>';
-      }).join('');
-      return '<tr' + (r.__pending ? ' class="pending-row"' : '') + '>' + tds
-        + '<td class="actions"><button class="btn-link danger" data-del="' + r.__id + '">删除</button></td></tr>';
-    }).join('');
-    if (!rows.length) {
-      body = '<tr><td colspan="6" class="empty-row">暂无标准,点上方按钮添加</td></tr>';
-    }
-    table.innerHTML = head + '<tbody>' + body + '</tbody>';
-  }
-
-  function deferredRender() {
-    clearTimeout(renderTimer);
-    renderTimer = setTimeout(render, 0);
-  }
-
-  function openEditor(r, c) {
-    var td = table.querySelector('td[data-row="' + r.__id + '"][data-col="' + c.key + '"]');
-    if (!td) { return; }
-    td.innerHTML = '';
-    td.classList.add('editing');
-    var editor;
-    if (c.type === 'select') {
-      editor = makeDropdown(c.options, '请选择');
-      if (r[c.key]) { editor.value = r[c.key]; }
-      editor.addEventListener('change', function () { commit(r, c, editor.value); });
-      var btn = editor.querySelector('.dd-btn');
-      if (btn) {
-        btn.addEventListener('blur', function () {
-          setTimeout(function () { commit(r, c, r[c.key]); }, 150);
-        });
-      }
-    } else {
-      editor = h('input', { type: 'text', style: 'width:100%' });
-      editor.value = r[c.key] || '';
-      editor.addEventListener('blur', function () { commit(r, c, editor.value); });
-      editor.addEventListener('keydown', function (e) { if (e.key === 'Enter') { editor.blur(); } });
-    }
-    td.appendChild(editor);
-    var el = editor.tagName === 'INPUT' ? editor : editor.querySelector('.dd-btn');
-    if (el) { setTimeout(function () { el.focus(); }, 0); }
-  }
-
-  function commit(r, c, value) {
-    value = String(value == null ? '' : value).trim();
-    if (String(r[c.key] || '') === value) { deferredRender(); return; }
-    r[c.key] = value;
-    saveRow(r);
-  }
-
-  function saveRow(r) {
-    if (!rowValid(r)) { deferredRender(); return; }
-    var body = { item: r.item, score_type: r.score_type,
-      excellent: r.excellent, good: r.good, pass: r.pass };
-    var done = r.id ? PUT('/api/fitness-standard/' + r.id, body)
-                    : POST('/api/fitness-standard', body);
-    done.then(function (saved) {
-      if (saved && saved.id) { r.id = saved.id; r.__id = 's' + saved.id; r.__pending = false; }
-      deferredRender();
-      reloadFitnessStandards();
-    }).catch(function (e) {
-      toast(e.message, 'err');
-      deferredRender();
-    });
-  }
-
-  table.addEventListener('dblclick', function (e) {
-    var td = e.target.closest('td[data-row][data-col]');
-    if (!td) { return; }
-    var r = rows.filter(function (x) { return x.__id === td.getAttribute('data-row'); })[0];
-    var c = COLS.filter(function (x) { return x.key === td.getAttribute('data-col'); })[0];
-    if (r && c) { openEditor(r, c); }
-  });
-
-  table.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-del]');
-    if (!b) { return; }
-    var r = rows.filter(function (x) { return x.__id === b.getAttribute('data-del'); })[0];
-    if (!r) { return; }
-    if (r.__pending || !r.id) {
-      rows = rows.filter(function (x) { return x !== r; });
-      render();
-      return;
-    }
-    confirmBox('确定删除「' + r.item + '」的评分标准吗?', true).then(function (yes) {
-      if (!yes) { return; }
-      DEL('/api/fitness-standard/' + r.id).then(function () {
-        rows = rows.filter(function (x) { return x !== r; });
-        render();
-        reloadFitnessStandards();
-        toast('已删除');
-      }).catch(function (err) { toast(err.message, 'err'); });
-    });
-  });
-
+  var currentItem = null;
+  var ageGroups = [];
+  var scores = [];
   var m = openModal({
     title: '体能评分标准管理',
-    body: h('div', {},
-      h('div', { style: 'margin-bottom:10px;display:flex;align-items:center;gap:12px' },
-        h('button', {
-          class: 'btn btn-ghost btn-sm', text: '＋ 添加标准',
-          onclick: function () {
-            var r = { __id: 'n' + (++uid), __pending: true,
-              item: '', score_type: '', excellent: '', good: '', pass: '' };
-            rows.push(r);
-            render();
-            setTimeout(function () { openEditor(r, COLS[0]); }, 30);
-          }
-        }),
-        h('span', { style: 'color:#a6b3c4;font-size:12px',
-          text: '双击编辑;时间型填秒数(如750),次数型填次数(如45);黄色行=必填未填完' })),
-      h('div', { class: 'table-wrap' }, table)),
+    body: h('div'),
     wide: true,
     footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })]
   });
+  var body = m.body;
 
-  GET('/api/fitness-standard').then(function (list) {
-    rows = (list || []).map(function (r) { r.__id = 's' + r.id; r.__pending = false; return r; });
-    render();
+  function selectorUI(items) {
+    var sel = h('select', { style: 'min-width:180px;height:32px' });
+    items.forEach(function (it) { sel.appendChild(h('option', { value: it, text: it })); });
+    var newInput = h('input', { type: 'text', placeholder: '新项目名称,回车创建', style: 'width:160px' });
+    var addCol = h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 年龄段' });
+    var addRow = h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 分数行' });
+    var delBtn = h('button', { class: 'btn btn-danger btn-sm', text: '删除项目' });
+
+    function switchTo(item) {
+      currentItem = item;
+      GET('/api/fitness-matrix?item=' + encodeURIComponent(item)).then(function (rows) {
+        rows = rows || [];
+        ageGroups = [];
+        scores = [];
+        rows.forEach(function (r) {
+          if (ageGroups.indexOf(r.age_group) < 0) { ageGroups.push(r.age_group); }
+          if (scores.indexOf(r.score) < 0) { scores.push(r.score); }
+        });
+        scores.sort(function (a, b) { return b - a; });
+        renderMatrix();
+      }).catch(function (e) { toast(e.message, 'err'); });
+    }
+
+    sel.addEventListener('change', function () { switchTo(sel.value); });
+    newInput.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') { return; }
+      var name = newInput.value.trim();
+      if (!name) { return; }
+      if (items.indexOf(name) >= 0) { sel.value = name; switchTo(name); return; }
+      items.push(name);
+      sel.appendChild(h('option', { value: name, text: name }));
+      sel.value = name;
+      ageGroups = ['24岁以下', '25-27', '28-30', '31-33', '34-36', '37-39'];
+      scores = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55];
+      renderMatrix();
+      toast('新项目已创建,填写达标值后失焦自动保存', 'info');
+    });
+    addCol.addEventListener('click', function () {
+      if (!currentItem) { toast('请先选择项目', 'err'); return; }
+      var g = prompt('请输入年龄段名称(如:40-42、40以上):');
+      if (!g || !g.trim()) { return; }
+      g = g.trim();
+      if (ageGroups.indexOf(g) < 0) { ageGroups.push(g); }
+      renderMatrix();
+    });
+    addRow.addEventListener('click', function () {
+      if (!currentItem) { toast('请先选择项目', 'err'); return; }
+      var s = prompt('请输入分数(如:50):');
+      if (!s || !s.trim()) { return; }
+      s = parseInt(s, 10);
+      if (isNaN(s)) { return; }
+      if (scores.indexOf(s) < 0) { scores.push(s); scores.sort(function (a, b) { return b - a; }); }
+      renderMatrix();
+    });
+    delBtn.addEventListener('click', function () {
+      if (!currentItem) { return; }
+      confirmBox('确定删除项目「' + currentItem + '」的全部评分标准吗?', true).then(function (yes) {
+        if (!yes) { return; }
+        DEL('/api/fitness-matrix/item?item=' + encodeURIComponent(currentItem)).then(function () {
+          toast('已删除');
+          var left = items.filter(function (x) { return x !== currentItem; });
+          currentItem = null;
+          selectorUI(left);
+          reloadFitnessMatrix();
+        }).catch(function (e) { toast(e.message, 'err'); });
+      });
+    });
+
+    function renderMatrix() {
+      var cellMap = {};
+      (FITNESS_MATRIX_CACHE[currentItem] || []).forEach(function (r) {
+        cellMap[r.age_group + '|' + r.score] = r.value;
+      });
+      function cellVal(g, sc) {
+        var v = cellMap[g + '|' + sc];
+        return (v === undefined || v === null) ? '' : String(v);
+      }
+      var table = h('table', { class: 'grid sub-grid' });
+      var head = '<thead><tr><th style="width:90px">分数 \\ 年龄</th>'
+        + ageGroups.map(function (g) {
+          return '<th><span data-col="' + esc(g) + '" class="mx-head" title="双击删除该年龄段">' + esc(g) + '</span></th>';
+        }).join('') + '</tr></thead>';
+      var body = scores.map(function (sc) {
+        var tds = ageGroups.map(function (g) {
+          return '<td data-score="' + sc + '" data-col="' + esc(g) + '" class="mx-cell" title="双击填写">'
+            + esc(cellVal(g, sc)) + '</td>';
+        }).join('');
+        return '<tr><th style="text-align:center"><span data-score="' + sc
+          + '" class="mx-row" title="双击删除该分数行">' + sc + '</span></th>' + tds + '</tr>';
+      }).join('');
+      table.innerHTML = head + '<tbody>' + body + '</tbody>';
+
+      table.addEventListener('dblclick', function (e) {
+        var td = e.target.closest('td.mx-cell');
+        if (!td || !currentItem) { return; }
+        var g = td.getAttribute('data-col');
+        var sc = td.getAttribute('data-score');
+        var old = td.textContent.trim();
+        td.innerHTML = '';
+        var inp = h('input', { type: 'text', style: 'width:100%;height:26px;font-size:13px;padding:0 4px' });
+        inp.value = old;
+        td.appendChild(inp);
+        inp.focus();
+        inp.select();
+        var done = false;
+        function finish() {
+          if (done) { return; }
+          done = true;
+          var val = inp.value.trim();
+          td.textContent = val;
+          POST('/api/fitness-matrix', { item: currentItem, age_group: g, score: +sc,
+            value: val === '' ? 0 : +val }).then(function () { reloadFitnessMatrix(); })
+            .catch(function (err) { toast(err.message, 'err'); });
+        }
+        inp.addEventListener('blur', finish);
+        inp.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { inp.blur(); }
+          if (ev.key === 'Escape') { done = true; td.textContent = old; }
+        });
+      });
+      table.addEventListener('dblclick', function (e) {
+        var ch = e.target.closest('.mx-head');
+        if (!ch || !currentItem) { return; }
+        var g = ch.getAttribute('data-col');
+        confirmBox('确定删除年龄段「' + g + '」整列吗?', true).then(function (yes) {
+          if (!yes) { return; }
+          DEL('/api/fitness-matrix/column?item=' + encodeURIComponent(currentItem)
+            + '&age_group=' + encodeURIComponent(g)).then(function () {
+            ageGroups = ageGroups.filter(function (x) { return x !== g; });
+            renderMatrix();
+            reloadFitnessMatrix();
+          }).catch(function (err) { toast(err.message, 'err'); });
+        });
+      });
+      table.addEventListener('dblclick', function (e) {
+        var rh = e.target.closest('.mx-row');
+        if (!rh || !currentItem) { return; }
+        var sc = +rh.getAttribute('data-score');
+        confirmBox('确定删除分数「' + sc + '」整行吗?', true).then(function (yes) {
+          if (!yes) { return; }
+          DEL('/api/fitness-matrix?item=' + encodeURIComponent(currentItem) + '&score=' + sc)
+            .then(function () {
+              scores = scores.filter(function (x) { return x !== sc; });
+              renderMatrix();
+              reloadFitnessMatrix();
+            }).catch(function (err) { toast(err.message, 'err'); });
+        });
+      });
+
+      body.innerHTML = '';
+      body.appendChild(h('div', { style: 'margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+        h('span', { style: 'color:#a6b3c4;font-size:12px' },
+          '双击单元格填达标值(失焦保存);双击年龄段/分数表头删除整列/整行')),
+        h('div', { class: 'table-wrap' }, table));
+    }
+
+    body.innerHTML = '';
+    body.appendChild(h('div', { style: 'margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
+      h('span', { text: '考核项目:' }), sel, newInput, addCol, addRow, delBtn));
+    if (currentItem) {
+      renderMatrix();
+    } else {
+      body.appendChild(h('div', { style: 'color:#97a4b5;padding:30px;text-align:center' },
+        h('span', { text: '请选择或输入考核项目' })));
+    }
+  }
+
+  GET('/api/fitness-matrix/items').then(function (items) {
+    selectorUI(items || []);
+    reloadFitnessMatrix();
   }).catch(function (e) { toast(e.message, 'err'); });
 }
 
