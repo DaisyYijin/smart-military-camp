@@ -321,9 +321,8 @@ table.grid td.empty-row { text-align: center; }
 }
 
 /* 图标居中 + 悬停反馈 */
+/* 不改 padding 和 justify-content——图标天然居中(3px border + 20px padding = 23px = (64-18)/2) */
 .sidebar.collapsed .menu-item {
-  justify-content: center;
-  padding-left: 0;
   padding-right: 0;
 }
 .sidebar.collapsed .menu-item .ic {
