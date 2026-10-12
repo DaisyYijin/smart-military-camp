@@ -71,6 +71,13 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("license_type", new String[]{"军本", "地方本"});
         addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
         addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
+        addDict("follow_army_status", new String[]{"符合", "不符合", "未申请"});
+        addDict("license_status", new String[]{"有效", "过期", "吊销"});
+        addDict("card_status", new String[]{"正常", "挂失", "注销"});
+        addDict("vehicle_status_sub", new String[]{"正常", "出售", "报废"});
+        addDict("house_nature", new String[]{"商品房", "房改房", "自建房", "其他"});
+        addDict("has_cert", new String[]{"有", "无"});
+        addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
         log.info("已初始化默认数据字典");
     }
 
@@ -336,14 +343,6 @@ public class SchemaInitializer implements CommandLineRunner {
                 jdbc.execute("ALTER TABLE " + se[0] + " ADD COLUMN " + se[1] + " TEXT DEFAULT ''");
             } catch (Exception ignore) { }
         }
-
-        addDict("follow_army_status", new String[]{"符合", "不符合", "未申请"});
-        addDict("license_status", new String[]{"有效", "过期", "吊销"});
-        addDict("card_status", new String[]{"正常", "挂失", "注销"});
-        addDict("vehicle_status_sub", new String[]{"正常", "出售", "报废"});
-        addDict("house_nature", new String[]{"商品房", "房改房", "自建房", "其他"});
-        addDict("has_cert", new String[]{"有", "无"});
-        addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
 
         // 体能评分矩阵:项目 x 年龄段 x 分数 → 达标值(用户可自行维护)
         try {
