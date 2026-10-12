@@ -565,8 +565,15 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   width: 270px;
   position: sticky;
   top: 0;
-  align-self: flex-start;
-  max-height: calc(100vh - 160px);
+  align-self: stretch;
+  max-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+.filter-panel-inner {
+  padding: 16px;
+  min-width: 270px;
+  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
 }
