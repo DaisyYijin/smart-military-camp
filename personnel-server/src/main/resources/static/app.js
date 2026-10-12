@@ -2000,6 +2000,11 @@ function openFitnessStdManager() {
           ';border-left:3px solid ' + (it === currentItem ? '#2f6fd6' : 'transparent')
       });
       row.appendChild(h('span', { text: it, style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }));
+      var pencilSpan = h('span', {
+        text: '✏', title: '点击重命名',
+        style: 'color:#b0bccb;font-size:11px;flex:none;width:20px;height:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:3px'
+      });
+      row.appendChild(pencilSpan);
       row.appendChild(h('span', {
         text: '×', style: 'color:#d0d8e2;font-size:16px;flex:none;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:3px;cursor:pointer',
         onclick: function (e) {
@@ -2017,42 +2022,52 @@ function openFitnessStdManager() {
         }
       }));
       // hover 效果
-      row.addEventListener('mouseenter', function () { row.style.background = it === currentItem ? '#e4edfb' : '#f4f7fb'; row.lastChild.style.color = '#d9463e'; });
-      row.addEventListener('mouseleave', function () { row.style.background = it === currentItem ? '#e4edfb' : '#fff'; row.lastChild.style.color = '#d0d8e2'; });
-      // 点击选中
-      row.addEventListener('click', function () { currentItem = it; loadMatrix(it); });
-      // 双击重命名
-      row.addEventListener('dblclick', function (e) {
-        if (e.target.textContent === '×') { return; }
+      row.addEventListener('mouseenter', function () { row.style.background = it === currentItem ? '#e4edfb' : '#f4f7fb'; });
+      row.addEventListener('mouseleave', function () { row.style.background = it === currentItem ? '#e4edfb' : '#fff'; });
+      // 点击选中(不重建左侧,只切高亮)
+      row.addEventListener('click', function () {
+        if (currentItem !== it) {
+          currentItem = it;
+          // 只切高亮,不重建DOM
+          $all('.dict-type-item', listBox).forEach(function (el) { el.style.background = ''; el.style.borderLeft = ''; el.style.fontWeight = ''; el.style.color = ''; });
+          row.style.background = '#e4edfb';
+          row.style.borderLeft = '3px solid #2f6fd6';
+          row.style.fontWeight = '600';
+          row.style.color = '#16437e';
+          loadMatrix(it);
+        }
+      });
+      // 铅笔按钮:点击重命名(替代双击,避免与单击冲突)
+      pencilSpan.addEventListener('click', function (e) {
+        e.stopPropagation();
         var nameSpan = row.firstChild;
-        var old = nameSpan.textContent;
+        var oldName = nameSpan.textContent;
         nameSpan.innerHTML = '';
-        var inp = h('input', { type: 'text', style: 'width:100%;font-size:13px;padding:2px 6px;border:1px solid #2f6fd6;border-radius:3px' });
-        inp.value = old;
+        var inp = h('input', { type: 'text', style: 'width:100%;font-size:13px;padding:2px 6px;border:1px solid #2f6fd6;border-radius:3px;background:#fff' });
+        inp.value = oldName;
         nameSpan.appendChild(inp);
         inp.focus();
         inp.select();
         function finishRename() {
           var newName = inp.value.trim();
-          nameSpan.textContent = newName || old;
-          if (!newName || newName === old) { return; }
-          // 服务端重命名
-          POST('/api/fitness-matrix/rename', { old_item: old, new_item: newName }).then(function () {
+          nameSpan.textContent = newName || oldName;
+          if (!newName || newName === oldName) { return; }
+          POST('/api/fitness-matrix/rename', { old_item: oldName, new_item: newName }).then(function () {
             items[idx] = newName;
-            if (currentItem === old) { currentItem = newName; }
+            if (currentItem === oldName) { currentItem = newName; }
             renderLeft();
             renderRight();
             reloadFitnessMatrix();
             toast('已重命名为「' + newName + '」');
           }).catch(function (err) {
-            nameSpan.textContent = old;
+            nameSpan.textContent = oldName;
             toast(err.message, 'err');
           });
         }
         inp.addEventListener('blur', finishRename);
         inp.addEventListener('keydown', function (ev) {
           if (ev.key === 'Enter') { inp.blur(); }
-          if (ev.key === 'Escape') { nameSpan.textContent = old; }
+          if (ev.key === 'Escape') { nameSpan.textContent = oldName; }
         });
       });
       listBox.appendChild(row);
@@ -2144,8 +2159,7 @@ function openFitnessStdManager() {
         if (scores.indexOf(r.score) < 0) { scores.push(r.score); }
       });
       scores.sort(function (a, b) { return b - a; });
-      renderLeft();
-      renderRight();
+      renderRight(); // 只渲染右侧,不重建左侧(避免销毁重命名输入框)
     }).catch(function (e) { toast(e.message, 'err'); });
   }
 
