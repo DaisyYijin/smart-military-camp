@@ -1992,7 +1992,7 @@ function openFitnessStdManager() {
         if (scores.indexOf(r.score) < 0) { scores.push(r.score); }
       });
       scores.sort(function (a, b) { return b - a; });
-      renderMatrix();
+      renderLayout();
     }).catch(function (e) { toast(e.message, 'err'); });
   }
 
@@ -2021,7 +2021,7 @@ function openFitnessStdManager() {
       ageGroups = ['24岁以下', '25-27', '28-30', '31-33', '34-36', '37-39'];
       scores = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55];
       newItemInput.value = '';
-      renderMatrix();
+      renderLayout();
       saveEntireItem();
       toast('项目「' + name + '」已创建,请填写达标值', 'info');
     });
