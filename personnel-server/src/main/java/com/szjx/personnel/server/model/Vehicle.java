@@ -9,7 +9,8 @@ public class Vehicle {
     private String plateNo;      // 车牌号
     private String vin;          // 车架号
     private String engineNo;     // 发动机号
-    private String brand;        // 品牌型号
+    private String brand;        // 品牌(字典 vehicle_brand)
+    private String model;        // 型号
     private String type;         // 车型(字典 vehicle_type)
     private String color;        // 车身颜色
     private String fuelType;     // 燃料类型(字典 vehicle_fuel)
@@ -39,6 +40,14 @@ public class Vehicle {
 
     public void setVin(String vin) {
         this.vin = vin;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
     }
 
     public String getEngineNo() {

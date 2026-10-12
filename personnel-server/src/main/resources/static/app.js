@@ -3063,14 +3063,16 @@ var vehicleCfg = {
   ],
   moreFilters: [
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
-    { key: 'brand', label: '品牌型号' },
+    { key: 'brand', label: '品牌', type: 'select', options: function () { return dictLabels('vehicle_brand'); } },
+    { key: 'model', label: '型号' },
     { key: 'vin', label: '车架号' },
     { key: 'driverName', label: '驾驶员' }
   ],
   columns: [
     { key: 'plateNo', label: '车牌号' },
     { key: 'vin', label: '车架号', render: function (r) { return r.vin || '—'; } },
-    { key: 'brand', label: '品牌型号' },
+    { key: 'brand', label: '品牌', render: function (r) { return r.brand || '—'; } },
+    { key: 'model', label: '型号', render: function (r) { return r.model || '—'; } },
     { key: 'type', label: '车型' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'driverName', label: '驾驶员', render: function (r) { return r.driverName || '—'; } },
@@ -3083,7 +3085,8 @@ var vehicleCfg = {
     { key: 'plateNo', label: '车牌号', required: true },
     { key: 'vin', label: '车架号', placeholder: '17位车辆识别代码' },
     { key: 'engineNo', label: '发动机号' },
-    { key: 'brand', label: '品牌型号' },
+    { key: 'brand', label: '品牌', type: 'select', options: function () { return dictLabels('vehicle_brand'); } },
+    { key: 'model', label: '型号', placeholder: '如 EQ2050' },
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
     { key: 'color', label: '车身颜色' },
     { key: 'fuelType', label: '燃料类型', type: 'select', options: function () { return dictLabels('vehicle_fuel'); } },

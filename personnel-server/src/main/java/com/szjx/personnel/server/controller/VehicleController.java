@@ -39,13 +39,14 @@ public class VehicleController {
                              @RequestParam(required = false) String type,
                              @RequestParam(required = false) String status,
                              @RequestParam(required = false) String brand,
+                             @RequestParam(required = false) String model,
                              @RequestParam(required = false) String driverName,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "50") int size) {
         if (page < 1) page = 1;
         if (size < 1 || size > 200) size = 50;
         StringBuilder sql = new StringBuilder(
-            "SELECT v.id, v.plate_no AS plateNo, v.vin, v.engine_no AS engineNo, v.brand, v.type, v.color, " +
+            "SELECT v.id, v.plate_no AS plateNo, v.vin, v.engine_no AS engineNo, v.brand, v.model, v.type, v.color, " +
             "v.fuel_type AS fuelType, v.status, v.driver_id AS driverId, p.name AS driverName, " +
             "p.id_card AS driverIdCard, v.seats, v.mileage, v.purchase_date AS purchaseDate, " +
             "v.insurance_expiry AS insuranceExpiry, v.inspection_expiry AS inspectionExpiry, " +
@@ -72,8 +73,12 @@ public class VehicleController {
             csql.append(" AND v.status = ?"); cargs.add(status.trim());
         }
         if (brand != null && !brand.trim().isEmpty()) {
-            sql.append(" AND v.brand LIKE ?"); args.add("%" + brand.trim() + "%");
-            csql.append(" AND v.brand LIKE ?"); cargs.add("%" + brand.trim() + "%");
+            sql.append(" AND v.brand = ?"); args.add(brand.trim());
+            csql.append(" AND v.brand = ?"); cargs.add(brand.trim());
+        }
+        if (model != null && !model.trim().isEmpty()) {
+            sql.append(" AND v.model LIKE ?"); args.add("%" + model.trim() + "%");
+            csql.append(" AND v.model LIKE ?"); cargs.add("%" + model.trim() + "%");
         }
         if (driverName != null && !driverName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + driverName.trim() + "%");

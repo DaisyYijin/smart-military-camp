@@ -57,6 +57,8 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("vehicle_type", new String[]{"轿车", "客车", "卡车", "越野车", "特种车", "其他"});
         addDict("vehicle_status", new String[]{"可用", "出车", "维修", "停用"});
         addDict("vehicle_fuel", new String[]{"汽油", "柴油", "电", "混合动力", "其他"});
+        addDict("vehicle_brand", new String[]{"东风", "解放", "陕汽", "中国重汽", "北汽", "猎豹", "长城", "上汽大通",
+                "丰田", "三菱", "日产", "本田", "大众", "别克", "福特", "奔驰", "其他"});
         addDict("blood_type", new String[]{"未知", "A", "B", "AB", "O"});
         addDict("nation", new String[]{"汉族", "蒙古族", "回族", "藏族", "维吾尔族", "苗族", "彝族", "壮族",
                 "布依族", "朝鲜族", "满族", "侗族", "瑶族", "白族", "土家族", "哈尼族", "哈萨克族", "傣族",
@@ -490,8 +492,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_vehicle_driver ON vehicle(driver_id)");
 
-        // 车辆扩展:车架号/发动机号/颜色/燃料/购置/保险/年检
-        String[] vehicleCols = {"vin", "engine_no", "color", "fuel_type", "purchase_date", "insurance_expiry", "inspection_expiry"};
+        // 车辆扩展:车架号/发动机号/颜色/燃料/购置/保险/年检/型号
+        String[] vehicleCols = {"vin", "engine_no", "color", "fuel_type", "purchase_date", "insurance_expiry", "inspection_expiry", "model"};
         for (String col : vehicleCols) {
             try { jdbc.execute("ALTER TABLE vehicle ADD COLUMN " + col + " TEXT DEFAULT ''"); } catch (Exception ignore) {}
         }
