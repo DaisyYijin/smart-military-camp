@@ -1008,6 +1008,9 @@ function crudView(cfg) {
       if (f.type === 'select') {
         var fopts = (typeof f.options === 'function' ? f.options() : f.options) || [];
         var ddItems = [{ v: '', l: '全部' }].concat(fopts.map(function (o) {
+          if (o && o.v !== undefined) {
+            return { v: String(o.v), l: String(o.l !== undefined ? o.l : o.v) };
+          }
           return { v: String(o), l: String(o) };
         }));
         el = makeDropdown(ddItems, '全部');
