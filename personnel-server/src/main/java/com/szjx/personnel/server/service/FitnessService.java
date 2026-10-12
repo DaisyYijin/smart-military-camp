@@ -73,7 +73,7 @@ public class FitnessService {
                                                Long departmentId, String minScore, String maxScore,
                                                int page, int size) {
         StringBuilder sql = new StringBuilder(
-            "SELECT f.*, p.name AS personnel_name FROM fitness_record f " +
+            "SELECT f.*, p.name AS personnel_name, p.birthday FROM fitness_record f " +
             "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore);
