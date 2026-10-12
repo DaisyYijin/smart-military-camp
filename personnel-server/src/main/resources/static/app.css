@@ -347,16 +347,12 @@ table.grid td.empty-row { text-align: center; }
   border-radius: 2px; background: #5b9bff;
 }
 
-/* 收起/展开按钮:箭头旋转 */
+/* 收起/展开按钮 */
+/* 注意:箭头方向由 JS 直接切换(展开=‹ 收起=›),此处不得再对 .ic 做 rotate,
+   否则视觉方向会二次翻转(历史 bug 根源) */
 .sidebar-toggle { border-top: 1px solid rgba(255,255,255,.08); padding: 6px 0; }
 .menu-item { position: relative; }
 .menu-item.toggle { color: #8fa6c6; }
-.menu-item.toggle .ic {
-  transition: transform .3s cubic-bezier(.4,0,.2,1);
-}
-.sidebar.collapsed .menu-item.toggle .ic {
-  transform: rotate(180deg);
-}
 
 /* 收起后悬停提示(带滑入动画) */
 .sidebar.collapsed .menu-item::after {
