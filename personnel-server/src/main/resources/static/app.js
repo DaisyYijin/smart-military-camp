@@ -1962,7 +1962,7 @@ function openFitnessStdManager() {
   var saveTimers = {};
 
   // 全屏容器
-  var overlay = h('div', { style: 'position:fixed;inset:0;background:#eef2f7;z-index:200;display:flex;flex-direction:column' });
+  var overlay = h('div', { style: 'position:fixed;inset:0;background:#eef2f7;z-index:90;display:flex;flex-direction:column' });
   var topbar = h('div', { style: 'height:48px;flex:none;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px' },
     h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
     h('button', { class: 'btn btn-primary', text: '✕ 关闭', onclick: function () { overlay.remove(); reloadFitnessMatrix(); } }));
