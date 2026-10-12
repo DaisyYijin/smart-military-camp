@@ -2357,11 +2357,11 @@ function openFitnessStdManager() {
   // 初始化
   GET('/api/fitness-matrix/items').then(function (list) {
     items = list || [];
+    renderLeft(); // 先渲染左侧列表
     if (items.length) {
       currentItem = items[0];
       loadMatrix(currentItem);
     } else {
-      renderLeft();
       renderRight();
     }
   }).catch(function (e) {
