@@ -1000,6 +1000,7 @@ function crudView(cfg) {
   }
 
   function render(container) {
+    var filterBtn = null;
     // 工具栏(只放操作按钮,不放筛选)
     var toolbar = h('div', { class: 'toolbar' });
 
@@ -1064,20 +1065,21 @@ function crudView(cfg) {
         })));
       filterPanel.appendChild(inner);
 
-      // 筛选切换按钮(放在右侧,spacer 之后)
-      var filterBtn = h('button', {
-        class: 'btn btn-ghost filter-toggle-btn', text: '筛选',
+      // 垂直标签按钮(固定在右侧边缘居中)
+      filterBtn = h('div', {
+        class: 'filter-tab-btn', text: '筛 选',
         onclick: function () {
           var open = filterPanel.classList.contains('open');
           filterPanel.classList.toggle('open');
-          this.textContent = open ? '筛选' : '收起';
-          // 主内容右移让出面板空间
+          this.classList.toggle('panel-open', !open);
+          this.textContent = !open ? '收 起' : '筛 选';
           var main = root.querySelector('.content-main');
           if (main) {
             main.classList.toggle('filter-padding', !open);
           }
         }
       });
+      document.body.appendChild(filterBtn);
     }
 
     function getActiveCount() {
@@ -1236,10 +1238,7 @@ function crudView(cfg) {
       text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
       onclick: function () { openForm(null); }
     }));
-    // 筛选按钮放最右侧
-    if (typeof filterBtn !== 'undefined' && filterBtn) {
-      toolbar.appendChild(filterBtn);
-    }
+    // 筛选按钮已改为固定在右侧边缘的垂直标签(document.body 上),不在工具栏
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +

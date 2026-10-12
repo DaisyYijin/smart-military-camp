@@ -573,11 +573,13 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   box-shadow: -4px 0 16px rgba(23,43,77,.08);
 }
 /* 面板打开时,主内容右移让出空间 */
+/* 主内容自适应:面板打开时内容区右移,表格自动缩窄(不是遮挡) */
 .content-main {
-  transition: padding-right .3s cubic-bezier(.4,0,.2,1);
+  transition: margin-right .3s cubic-bezier(.4,0,.2,1);
+  min-width: 0;
 }
 .content-main.filter-padding {
-  padding-right: 270px;
+  margin-right: 270px;
 }
 
 .filter-panel-inner {
@@ -622,14 +624,41 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
 .filter-actions .btn {
   flex: 1;
 }
-.filter-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
+
 .filter-toggle-btn .badge {
   font-size: 11px;
   padding: 1px 6px;
   min-width: 18px;
   text-align: center;
+}
+
+/* 筛选按钮:固定在右侧垂直居中 */
+.filter-tab-btn {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 51;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 14px 8px;
+  border: 1px solid #dbe4ee;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  background: #fff;
+  color: #16437e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 4px;
+  box-shadow: -3px 0 12px rgba(23,43,77,.1);
+  transition: right .3s cubic-bezier(.4,0,.2,1), background .15s;
+  user-select: none;
+}
+.filter-tab-btn:hover {
+  background: #eef4ff;
+  color: #2f6fd6;
+}
+.filter-tab-btn.panel-open {
+  right: 270px;
 }
