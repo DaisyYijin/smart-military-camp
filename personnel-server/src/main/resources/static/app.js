@@ -862,7 +862,10 @@ function crudView(cfg) {
     head.checked = allOn;
   }
   var root = h('div');
-  var pagerBox = h('div');
+  var loadingMore = false;
+  var allLoaded = false;
+  var sentinel = h('div', { class: 'scroll-sentinel' },
+    h('div', { class: 'scroll-indicator' }));
 
   function collectFilters() {
     var out = {};
@@ -872,33 +875,72 @@ function crudView(cfg) {
     return out;
   }
 
-  function load() {
-    state.filters = collectFilters();
-    state.loading = true;
-    renderTable();
+  function buildQuery(append) {
     var q = {};
     Object.keys(state.filters).forEach(function (k) {
       if (state.filters[k] !== '') q[k] = state.filters[k];
     });
-    q.page = state.page; q.size = state.size;
-    var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
-    GET(cfg.endpoint + (qs ? '?' + qs : '')).then(function (pageData) {
+    q.page = append ? state.page + 1 : 1;
+    q.size = state.size;
+    return Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
+  }
+
+  function load() {
+    state.filters = collectFilters();
+    state.page = 1;
+    allLoaded = false;
+    state.loading = true;
+    renderTable();
+    GET(cfg.endpoint + '?' + buildQuery(false)).then(function (pageData) {
       state.rows = (pageData && pageData.list) || [];
       state.total = (pageData && pageData.total) || 0;
+      allLoaded = state.rows.length >= state.total;
+      updateIndicator();
     }).catch(function (e) {
-      state.rows = []; state.total = 0;
+      state.rows = []; state.total = 0; allLoaded = true;
       toast(e.message, 'err');
     }).then(function () {
       state.loading = false;
       renderTable();
-      renderPagerBox();
       if (cfg.afterTable) cfg.afterTable(root);
     });
   }
 
-  function renderPagerBox() {
-    pagerBox.innerHTML = '';
-    pagerBox.appendChild(renderPager(state, function (p) { state.page = p; load(); }));
+  function loadMore() {
+    if (loadingMore || allLoaded || state.loading) return;
+    loadingMore = true;
+    updateIndicator('加载中…');
+    GET(cfg.endpoint + '?' + buildQuery(true)).then(function (pageData) {
+      var list = (pageData && pageData.list) || [];
+      state.page++;
+      state.rows = state.rows.concat(list);
+      state.total = (pageData && pageData.total) || state.total;
+      if (state.rows.length >= state.total || list.length === 0) {
+        allLoaded = true;
+      }
+      renderTable();
+      updateIndicator();
+    }).catch(function () {
+      allLoaded = true;
+    }).then(function () {
+      loadingMore = false;
+    });
+  }
+
+  function updateIndicator(text) {
+    var el = sentinel.firstChild;
+    if (text) {
+      el.textContent = text;
+      el.className = 'scroll-indicator loading';
+      return;
+    }
+    if (allLoaded) {
+      el.textContent = state.rows.length ? '已加载全部 ' + state.rows.length + ' 条' : '';
+      el.className = 'scroll-indicator done';
+    } else {
+      el.textContent = '下拉加载更多';
+      el.className = 'scroll-indicator';
+    }
   }
 
   function renderTable() {
@@ -1292,7 +1334,7 @@ function crudView(cfg) {
       }
     });
 
-    var panel = h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table), pagerBox);
+    var panel = h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table), sentinel);
     // 布局:左侧主内容 + 右侧筛选面板
     var mainArea = h('div', { class: 'content-main' },
       h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
@@ -1303,6 +1345,25 @@ function crudView(cfg) {
     }
     root.appendChild(layout);
     container.appendChild(root);
+
+    // 无限滚动:观察 sentinel 进入视口时加载更多
+    var io = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) {
+        loadMore();
+      }
+    }, { rootMargin: '200px' });
+    io.observe(sentinel);
+
+    // 回到顶部按钮
+    var topBtn = h('div', {
+      class: 'back-top', text: '↑', title: '回到顶部',
+      onclick: function () {
+        var scrollEl = root.closest('.content') || root.parentElement;
+        if (scrollEl) { scrollEl.scrollTop = 0; }
+      }
+    });
+    root.appendChild(topBtn);
+
     syncBatchBtn();
     load();
   }
