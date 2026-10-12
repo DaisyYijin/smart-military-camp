@@ -1355,17 +1355,21 @@ function crudView(cfg) {
     }, { rootMargin: '200px' });
     io.observe(sentinel);
 
-    // 回到顶部/底部按钮组
+    // 回到顶部/底部按钮组(平滑滚动)
     $all('.scroll-btns', document).forEach(function (b) { b.remove(); });
     var scrollEl = root.closest('.content') || root.parentElement;
+    function smoothScroll(top) {
+      if (!scrollEl) return;
+      scrollEl.scrollTo({ top: top, behavior: 'smooth' });
+    }
     var btns = h('div', { class: 'scroll-btns' },
       h('div', {
         class: 'scroll-btn', title: '回到顶部',
-        onclick: function () { if (scrollEl) scrollEl.scrollTop = 0; }
+        onclick: function () { smoothScroll(0); }
       }, h('span', { text: '⬆' })),
       h('div', {
         class: 'scroll-btn', title: '跳到底部',
-        onclick: function () { if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight; }
+        onclick: function () { if (scrollEl) smoothScroll(scrollEl.scrollHeight); }
       }, h('span', { text: '⬇' })));
     document.body.appendChild(btns);
 
