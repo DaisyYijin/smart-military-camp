@@ -47,6 +47,7 @@ public class LeaveController {
             "SELECT l.id, l.personnel_id AS personnelId, p.name AS personnelName, p.id_card AS idCard, " +
             "l.year, l.leave_type AS leaveType, l.start_date AS startDate, l.end_date AS endDate, l.days, " +
             "CAST(l.travel_days AS REAL) AS travelDays, CAST(l.holiday_days AS REAL) AS holidayDays, " +
+            "l.holiday_name AS holidayName, " +
             "l.reason, l.remark, l.created_at AS createdAt, l.updated_at AS updatedAt " +
             "FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(

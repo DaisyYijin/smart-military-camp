@@ -14,7 +14,8 @@ public class LeaveRecord {
     private String endDate;         // 结束日期
     private Double days;            // 基本天数(不含路途和节假日)
     private Double travelDays;      // 路途天数(每年度限一次)
-    private Double holidayDays;     // 节假日加假(自动计算)
+    private Double holidayDays;     // 节假日加假(手动填写)
+    private String holidayName;     // 节假日名称(国庆/元旦等,字典 holiday_type)
     private String reason;          // 事由
     private String remark;          // 备注
     private String createdAt;
@@ -66,6 +67,14 @@ public class LeaveRecord {
 
     public void setHolidayDays(Double holidayDays) {
         this.holidayDays = holidayDays;
+    }
+
+    public String getHolidayName() {
+        return holidayName;
+    }
+
+    public void setHolidayName(String holidayName) {
+        this.holidayName = holidayName;
     }
 
     public String getLeaveType() {

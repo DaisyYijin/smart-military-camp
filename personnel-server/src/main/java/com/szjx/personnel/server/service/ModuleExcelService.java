@@ -113,6 +113,7 @@ public class ModuleExcelService {
                         new Col("天数", "days", "number"),
                         new Col("路途天数", "travelDays", "number"),
                         new Col("节假日加假", "holidayDays", "number"),
+                        new Col("节假日名称", "holidayName", "text"),
                         new Col("事由", "reason", "text"),
                         new Col("备注", "remark", "text")),
                 ""));

@@ -872,33 +872,7 @@ function renderPager(state, onChange) {
 
 /* ================= 通用 CRUD 视图 ================= */
 
-/** 休假模块自动计算:填开始日期+基本天数+路途 → 自动算节假日加假和结束日期 */
-var HOLIDAY_CACHE = null;
-function loadHolidays() {
-  if (HOLIDAY_CACHE) return Promise.resolve(HOLIDAY_CACHE);
-  return GET('/api/leave/holidays').then(function (list) {
-    HOLIDAY_CACHE = {};
-    (list || []).forEach(function (h) {
-      HOLIDAY_CACHE[h.holiday_date] = h.holiday_name;
-    });
-    return HOLIDAY_CACHE;
-  }).catch(function () { HOLIDAY_CACHE = {}; return HOLIDAY_CACHE; });
-}
-
-function countHolidaysInRange(startDate, baseDays) {
-  if (!startDate || !baseDays || !HOLIDAY_CACHE) return 0;
-  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startDate);
-  if (!m) return 0;
-  var d = new Date(+m[1], +m[2] - 1, +m[3]);
-  var count = 0;
-  for (var i = 0; i < baseDays; i++) {
-    var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-    if (HOLIDAY_CACHE[iso]) count++;
-    d.setDate(d.getDate() + 1);
-  }
-  return count;
-}
-
+/** 休假模块联动:身份证带出人员 + 路途年度限一次 + 结束日期/总天数自动计算 */
 function setupLeaveAutoCalc(form, row) {
   var startDateEl = form.inputs['startDate'];
   var daysEl = form.inputs['days'];
@@ -909,7 +883,7 @@ function setupLeaveAutoCalc(form, row) {
   var personEl = form.inputs['personnelId'];   // 隐藏字段,由身份证反查填充
   var idCardEl = form.inputs['idCard'];
   var nameEl = form.inputs['personnelName'];
-  var totalEl = form.inputs['yearTotal'];
+  var totalEl = form.inputs['totalDays'];
   if (!startDateEl || !daysEl) return;
 
   var editId = row ? row.id : null;
@@ -994,21 +968,14 @@ function setupLeaveAutoCalc(form, row) {
     if (w) w.remove();
   }
 
-  /* —— 本年度休假总天数 —— */
+  /* —— 本条总天数 = 基本 + 路途 + 节假日 —— */
   function updateTotal() {
     if (!totalEl) return;
-    var pid = personEl ? personEl.value : '';
-    var yr = yearEl ? String(yearEl.value || '').trim() : '';
-    if (!pid || !yr) { totalEl.value = ''; return; }
-    var url = '/api/leave/summary?personnelId=' + pid + '&year=' + encodeURIComponent(yr)
-      + (editId ? '&excludeId=' + editId : '');
-    GET(url).then(function (s) {
-      var existed = s && s.totalDays ? Number(s.totalDays) : 0;
-      var cur = (parseFloat(daysEl.value) || 0)
-        + (travelEl ? parseFloat(travelEl.value) || 0 : 0)
-        + (holidayEl ? parseFloat(holidayEl.value) || 0 : 0);
-      totalEl.value = fmtNum(existed + cur) + ' 天(已休 ' + fmtNum(existed) + ' + 本条 ' + fmtNum(cur) + ')';
-    }).catch(function () { totalEl.value = ''; });
+    var bd = parseFloat(daysEl.value) || 0;
+    var td = travelEl ? parseFloat(travelEl.value) || 0 : 0;
+    var hd = holidayEl ? parseFloat(holidayEl.value) || 0 : 0;
+    if (bd + td + hd <= 0) { totalEl.value = ''; return; }
+    totalEl.value = fmtNum(bd + td + hd) + ' 天(基本 ' + fmtNum(bd) + ' + 路途 ' + fmtNum(td) + ' + 节假日 ' + fmtNum(hd) + ')';
   }
 
   function refreshYear() { checkTravel(); updateTotal(); }
@@ -1021,32 +988,28 @@ function setupLeaveAutoCalc(form, row) {
   // 编辑打开时:预填的年度/人员需要触发一次检查与统计
   setTimeout(refreshYear, 150);
 
-  /* —— 节假日加假 + 结束日期自动计算 —— */
+  /* —— 结束日期自动计算:开始日期 + 基本天数 + 手填节假日 + 路途 —— */
   function calc() {
-    loadHolidays().then(function () {
-      var sd = startDateEl.value;
-      var bd = parseFloat(daysEl.value) || 0;
-      var td = travelEl ? parseFloat(travelEl.value) || 0 : 0;
-      if (sd && bd > 0) {
-        var hd = countHolidaysInRange(sd, bd);
-        if (holidayEl) holidayEl.value = hd || '';
-        if (endDateEl) {
-          var total = bd + hd + td;
-          var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
-          if (m) {
-            var d = new Date(+m[1], +m[2] - 1, +m[3]);
-            d.setDate(d.getDate() + Math.round(total) - 1);
-            endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-          }
-        }
+    var sd = startDateEl.value;
+    var bd = parseFloat(daysEl.value) || 0;
+    var td = travelEl ? parseFloat(travelEl.value) || 0 : 0;
+    var hd = holidayEl ? parseFloat(holidayEl.value) || 0 : 0;
+    if (sd && bd > 0 && endDateEl) {
+      var total = bd + hd + td;
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
+      if (m) {
+        var d = new Date(+m[1], +m[2] - 1, +m[3]);
+        d.setDate(d.getDate() + Math.round(total) - 1);
+        endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       }
-      updateTotal();
-    });
+    }
+    updateTotal();
   }
 
   startDateEl.addEventListener('change', calc);
   daysEl.addEventListener('input', calc);
   if (travelEl) travelEl.addEventListener('input', calc);
+  if (holidayEl) holidayEl.addEventListener('input', calc);
   if (row) setTimeout(calc, 200);
 }
 
@@ -3106,7 +3069,11 @@ var leaveCfg = {
     { key: 'endDate', label: '结束日期' },
     { key: 'days', label: '基本天数' },
     { key: 'travelDays', label: '路途', render: function (r) { return Number(r.travelDays) > 0 ? Number(r.travelDays) + '天' : '—'; } },
-    { key: 'holidayDays', label: '节假日', render: function (r) { return Number(r.holidayDays) > 0 ? Number(r.holidayDays) + '天' : '—'; } },
+    { key: 'holidayDays', label: '节假日', render: function (r) {
+        var d = Number(r.holidayDays);
+        if (d > 0) return (r.holidayName ? r.holidayName + ' ' : '') + d + '天';
+        return r.holidayName || '—';
+      } },
     { key: 'reason', label: '事由' }
   ],
   rowTitle: function (r) { return r.personnelName; },
@@ -3120,17 +3087,18 @@ var leaveCfg = {
     { key: 'startDate', label: '开始日期', type: 'date', required: true },
     { key: 'days', label: '基本天数', type: 'number', step: '0.5', required: true, placeholder: '不含路途和节假日' },
     { key: 'travelDays', label: '路途天数', type: 'number', step: '0.5', placeholder: '每年度限一次' },
-    { key: 'holidayDays', label: '节假日加假', type: 'number', step: '0.5', placeholder: '自动计算', readonly: true },
+    { key: 'holidayName', label: '节假日', type: 'select', options: function () { return dictLabels('holiday_type'); } },
+    { key: 'holidayDays', label: '节假日加假', type: 'number', step: '0.5', placeholder: '手动填写' },
     { key: 'endDate', label: '结束日期', type: 'date', placeholder: '自动计算', readonly: true },
-    { key: 'yearTotal', label: '本年度休假总天数', readonly: true, placeholder: '自动统计' },
+    { key: 'totalDays', label: '总天数', readonly: true, placeholder: '自动计算' },
     { key: 'reason', label: '事由', span: 'full' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   beforeSave: function (data) {
-    // idCard/personnelName/yearTotal 仅用于表单展示,不提交
+    // idCard/personnelName/totalDays 仅用于表单展示,不提交
     delete data.idCard;
     delete data.personnelName;
-    delete data.yearTotal;
+    delete data.totalDays;
     return data;
   }
 };
