@@ -3409,6 +3409,7 @@ function departmentView() {
 function dictView() {
   var root = h('div');
   var currentType = null;
+  var pendingHighlightPid = null; // 点击"N个下级"跳转后,高亮该父项的下级行
 
   function typeGroup(t) {
     for (var i = 0; i < Ctx.dictTypes.length; i++) {
@@ -3480,21 +3481,37 @@ function dictView() {
       });
       return n;
     }
+    /** 下级所在的字典类型(取数量最多的) */
+    function childMainType(d) {
+      var counts = {};
+      Ctx.dictTypes.forEach(function (g2) {
+        (g2.items || []).forEach(function (x) {
+          if (String(x.parentId) === String(d.id)) counts[g2.type] = (counts[g2.type] || 0) + 1;
+        });
+      });
+      var best = null, bestN = -1;
+      Object.keys(counts).forEach(function (t) { if (counts[t] > bestN) { bestN = counts[t]; best = t; } });
+      return best;
+    }
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th style="width:150px">操作</th></tr></thead><tbody>' +
-      (ordered.length ? ordered.map(function (d) {
+      (ordered.length ? ordered.map(function (d, ri) {
         var isChild = !!d.parentId;
         var childCount = globalChildCount(d);
+        var rowFlash = (pendingHighlightPid && String(d.parentId) === String(pendingHighlightPid)) ? ' class="row-flash"' : '';
         var label;
         if (d._parentLabel) {
           label = '<span class="dict-child">↳ ' + esc(d._parentLabel) + ' · ' + esc(d.dictLabel) + '</span>';
         } else if (isChild) {
           label = '<span class="dict-child">└ ' + esc(d.dictLabel) + '</span>';
         } else {
-          label = esc(d.dictLabel) + (childCount ? ' <span class="badge blue">' + childCount + '个下级</span>' : '');
+          var ct = childMainType(d);
+          label = esc(d.dictLabel) + (childCount
+            ? ' <span class="badge blue dict-child-link" data-ctype="' + esc(ct || '') + '" data-pid="' + d.id + '" title="点击查看下级">' + childCount + '个下级 ›</span>'
+            : '');
         }
-        return '<tr><td>' + label + '</td><td>' + esc(d.sort) + '</td>' +
+        return '<tr' + rowFlash + '><td>' + label + '</td><td>' + esc(d.sort) + '</td>' +
           '<td>' + (d.enabled === false ? '<span class="badge gray">停用</span>' : '<span class="badge green">启用</span>') + '</td>' +
           '<td>' + esc(d.remark) + '</td>' +
           '<td class="actions">' +
@@ -3502,7 +3519,20 @@ function dictView() {
           '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
       }).join('') : '<tr><td colspan="5" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
+    pendingHighlightPid = null;
     table.addEventListener('click', function (e) {
+      // 点击"N个下级"徽标 → 跳到下级所在类型并高亮
+      var link = e.target.closest('.dict-child-link');
+      if (link) {
+        var ctype = link.getAttribute('data-ctype');
+        if (ctype && typeGroup(ctype)) {
+          currentType = ctype;
+          pendingHighlightPid = link.getAttribute('data-pid');
+          renderTypeList();
+          renderItems();
+        }
+        return;
+      }
       var b = e.target.closest('button');
       if (!b) return;
       var subId = b.getAttribute('data-sub');
