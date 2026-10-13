@@ -756,7 +756,7 @@ function refreshPersonnelOptions() {
 }
 
 function refreshAll() {
-  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions(), loadGradeRule(), loadHolidayMap()]);
+  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions(), loadGradeRule(), loadHolidayMap(), reloadFitnessMatrix()]);
 }
 
 function loadRowPhotos(root) {
@@ -3044,7 +3044,7 @@ function gradeForPoints(pts) {
 var FITNESS_MATRIX_CACHE = {};
 
 function reloadFitnessMatrix() {
-  GET('/api/fitness-matrix/items').then(function (items) {
+  return GET('/api/fitness-matrix/items').then(function (items) {
     var jobs = (items || []).map(function (item) {
       return GET('/api/fitness-matrix?item=' + encodeURIComponent(item)).then(function (rows) {
         FITNESS_MATRIX_CACHE[item] = rows || [];
@@ -4430,17 +4430,90 @@ var fitnessCfg = {
   // 点击姓名或身份证号 → 体能档案大窗口(3D人体+基本信息+走势)
   onView: function (rw, act) { openPersonProfile(rw, act); },
   form: [
-    { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
-    { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
-    { key: 'score', label: '成绩', placeholder: '如 12\'30 或 45 次' },
-    { key: 'points', label: '分数', type: 'number', step: '0.5', placeholder: '按体能标准评分' },
-    {
-      key: 'grade', label: '评定', type: 'select', required: true,
-      options: function () { var l = dictLabels('fitness_grade'); return l.length ? l : ['优秀', '良好', '及格', '不及格']; }
-    },
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名/年龄' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'item', label: '考核项目', type: 'select', required: true, options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
+    { key: 'score', label: '成绩', placeholder: "如 12'30 或 45 次", hint: '输入后自动算分数和评定' },
+    { key: 'points', label: '分数', readonly: true, placeholder: '自动计算' },
+    { key: 'grade', label: '评定', readonly: true, placeholder: '自动计算' },
     { key: 'testDate', label: '考核日期', type: 'date', required: true },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+  ],
+  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
+  formSetup: function (form, row) {
+    var idEl = form.inputs['idCard'];
+    var ageEl = form.inputs['age'];
+    function calcAge(bd) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(bd || '');
+      if (!m) { return ''; }
+      var t = new Date();
+      var age = t.getFullYear() - (+m[1]) - ((t.getMonth() + 1 < +m[2] || (t.getMonth() + 1 === +m[2] && t.getDate() < +m[3])) ? 1 : 0);
+      return (age >= 0 && age < 130) ? age : '';
+    }
+    function lookup() {
+      var v = String(idEl.value || '').trim();
+      if (!v) { return; }
+      GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+        if (p) {
+          form.inputs['personnelId'].value = String(p.id);
+          form.inputs['personnelName'].value = p.name || '';
+          idEl.classList.remove('bad');
+          idEl.title = p.departmentName || '';
+          GET('/api/personnel/' + p.id).then(function (full) {
+            if (ageEl && full && full.birthday) { ageEl.value = calcAge(full.birthday); }
+          }).catch(function () { });
+        } else {
+          form.inputs['personnelId'].value = '';
+          form.inputs['personnelName'].value = '';
+          if (ageEl) { ageEl.value = ''; }
+          idEl.classList.add('bad');
+          idEl.title = '未找到对应人员';
+        }
+      }).catch(function () { });
+    }
+    idEl.addEventListener('change', lookup);
+    if (String(idEl.value || '').trim()) { setTimeout(lookup, 60); }
+
+    var scoreEl = form.inputs['score'];
+    var ptsEl = form.inputs['points'];
+    var gradeEl = form.inputs['grade'];
+    var itemEl = form.inputs['item'];
+    function calc() {
+      var item = itemEl ? itemEl.value : '';
+      var text = String(scoreEl.value || '').trim();
+      if (!item || !text) {
+        if (ptsEl) { ptsEl.value = ''; }
+        if (gradeEl) { gradeEl.value = ''; }
+        return;
+      }
+      var age = ageEl ? (parseInt(ageEl.value, 10) || null) : null;
+      if (!GRADE_RULE) { loadGradeRule(); }
+      var pts = calcFitnessGrade(item, text, age);
+      if (pts) {
+        if (ptsEl) { ptsEl.value = pts; }
+        if (gradeEl) { gradeEl.value = gradeForPoints(pts); }
+        scoreEl.classList.remove('bad');
+      } else {
+        if (ptsEl) { ptsEl.value = ''; }
+        if (gradeEl) { gradeEl.value = ''; }
+      }
+    }
+    scoreEl.addEventListener('change', calc);
+    scoreEl.addEventListener('input', function () {
+      clearTimeout(scoreEl._t);
+      scoreEl._t = setTimeout(calc, 500);
+    });
+    if (itemEl && itemEl.addEventListener) { itemEl.addEventListener('change', calc); }
+    if (row && row.score) { setTimeout(calc, 100); }
+  },
+  beforeSave: function (data) {
+    delete data.idCard;
+    delete data.personnelName;
+    delete data.age;
+    return data;
+  }
 };
 
 /* ================= 部门管理视图(树) ================= */
