@@ -402,6 +402,14 @@ table.grid td.empty-row { text-align: center; }
 .dash-pick-btn.disabled .ok { color: #8a97a8; }
 .dash-pick-btn b { font-size: 14px; color: #1d2c40; }
 .dash-pick-btn .kind { font-size: 12px; color: #8a97a8; }
+.pick-kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.pick-kind-btn {
+  height: 26px; padding: 0 11px; border: 1px solid #c9d7ea; border-radius: 4px;
+  background: #eef4ff; color: #16437e; font-size: 12px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.pick-kind-btn:hover { background: #2f6fd6; border-color: #2f6fd6; color: #fff; }
+.pick-kind-btn.on { background: #e2e8f0; border-color: #dbe4ee; color: #8a97a8; cursor: not-allowed; }
 @media (max-width: 1100px) {
   .dash-main { flex-direction: column; }
   .dash-right { width: 100%; }

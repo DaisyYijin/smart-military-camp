@@ -4528,42 +4528,76 @@ function dictView() {
 
 var DASH_COLORS = ['#2f6fd6', '#2ea44f', '#e8960e', '#9333ea', '#d9463e', '#0d9488', '#b26a00', '#66788c'];
 
-/** 仪表盘图表目录:cat=所属模块 kind=图表类型 size=默认尺寸 drill=点击下钻({api,param,fixedVal}) */
-var DASH_WIDGETS = {
-  dept:             { cat: '人员管理', label: '各部门人数',       kind: 'bar',     group: 'department', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'departmentId' } },
-  deptTree:         { cat: '人员管理', label: '各部门人数(树状图)', kind: 'treemap', group: 'department', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'departmentId' } },
-  status:           { cat: '人员管理', label: '人员状态分布',     kind: 'donut',   group: 'status', size: 'm', drill: { api: '/api/personnel', param: 'status' } },
-  statusRose:       { cat: '人员管理', label: '人员状态(玫瑰图)', kind: 'rose',    group: 'status', size: 'm', drill: { api: '/api/personnel', param: 'status' } },
-  gender:           { cat: '人员管理', label: '性别分布',         kind: 'donut',   group: 'gender', size: 's', drill: { api: '/api/personnel', param: 'gender' } },
-  category:         { cat: '人员管理', label: '人员类别分布',     kind: 'donut',   group: 'category', size: 'm', drill: { api: '/api/personnel', param: 'category' } },
-  rank:             { cat: '人员管理', label: '军衔分布',         kind: 'bar',     group: 'rank', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'rank' } },
-  rankTree:         { cat: '人员管理', label: '军衔分布(树状图)', kind: 'treemap', group: 'rank', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'rank' } },
-  education:        { cat: '人员管理', label: '学历分布',         kind: 'donut',   group: 'education', size: 'm', drill: { api: '/api/personnel', param: 'education' } },
-  political:        { cat: '人员管理', label: '政治面貌分布',     kind: 'donut',   group: 'politicalStatus', size: 'm', drill: { api: '/api/personnel', param: 'politicalStatus' } },
-  onDutyGauge:      { cat: '人员管理', label: '人员在位率(仪表)', kind: 'gauge',   size: 's', drill: { api: '/api/personnel', param: 'status', fixedVal: '在职' } },
-  entryTrend:       { cat: '人员管理', label: '近15年入伍趋势',   kind: 'columns', unit: '人', size: 'l', drill: { api: '/api/personnel', param: 'entryYear' } },
-  entryLine:        { cat: '人员管理', label: '入伍趋势(折线)',   kind: 'line',    unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'entryYear' } },
-  equipmentCat:     { cat: '装备管理', label: '装备类别分布',     kind: 'bar',     group: 'equipmentCategory', unit: '件', size: 'm', drill: { api: '/api/equipment', param: 'category' } },
-  equipmentStatus:  { cat: '装备管理', label: '装备状态分布',     kind: 'donut',   group: 'equipmentStatus', size: 'm', drill: { api: '/api/equipment', param: 'status' } },
-  materialCat:      { cat: '物资管理', label: '物资分类分布',     kind: 'donut',   group: 'materialCategory', size: 'm', drill: { api: '/api/material', param: 'category' } },
-  vehicleStatus:    { cat: '车辆管理', label: '车辆状态分布',     kind: 'donut',   group: 'vehicleStatus', size: 's', drill: { api: '/api/vehicle', param: 'status' } },
-  vehicleBrand:     { cat: '车辆管理', label: '车辆品牌分布',     kind: 'bar',     group: 'vehicleBrand', unit: '辆', size: 'm', drill: { api: '/api/vehicle', param: 'brand' } },
-  leaveType:        { cat: '休假管理', label: '今年休假类型',     kind: 'bar',     group: 'leaveType', unit: '次', size: 'm', drill: { api: '/api/leave', param: 'leaveType' } },
-  fitnessGrade:     { cat: '体能考核', label: '今年体能评定',     kind: 'donut',   group: 'fitnessGrade', size: 'm', drill: { api: '/api/fitness', param: 'grade' } }
+/** 仪表盘数据维度:cat=所属模块 group=接口分组 trend=按年趋势 gauge=仪表 drill=点击下钻 */
+var DASH_DIMS = {
+  department:       { cat: '人员管理', label: '各部门人数',  group: 'department', unit: '人', drill: { api: '/api/personnel', param: 'departmentId' } },
+  status:           { cat: '人员管理', label: '人员状态',    group: 'status', drill: { api: '/api/personnel', param: 'status' } },
+  gender:           { cat: '人员管理', label: '性别分布',    group: 'gender', drill: { api: '/api/personnel', param: 'gender' } },
+  category:         { cat: '人员管理', label: '人员类别',    group: 'category', drill: { api: '/api/personnel', param: 'category' } },
+  rank:             { cat: '人员管理', label: '军衔分布',    group: 'rank', unit: '人', drill: { api: '/api/personnel', param: 'rank' } },
+  education:        { cat: '人员管理', label: '学历分布',    group: 'education', drill: { api: '/api/personnel', param: 'education' } },
+  politicalStatus:  { cat: '人员管理', label: '政治面貌',    group: 'politicalStatus', drill: { api: '/api/personnel', param: 'politicalStatus' } },
+  entryTrend:       { cat: '人员管理', label: '入伍趋势',    trend: true, unit: '人', drill: { api: '/api/personnel', param: 'entryYear' } },
+  onDuty:           { cat: '人员管理', label: '人员在位率',  gauge: true, drill: { api: '/api/personnel', param: 'status', fixedVal: '在职' } },
+  equipmentCategory:{ cat: '装备管理', label: '装备类别',    group: 'equipmentCategory', unit: '件', drill: { api: '/api/equipment', param: 'category' } },
+  equipmentStatus:  { cat: '装备管理', label: '装备状态',    group: 'equipmentStatus', drill: { api: '/api/equipment', param: 'status' } },
+  materialCategory: { cat: '物资管理', label: '物资分类',    group: 'materialCategory', drill: { api: '/api/material', param: 'category' } },
+  vehicleStatus:    { cat: '车辆管理', label: '车辆状态',    group: 'vehicleStatus', drill: { api: '/api/vehicle', param: 'status' } },
+  vehicleBrand:     { cat: '车辆管理', label: '车辆品牌',    group: 'vehicleBrand', unit: '辆', drill: { api: '/api/vehicle', param: 'brand' } },
+  leaveType:        { cat: '休假管理', label: '今年休假类型', group: 'leaveType', unit: '次', drill: { api: '/api/leave', param: 'leaveType' } },
+  fitnessGrade:     { cat: '体能考核', label: '今年体能评定', group: 'fitnessGrade', drill: { api: '/api/fitness', param: 'grade' } }
 };
-/** 默认布局:[{id,size}] */
+
+/** 图表类型中文名 */
+var DASH_KINDS = { bar: '条形图', donut: '环形图', rose: '玫瑰图', treemap: '树状图', columns: '柱状图', line: '折线图', gauge: '仪表图' };
+
+/** 每个维度可选的图表类型 */
+function kindsForDim(dim) {
+  if (dim.gauge) { return ['gauge']; }
+  if (dim.trend) { return ['columns', 'line']; }
+  return ['bar', 'donut', 'rose', 'treemap'];
+}
+
+/** 维度+图型 → 卡片标题 */
+function dashCardLabel(dimKey, kind) {
+  var dim = DASH_DIMS[dimKey];
+  var kinds = kindsForDim(dim);
+  return kinds.length === 1 ? dim.label : dim.label + ' · ' + DASH_KINDS[kind];
+}
+
+/** 默认布局:[{dim,kind,size}] */
 var DASH_DEFAULT = [
-  { id: 'dept', size: 'm' }, { id: 'status', size: 'm' },
-  { id: 'entryTrend', size: 'l' }, { id: 'leaveType', size: 'm' }
+  { dim: 'department', kind: 'bar', size: 'm' },
+  { dim: 'status', kind: 'donut', size: 'm' },
+  { dim: 'entryTrend', kind: 'columns', size: 'l' },
+  { dim: 'leaveType', kind: 'bar', size: 'm' }
 ];
-/** 旧版(纯id数组) → 新版({id,size}) 兼容迁移 */
+
+/** 旧版目录 id → {dim,kind} 映射(配置迁移用) */
+var DASH_OLD_WIDGET = {
+  dept: ['department', 'bar'], deptTree: ['department', 'treemap'],
+  status: ['status', 'donut'], statusRose: ['status', 'rose'],
+  gender: ['gender', 'donut'], category: ['category', 'donut'],
+  rank: ['rank', 'bar'], rankTree: ['rank', 'treemap'],
+  education: ['education', 'donut'], political: ['politicalStatus', 'donut'],
+  onDutyGauge: ['onDuty', 'gauge'],
+  entryTrend: ['entryTrend', 'columns'], entryLine: ['entryTrend', 'line'],
+  equipmentCat: ['equipmentCategory', 'bar'], equipmentStatus: ['equipmentStatus', 'donut'],
+  materialCat: ['materialCategory', 'donut'],
+  vehicleStatus: ['vehicleStatus', 'donut'], vehicleBrand: ['vehicleBrand', 'bar'],
+  leaveType: ['leaveType', 'bar'], fitnessGrade: ['fitnessGrade', 'donut']
+};
+
+/** 旧版(纯id数组 / {id,size}) → 新版({dim,kind,size}) 兼容迁移 */
 function dashMigrate(saved) {
   var out = [];
   (saved || []).forEach(function (w) {
-    if (typeof w === 'string' && DASH_WIDGETS[w]) {
-      out.push({ id: w, size: DASH_WIDGETS[w].size || 'm' });
-    } else if (w && w.id && DASH_WIDGETS[w.id]) {
-      out.push({ id: w.id, size: w.size === 's' || w.size === 'l' ? w.size : 'm' });
+    if (typeof w === 'string' && DASH_OLD_WIDGET[w]) {
+      out.push({ dim: DASH_OLD_WIDGET[w][0], kind: DASH_OLD_WIDGET[w][1], size: 'm' });
+    } else if (w && w.dim && DASH_DIMS[w.dim] && kindsForDim(DASH_DIMS[w.dim]).indexOf(w.kind) >= 0) {
+      out.push({ dim: w.dim, kind: w.kind, size: w.size === 's' || w.size === 'l' ? w.size : 'm' });
+    } else if (w && w.id && DASH_OLD_WIDGET[w.id]) {
+      out.push({ dim: DASH_OLD_WIDGET[w.id][0], kind: DASH_OLD_WIDGET[w.id][1], size: w.size === 's' || w.size === 'l' ? w.size : 'm' });
     }
   });
   return out;
@@ -4864,7 +4898,9 @@ function dashboardView() {
   var widgets;
   try { widgets = JSON.parse(localStorage.getItem('dashWidgets') || 'null'); } catch (e) { widgets = null; }
   widgets = dashMigrate(widgets);
-  if (!widgets.length) { widgets = DASH_DEFAULT.map(function (w) { return { id: w.id, size: w.size }; }); }
+  if (!widgets.length) {
+    widgets = DASH_DEFAULT.map(function (w) { return { dim: w.dim, kind: w.kind, size: w.size }; });
+  }
   var lastData = null;
   var lastEvents = [];
   var evFilter = '全部';
@@ -4906,18 +4942,20 @@ function dashboardView() {
 
   /* ---------- 图表卡片(尺寸可切 + 可拖动排序) ---------- */
   function makeCard(w) {
-    var def = DASH_WIDGETS[w.id];
+    var dim = DASH_DIMS[w.dim];
+    var kind = w.kind;
+    var label = dashCardLabel(w.dim, kind);
     // 下钻配置:valOf 把图表项名转成接口参数值(部门按名称查id,其余原样)
     var drill = null;
-    if (def.drill) {
-      var fixed = def.drill.fixedVal;
+    if (dim.drill) {
+      var fixed = dim.drill.fixedVal;
       drill = {
-        api: def.drill.api,
-        param: def.drill.param,
-        title: def.label,
+        api: dim.drill.api,
+        param: dim.drill.param,
+        title: label,
         valOf: fixed != null
           ? function () { return fixed; }
-          : (def.drill.param === 'departmentId'
+          : (dim.drill.param === 'departmentId'
               ? function (name) {
                   if (name === '未分配') { return null; }
                   for (var i = 0; i < Ctx.deptFlat.length; i++) {
@@ -4929,20 +4967,20 @@ function dashboardView() {
       };
     }
     var body;
-    if (def.kind === 'columns') {
-      body = drawColumns(lastData.entryTrend, def.unit, drill);
-    } else if (def.kind === 'line') {
-      body = drawLine(lastData.entryTrend, def.unit, drill);
-    } else if (def.kind === 'gauge') {
+    if (kind === 'columns') {
+      body = drawColumns(lastData.entryTrend, dim.unit, drill);
+    } else if (kind === 'line') {
+      body = drawLine(lastData.entryTrend, dim.unit, drill);
+    } else if (kind === 'gauge') {
       body = drawGauge(lastData, drill);
     } else {
-      var items = (lastData.groups && lastData.groups[def.group]) || [];
-      if (def.kind === 'treemap') {
-        body = drawTreemap(items, def.unit, drill);
-      } else if (def.kind === 'rose') {
+      var items = (lastData.groups && lastData.groups[dim.group]) || [];
+      if (kind === 'treemap') {
+        body = drawTreemap(items, dim.unit, drill);
+      } else if (kind === 'rose') {
         body = drawRose(items, drill);
       } else {
-        body = def.kind === 'donut' ? drawDonut(items, drill) : dashBarList(items, def.unit, '', drill);
+        body = kind === 'donut' ? drawDonut(items, drill) : dashBarList(items, dim.unit, '', drill);
       }
     }
     var sizeBtns = h('span', { class: 'size-opts', title: '切换显示尺寸' });
@@ -4957,15 +4995,15 @@ function dashboardView() {
         }
       }));
     });
-    var card = h('div', { class: 'chart-panel dash-card size-' + (w.size || 'm'), 'data-wid': w.id },
+    var card = h('div', { class: 'chart-panel dash-card size-' + (w.size || 'm'), 'data-wid': w.dim + ':' + w.kind },
       h('div', { class: 'dash-card-head' },
-        h('h3', { style: 'margin:0', text: def.label }),
+        h('h3', { style: 'margin:0', text: label }),
         h('span', { style: 'display:flex;align-items:center;gap:6px' },
           sizeBtns,
           h('button', {
             class: 'dash-card-x', text: '×', title: '移除此图表',
             onclick: function () {
-              widgets = widgets.filter(function (x) { return x.id !== w.id; });
+              widgets = widgets.filter(function (x) { return !(x.dim === w.dim && x.kind === w.kind); });
               saveWidgets();
               renderCharts();
             }
@@ -4983,9 +5021,9 @@ function dashboardView() {
       // 按 DOM 顺序回写 widgets(保持各自的尺寸)
       var order = [];
       Array.prototype.forEach.call(chartsGrid.querySelectorAll('.dash-card'), function (el) {
-        var id = el.getAttribute('data-wid');
+        var key = el.getAttribute('data-wid');
         for (var i = 0; i < widgets.length; i++) {
-          if (widgets[i].id === id) { order.push(widgets[i]); break; }
+          if (widgets[i].dim + ':' + widgets[i].kind === key) { order.push(widgets[i]); break; }
         }
       });
       if (order.length === widgets.length) {
@@ -5021,41 +5059,52 @@ function dashboardView() {
       el.getAttribute('data-param'), el.getAttribute('data-val'));
   });
 
-  /* ---------- 添加图表(按模块分类) ---------- */
+  /* ---------- 添加图表:先选指标,再选图表类型 ---------- */
   function openPicker() {
     var wrap = h('div', { style: 'max-height:62vh;overflow:auto' });
     var cats = [];
-    Object.keys(DASH_WIDGETS).forEach(function (wid) {
-      var c = DASH_WIDGETS[wid].cat;
+    Object.keys(DASH_DIMS).forEach(function (k) {
+      var c = DASH_DIMS[k].cat;
       if (cats.indexOf(c) < 0) { cats.push(c); }
     });
+    function isAdded(dimKey, kind) {
+      return widgets.some(function (w) { return w.dim === dimKey && w.kind === kind; });
+    }
     cats.forEach(function (cat) {
-      var inCat = Object.keys(DASH_WIDGETS).filter(function (wid) { return DASH_WIDGETS[wid].cat === cat; });
-      var allAdded = inCat.every(function (wid) { return widgets.some(function (w) { return w.id === wid; }); });
-      if (allAdded) { return; }   // 整类都已添加就不再显示
+      var dims = Object.keys(DASH_DIMS).filter(function (k) { return DASH_DIMS[k].cat === cat; });
+      var allAdded = dims.every(function (k) {
+        return kindsForDim(DASH_DIMS[k]).every(function (kd) { return isAdded(k, kd); });
+      });
+      if (allAdded) { return; }   // 该模块所有组合都已添加
       wrap.appendChild(h('div', { class: 'dash-pick-cat', text: cat }));
       var grid = h('div', { class: 'dash-picker' });
-      inCat.forEach(function (wid) {
-        var def = DASH_WIDGETS[wid];
-        var added = widgets.some(function (w) { return w.id === wid; });
-        grid.appendChild(h('button', {
-          class: 'dash-pick-btn' + (added ? ' disabled' : ''),
-          disabled: added,
-          html: (added ? '<span class="ok">✓ 已添加</span>' : '<span class="ok">＋ 添加</span>') + '<b>' + esc(def.label) + '</b>'
-            + '<span class="kind">' + ({ bar: '条形图', donut: '环形图', columns: '柱状图', treemap: '树状图', rose: '玫瑰图', gauge: '仪表图', line: '折线图' })[def.kind] + '</span>',
-          onclick: function () {
-            if (added) { return; }
-            widgets.push({ id: wid, size: def.size || 'm' });
-            saveWidgets();
-            renderCharts();
-            m.close();
-          }
-        }));
+      dims.forEach(function (k) {
+        var dim = DASH_DIMS[k];
+        var kinds = kindsForDim(dim);
+        var card = h('div', { class: 'dash-pick-btn' },
+          h('b', { text: dim.label }),
+          h('span', { class: 'kind', text: kinds.length === 1 ? '专用图表' : '选择图表类型:' }));
+        var btns = h('div', { class: 'pick-kinds' });
+        kinds.forEach(function (kd) {
+          var added = isAdded(k, kd);
+          btns.appendChild(h('button', {
+            type: 'button', class: 'pick-kind-btn' + (added ? ' on' : ''),
+            text: (added ? '✓ ' : '＋ ') + DASH_KINDS[kd], title: added ? '已添加' : '以' + DASH_KINDS[kd] + '展示' + dim.label,
+            onclick: function () {
+              widgets.push({ dim: k, kind: kd, size: 'm' });
+              saveWidgets();
+              renderCharts();
+              m.close();
+            }
+          }));
+        });
+        card.appendChild(btns);
+        grid.appendChild(card);
       });
       wrap.appendChild(grid);
     });
     var m = openModal({
-      title: '添加图表(按模块分类,点击添加到仪表盘)',
+      title: '添加图表(选指标 → 选类型)',
       body: wrap,
       footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
     });
@@ -5086,7 +5135,7 @@ function dashboardView() {
           h('button', {
             class: 'btn btn-ghost', text: '恢复默认',
             onclick: function () {
-              widgets = DASH_DEFAULT.map(function (w) { return { id: w.id, size: w.size }; });
+              widgets = DASH_DEFAULT.map(function (w) { return { dim: w.dim, kind: w.kind, size: w.size }; });
               saveWidgets();
               renderCharts();
             }
