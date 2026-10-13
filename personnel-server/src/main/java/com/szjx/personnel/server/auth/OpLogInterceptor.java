@@ -43,9 +43,65 @@ public class OpLogInterceptor implements HandlerInterceptor {
     }
 
     private final LogService logService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public OpLogInterceptor(LogService logService) {
+    public OpLogInterceptor(LogService logService, org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.logService = logService;
+        this.jdbc = jdbc;
+    }
+
+    /** 各模块按 ID 取"人能看懂"的记录名(删除前预取,删后就查不到了) */
+    private static final Map<String, String> NAME_SQL = new HashMap<String, String>();
+
+    static {
+        NAME_SQL.put("personnel", "SELECT name FROM personnel WHERE id=?");
+        NAME_SQL.put("departments", "SELECT name FROM department WHERE id=?");
+        NAME_SQL.put("dict", "SELECT dict_type || ' · ' || dict_label FROM sys_dict WHERE id=?");
+        NAME_SQL.put("equipment", "SELECT name FROM equipment WHERE id=?");
+        NAME_SQL.put("material", "SELECT name FROM material WHERE id=?");
+        NAME_SQL.put("vehicle", "SELECT plate_no FROM vehicle WHERE id=?");
+        NAME_SQL.put("leave", "SELECT (SELECT name FROM personnel WHERE id=l.personnel_id) || '(' || l.start_date || '~' || l.end_date || ')' FROM leave_record l WHERE l.id=?");
+        NAME_SQL.put("leave-plan", "SELECT (SELECT name FROM personnel WHERE id=l.personnel_id) || '(' || l.start_date || '~' || l.end_date || ')' FROM leave_plan l WHERE l.id=?");
+        NAME_SQL.put("fitness", "SELECT (SELECT name FROM personnel WHERE id=f.personnel_id) || ' · ' || f.item FROM fitness_record f WHERE f.id=?");
+        // 人员子记录:取所属人员姓名
+        String[] subTables = {"position_history", "reward_punish", "child_info", "family_member",
+                "driver_license", "personal_card", "private_vehicle", "housing_info"};
+        for (String t : subTables) {
+            NAME_SQL.put(t, "SELECT (SELECT name FROM personnel WHERE id=x.personnel_id) FROM " + t + " x WHERE x.id=?");
+        }
+    }
+
+    /** 修改/删除前预取记录名称,挂到请求属性上供 afterCompletion 写日志 */
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        try {
+            String method = request.getMethod();
+            if (!"PUT".equalsIgnoreCase(method) && !"DELETE".equalsIgnoreCase(method)) {
+                return true;
+            }
+            String uri = request.getRequestURI();
+            String[] parts = uri == null ? new String[0] : uri.split("/");
+            String moduleKey = parts.length > 2 ? parts[2] : "";
+            String sub = parts.length > 3 ? parts[3] : "";
+            if ("sub".equals(moduleKey) && parts.length > 4) {
+                moduleKey = sub;
+                sub = parts[4];
+            }
+            String sql = NAME_SQL.get(moduleKey);
+            if (sql == null || sub == null || !sub.matches("[0-9]+")) {
+                return true;
+            }
+            java.util.List<java.util.Map<String, Object>> rows = jdbc.queryForList(sql, Long.parseLong(sub));
+            if (!rows.isEmpty()) {
+                Object v = rows.get(0).values().iterator().next();
+                if (v != null && !String.valueOf(v).trim().isEmpty()) {
+                    request.setAttribute("opLogName", String.valueOf(v));
+                }
+            }
+        } catch (Exception ignore) {
+            // 预取失败不影响业务,日志退回只记 ID
+        }
+        return true;
     }
 
     @Override
@@ -91,10 +147,10 @@ public class OpLogInterceptor implements HandlerInterceptor {
                 detail = sub.isEmpty() ? "" : "ID " + sub;
             } else if ("PUT".equalsIgnoreCase(method)) {
                 action = "修改" + moduleName;
-                detail = sub.isEmpty() ? "" : "ID " + sub;
+                detail = recordDetail(request, sub);
             } else {
                 action = "删除" + moduleName;
-                detail = sub.isEmpty() ? "" : "ID " + sub;
+                detail = recordDetail(request, sub);
             }
 
             String username = (String) request.getAttribute("authUser");
@@ -118,6 +174,18 @@ public class OpLogInterceptor implements HandlerInterceptor {
             return "备份设置";
         }
         return "备份操作";
+    }
+
+    /** 日志详情:优先带记录名「张三」,退化为 ID n;两者都有最稳妥 */
+    private static String recordDetail(HttpServletRequest request, String sub) {
+        if (sub == null || sub.isEmpty()) {
+            return "";
+        }
+        String name = (String) request.getAttribute("opLogName");
+        if (name != null) {
+            return name + "(ID " + sub + ")";
+        }
+        return "ID " + sub;
     }
 
     public static String clientIp(HttpServletRequest request) {
