@@ -954,3 +954,12 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 /* 上报导出:点击式选择按钮选中态 */
 .pick-kind-btn.mod-on { background: var(--pri, #2f6fd6); border-color: var(--pri, #2f6fd6); color: #fff; }
 .pick-kind-btn.mod-on:hover { background: var(--pri-dark, #16437e); }
+
+/* 上报导出:单位树形分组 */
+.dept-group {
+  border: 1px solid #dbe4ee; border-radius: 8px; padding: 10px 12px;
+  margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; background: #fbfcfe;
+}
+.dept-group.nested { background: #fff; margin: 0; }
+.dept-children { margin-left: 20px; display: flex; flex-wrap: wrap; gap: 7px; align-items: flex-start; }
+.dept-children .dept-group { margin-bottom: 0; }

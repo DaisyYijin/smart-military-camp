@@ -5724,26 +5724,26 @@ function backupView() {
           var modBtns = {};
           var deptBtns = {};
 
-          // ① 单位选择
-          var deptBox = h('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;max-height:170px;overflow:auto;padding:2px' });
-          (Ctx.deptFlat || []).forEach(function (d) {
+          // ① 单位选择(树形分组:大单位一个框,子单位缩进在框内)
+          var kidsOf = {};
+          (Ctx.deptFlat || []).forEach(function (x) {
+            (kidsOf[x.parentId] = kidsOf[x.parentId] || []).push(x.id);
+          });
+          function descendants(id) {
+            var out = [id];
+            (kidsOf[id] || []).forEach(function (k) {
+              descendants(k).forEach(function (kk) { out.push(kk); });
+            });
+            return out;
+          }
+          var deptBox = h('div', { style: 'max-height:260px;overflow:auto;padding:1px' });
+          function makeDeptBtn(d, childCount) {
             var b = h('button', {
-              type: 'button', class: 'pick-kind-btn', style: 'font-size:12px;padding:0 10px;height:26px;',
-              text: new Array(d.depth + 1).join('　') + d.name
+              type: 'button', class: 'pick-kind-btn',
+              style: (childCount ? 'font-weight:600;padding:0 14px;height:30px;' : 'font-size:12px;padding:0 10px;height:26px;'),
+              text: d.name + (childCount ? '(' + childCount + '个下级)' : '')
             });
-            // 点父单位自动连带其全部下级(选中/取消都联动)
-            var kidsOf = {};
-            (Ctx.deptFlat || []).forEach(function (x) {
-              (kidsOf[x.parentId] = kidsOf[x.parentId] || []).push(x.id);
-            });
-            function descendants(id) {
-              var out = [id];
-              (kidsOf[id] || []).forEach(function (k) {
-                descendants(k).forEach(function (kk) { out.push(kk); });
-              });
-              return out;
-            }
-            b.title = (kidsOf[d.id] && kidsOf[d.id].length) ? '点击选择「' + d.name + '」及其全部下级' : '';
+            b.title = childCount ? '点击选择「' + d.name + '」及其全部下级' : '';
             b.addEventListener('click', function () {
               if (allDept) {
                 deptSel = {};
@@ -5756,9 +5756,25 @@ function backupView() {
               }
               paint();
             });
+            b.setAttribute('data-big', childCount ? '1' : '0');
             deptBtns[d.id] = b;
-            deptBox.appendChild(b);
-          });
+            return b;
+          }
+          (function buildDeptTree(nodes, container, depth) {
+            (nodes || []).forEach(function (d) {
+              var kids = d.children || [];
+              if (kids.length) {
+                var g = h('div', { class: depth === 0 ? 'dept-group' : 'dept-group nested' },
+                  makeDeptBtn(d, kids.length));
+                var kidBox = h('div', { class: 'dept-children' });
+                buildDeptTree(kids, kidBox, depth + 1);
+                g.appendChild(kidBox);
+                container.appendChild(g);
+              } else {
+                container.appendChild(makeDeptBtn(d, 0));
+              }
+            });
+          })(Ctx.deptTree, deptBox, 0);
           if (!(Ctx.deptFlat || []).length) {
             deptBox.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '(暂无部门)' }));
           }
@@ -5783,8 +5799,10 @@ function backupView() {
             });
             Object.keys(deptBtns).forEach(function (id) {
               var on = allDept || deptSel[id];
-              deptBtns[id].className = 'pick-kind-btn' + (on ? ' mod-on' : '');
-              deptBtns[id].style.cssText = 'font-size:12px;padding:0 10px;height:26px;';
+              var b = deptBtns[id];
+              b.className = 'pick-kind-btn' + (on ? ' mod-on' : '');
+              var big = b.getAttribute('data-big') === '1';
+              b.style.cssText = big ? 'font-weight:600;padding:0 14px;height:30px;' : 'font-size:12px;padding:0 10px;height:26px;';
             });
             countLbl.textContent = allDept ? '已选:全部单位' : ('已选:' + Object.keys(deptSel).length + ' 个单位');
           }
