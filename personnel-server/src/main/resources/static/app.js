@@ -5284,6 +5284,13 @@ function settingsView() {
   /* ---- 主题色 ---- */
   var themeSec = section('主题色');
   var presets = ['#2f6fd6', '#4a7c59', '#1f3a5f', '#8a4a2f', '#7048b7', '#b03a3a', '#0d8484', '#5a5f6b'];
+  /** 选色即时保存到服务器(刷新/其他人打开都保持) */
+  function saveThemeNow(c) {
+    PUT('/api/setting/themeColor', c).then(function () {
+      SITE.theme = c;
+      toast('主题色已应用并保存', 'ok');
+    }).catch(function (e) { toast(e.message, 'err'); });
+  }
   var swatches = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' });
   presets.forEach(function (c) {
     var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? '#1d2c40' : 'transparent'), title: c });
@@ -5293,15 +5300,19 @@ function settingsView() {
       document.documentElement.style.setProperty('--pri-dark', shade(c, 0.62));
       Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
       sw.style.borderColor = '#1d2c40';
+      saveThemeNow(c);
     });
     swatches.appendChild(sw);
   });
   var customColor = h('input', { type: 'color', value: vals.themeColor, style: 'width:44px;height:34px;border:none;background:none;cursor:pointer' });
+  var colorSaveTimer = null;
   customColor.addEventListener('input', function () {
     vals.themeColor = customColor.value;
     document.documentElement.style.setProperty('--pri', customColor.value);
     document.documentElement.style.setProperty('--pri-dark', shade(customColor.value, 0.62));
     Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
+    clearTimeout(colorSaveTimer);
+    colorSaveTimer = setTimeout(function () { saveThemeNow(customColor.value); }, 600);
   });
   swatches.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '自定义:' }));
   swatches.appendChild(customColor);
