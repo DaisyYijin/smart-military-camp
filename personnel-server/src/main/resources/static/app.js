@@ -3943,7 +3943,9 @@ function openLeaveHistory(rw, act) {
           h('td', { html: holiDateCell(x.endDate) }),
           h('td', { text: String(Number(x.days) || 0) }),
           h('td', { text: Number(x.travelDays) > 0 ? String(x.travelDays) : '—' }),
-          h('td', { text: Number(x.holidayDays) > 0 ? String(x.holidayDays) : '—' }),
+          h('td', { html: x.holidayName
+              ? '<span class="holi-chip" style="background:' + holidayColor(x.holidayName) + '">' + esc(x.holidayName) + (Number(x.holidayDays) > 0 ? ' ' + x.holidayDays + '天' : '') + '</span>'
+              : (Number(x.holidayDays) > 0 ? String(x.holidayDays) + '天' : '—') }),
           h('td', { html: '<b>' + (Math.round(sum * 10) / 10) + '</b>' }),
           h('td', { text: x.reason || '', style: 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' })));
       });
