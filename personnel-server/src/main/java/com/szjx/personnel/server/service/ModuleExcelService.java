@@ -554,19 +554,36 @@ public class ModuleExcelService {
             return "考核项目为空";
         }
         // BMI:按性别合格区间评分(身高体重指数),不走评分矩阵
-        if ("BMI".equals(item)) {
-            Double bmi = null;
-            java.util.regex.Matcher bm = java.util.regex.Pattern.compile("([0-9]+(?:[.][0-9]+)?)").matcher(str(vals.get("score")));
-            if (bm.find()) { bmi = Double.parseDouble(bm.group(1)); }
-            if (bmi == null || bmi < 8 || bmi > 60) {
-                return "BMI成绩应为8~60之间的数值(身高体重指数)";
+        // 体重标准(身高×年龄交叉表):成绩填体重kg,按该人身高行+年龄列查合格区间
+        if ("BMI".equals(item) || "体重".equals(item)) {
+            Double weight = null;
+            java.util.regex.Matcher wm = java.util.regex.Pattern.compile("([0-9]+(?:[.][0-9]+)?)").matcher(str(vals.get("score")));
+            if (wm.find()) { weight = Double.parseDouble(wm.group(1)); }
+            if (weight == null || weight < 25 || weight > 200) {
+                return "体重成绩应为25~200之间的数值(kg)";
             }
+            List<Map<String, Object>> g = jdbc.queryForList("SELECT gender, height, birthday FROM personnel WHERE id=?", pid);
             String gender = "";
-            List<Map<String, Object>> g = jdbc.queryForList("SELECT gender FROM personnel WHERE id=?", pid);
-            if (!g.isEmpty() && g.get(0).get("gender") != null) { gender = String.valueOf(g.get(0).get("gender")); }
-            Integer age = ageAt(birthdayOf(pid), null);   // 按实际年龄选区间
-            double[] range = bmiRange(gender, age);
-            boolean pass = bmi >= range[0] && bmi <= range[1];
+            Double heightCm = null;
+            Integer age = null;
+            if (!g.isEmpty()) {
+                Map<String, Object> pp = g.get(0);
+                if (pp.get("gender") != null) { gender = String.valueOf(pp.get("gender")); }
+                if (pp.get("height") != null) { heightCm = ((Number) pp.get("height")).doubleValue(); }
+                age = ageAt(String.valueOf(pp.get("birthday") == null ? "" : pp.get("birthday")), null);
+            }
+            if (heightCm == null || heightCm < 140 || heightCm > 210) {
+                return "该人员未维护身高(或超出140~210cm),无法按体重标准判定";
+            }
+            double heightM = Math.round(heightCm) / 100.0 * 100 / 100.0;
+            heightM = Math.round(heightCm) / 100.0;
+            heightM = Math.round(heightCm * 1.0) / 100.0;
+            heightM = Math.floor(heightCm + 0.5) / 100.0;
+            double[] range = weightRange(gender, heightCm, age);
+            if (range == null) {
+                return "体重标准中没有身高 " + String.format("%.2f", heightM) + "m 的行,请先在[体能标准-BMI标准]中维护";
+            }
+            boolean pass = weight >= range[0] && weight <= range[1];
             vals.put("personnelId", pid);
             vals.put("points", pass ? 100.0 : 0.0);
             vals.put("grade", pass ? "及格" : "不及格");
@@ -594,41 +611,61 @@ public class ModuleExcelService {
     }
 
     /**
-     * BMI 合格区间:按性别+年龄选行。
-     * 新格式 {"ranges":[{gender,ageMin,ageMax,min,max},...]};兼容旧 {"male":[..],"female":[..]}。
+     * 体重合格区间:身高(米,四舍五入到cm)行 × 年龄段列。
+     * 格式 {"ages":["24岁以下","25-29岁",...], "male":{"rows":[{"h":1.6,"w":[[47.4,66.3],[48,68],...]},...]}, "female":{...}}
      */
-    private double[] bmiRange(String gender, Integer age) {
-        double[] def = "女".equals(gender) ? new double[]{17.0, 24.5} : new double[]{17.5, 27.5};
+    private double[] weightRange(String gender, Double heightCm, Integer age) {
+        boolean female = "女".equals(gender);
         try {
             String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='bmi_standard'", String.class);
-            if (v == null) { return def; }
-            com.fasterxml.jackson.databind.JsonNode node =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
-            com.fasterxml.jackson.databind.JsonNode ranges = node.get("ranges");
-            if (ranges == null || !ranges.isArray() || ranges.size() == 0) {
-                // 旧格式
-                com.fasterxml.jackson.databind.JsonNode arr = node.get("女".equals(gender) ? "female" : "male");
-                if (arr != null && arr.isArray() && arr.size() == 2) {
-                    return new double[]{arr.get(0).asDouble(), arr.get(1).asDouble()};
-                }
-                return def;
+            if (v == null) { return null; }
+            com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
+            com.fasterxml.jackson.databind.JsonNode side = node.get(female ? "female" : "male");
+            com.fasterxml.jackson.databind.JsonNode ages = node.get("ages");
+            if (side == null || ages == null || !ages.isArray() || ages.size() == 0) { return null; }
+            com.fasterxml.jackson.databind.JsonNode rows = side.get("rows");
+            if (rows == null || !rows.isArray()) { return null; }
+            double hm = Math.round(heightCm + 0.5) / 100.0;
+            com.fasterxml.jackson.databind.JsonNode hit = null;
+            double bestDiff = Double.MAX_VALUE;
+            for (int i = 0; i < rows.size(); i++) {
+                com.fasterxml.jackson.databind.JsonNode r = rows.get(i);
+                double h = r.get("h").asDouble();
+                double diff = Math.abs(h - hm);
+                if (diff < bestDiff - 0.0001) { bestDiff = diff; hit = r; }
             }
-            double[] fallback = null;
-            for (int i = 0; i < ranges.size(); i++) {
-                com.fasterxml.jackson.databind.JsonNode r = ranges.get(i);
-                String rg = r.has("gender") ? r.get("gender").asText("") : "男";
-                if (!rg.equals(gender == null || gender.isEmpty() ? "男" : gender)) { continue; }
-                int aMin = r.has("ageMin") ? r.get("ageMin").asInt(0) : 0;
-                int aMax = r.has("ageMax") ? r.get("ageMax").asInt(99) : 99;
-                if (fallback == null) { fallback = new double[]{r.get("min").asDouble(), r.get("max").asDouble()}; }
-                if (age == null || (age >= aMin && age <= aMax)) {
-                    return new double[]{r.get("min").asDouble(), r.get("max").asDouble()};
-                }
+            if (hit == null || bestDiff > 0.011) { return null; }   // 没有这一身高行
+            com.fasterxml.jackson.databind.JsonNode cells = hit.get("w");
+            if (cells == null || !cells.isArray() || cells.size() != ages.size()) { return null; }
+            int col = -1;
+            for (int i = 0; i < ages.size(); i++) {
+                if (ageInGroup(ages.get(i).asText(""), age)) { col = i; break; }
             }
-            return fallback != null ? fallback : def;
-        } catch (Exception ignore) {
-            return def;
+            if (col < 0) { return null; }
+            com.fasterxml.jackson.databind.JsonNode pair = cells.get(col);
+            if (pair == null || !pair.isArray() || pair.size() != 2) { return null; }
+            return new double[]{pair.get(0).asDouble(), pair.get(1).asDouble()};
+        } catch (Exception e) {
+            return null;
         }
+    }
+
+    /** 年龄是否落在年龄段标签内(如 "24岁以下"/"25-29岁"/"40-49岁"/"50岁以上") */
+    private static boolean ageInGroup(String label, Integer age) {
+        if (age == null) { return false; }
+        java.util.regex.Matcher mm = java.util.regex.Pattern.compile("[0-9]+").matcher(label);
+        List<Integer> nums = new ArrayList<Integer>();
+        while (mm.find()) { nums.add(Integer.parseInt(mm.group())); }
+        if (label.contains("以下")) {
+            return nums.isEmpty() || age <= nums.get(0);
+        }
+        if (label.contains("以上")) {
+            return nums.isEmpty() || age >= nums.get(0);
+        }
+        if (nums.size() >= 2) {
+            return age >= nums.get(0) && age <= nums.get(1);
+        }
+        return false;
     }
 
     private String birthdayOf(Long pid) {

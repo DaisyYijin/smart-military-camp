@@ -2882,17 +2882,14 @@ function buildBodyFigure(hcm, wkg, gender, age) {
   s.push('<path d="M ' + (cx - headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' A ' + headR.toFixed(1) + ' ' + headR.toFixed(1) + ' 0 0 1 ' + (cx + headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' Z" fill="#3a332b"/>');
   s.push('</svg>');
   var bmiV = Math.round(bmi * 10) / 10;
-  // 军事标准判定(按性别+年龄选区间,可在体能标准-BMI标准中配置)
-  var v = bmiVerdict(bmi, gender, age);
-  var row = bmiRowFor(gender, age) || { min: 17.5, max: 27.5, ageMin: 0, ageMax: 99 };
-  var gLbl = (gender === '女' ? '女' : '男');
-  var aLbl = (row.ageMin || 0) === 0 && (row.ageMax == null || row.ageMax >= 99) ? '' : (row.ageMin + '~' + row.ageMax + '岁 ');
+  // 体重标准判定(按性别+身高行+年龄列,可在体能标准-体重标准中配置)
+  var v = weightVerdict(wc, hc, gender, age);
   box.appendChild(h('div', { style: 'width:100%', html: s.join('') }));
   box.appendChild(h('div', { style: 'margin-top:8px;font-size:13px;color:#445262;text-align:center' },
     h('span', { text: '身高 ' + (+hc) + ' cm · 体重 ' + (+wc) + ' kg · BMI ' + bmiV + ' ' }),
     h('b', { style: 'color:' + v[2], text: v[1] })));
   box.appendChild(h('div', { style: 'margin-top:3px;font-size:11.5px;color:#8a97a8;text-align:center',
-    text: '军标区间(' + gLbl + ' ' + aLbl + '):' + row.min + ' ~ ' + row.max }));
+    text: v[3] ? ('体重合格区间(' + v[3].split(' ').slice(1).join(' ') + ')') : (gender === '女' ? '女' : '男') + '性暂无该身高标准' }));
   return box;
 }
 
@@ -2956,15 +2953,22 @@ function defaultBmiStd() {
   ] };
 }
 /** 归一化:兼容旧 {male:[..],female:[..]} → ranges */
-function normBmiStd(v) {
-  if (v && v.ranges && v.ranges.length) { return v; }
-  if (v && v.male && v.female) {
-    return { ranges: [
-      { gender: '男', ageMin: 0, ageMax: 99, min: v.male[0], max: v.male[1] },
-      { gender: '女', ageMin: 0, ageMax: 99, min: v.female[0], max: v.female[1] }
-    ] };
+function normWeightStd(v) {
+  if (v && v.ages && v.male && v.male.rows) {
+    return { ages: v.ages, male: v.male, female: v.female || { rows: [] } };
   }
-  return defaultBmiStd();
+  // 旧BMI区间 → 生成 1.50~2.00m 等值体重区间表
+  var mk = function (lo, hi) {
+    var rows = [];
+    for (var h = 150; h <= 200; h++) {
+      var m2 = h / 100;
+      rows.push({ h: m2, w: [Math.round(m2 * m2 * lo * 10) / 10, Math.round(m2 * m2 * hi * 10) / 10] });
+    }
+    return { rows: rows };
+  };
+  var m = (v && v.male) ? v.male : [17.5, 27.5];
+  var f = (v && v.female) ? v.female : [17, 24.5];
+  return { ages: ['24岁以下', '25-29岁', '30-39岁', '40-49岁', '50-59岁', '60岁以上'], male: mk(m[0], m[1]), female: mk(f[0], f[1]) };
 }
 function loadBmiStd() {
   return GET('/api/setting/bmi_standard').then(function (r) {
@@ -2972,26 +2976,41 @@ function loadBmiStd() {
     return BMI_STD;
   }).catch(function () { BMI_STD = defaultBmiStd(); return BMI_STD; });
 }
-/** 按性别+年龄选区间行 */
-function bmiRowFor(gender, age) {
+/** 身高(米)匹配标准中最接近的行 */
+function weightRowFor(heightCm) {
   var std = BMI_STD || defaultBmiStd();
-  var g = (gender || '男') === '女' ? '女' : '男';
-  var fallback = null;
-  for (var i = 0; i < std.ranges.length; i++) {
-    var r = std.ranges[i];
-    if (r.gender !== g) { continue; }
-    if (!fallback) { fallback = r; }
-    if (age == null || (age >= (r.ageMin || 0) && age <= (r.ageMax == null ? 99 : r.ageMax))) { return r; }
-  }
-  return fallback;
+  var side = (genderIsFemale(heightCumSkip(heightCm)) ? std.female : std.male) || { rows: [] };
+  var best = null, bestDiff = 1e9;
+  (side.rows || []).forEach(function (r) {
+    var d = Math.abs(r.h * 100 - heightCm);
+    if (d < bestDiff) { bestDiff = d; best = r; }
+  });
+  return (best && bestDiff <= 0.51) ? best : null;
 }
-/** BMI 军标判定: [合格?, 标签, 颜色] */
-function bmiVerdict(bmi, gender, age) {
-  var r = bmiRowFor(gender, age) || { min: 17.5, max: 27.5 };
-  var inRange = bmi >= r.min && bmi <= r.max;
-  if (inRange) { return [true, '合格', '#2ea44f']; }
-  if (bmi < r.min) { return [false, '偏瘦不合格', '#2f6fd6']; }
-  return [false, '超重不合格', '#d9463e'];
+function genderIsFemale(ignore) { return window.__pfGender === '女'; }
+/** 体重区间判定: [合格?, 标签, 颜色, 区间描述] */
+function weightVerdict(weightKg, heightCm, gender, age) {
+  window.__pfGender = gender;
+  var row = weightRowFor(heightCm);
+  window.__pfGender = null;
+  if (!row) { return [false, '无身高标准', '#8a97a8', null]; }
+  var side = (gender === '女') ? '女' : '男';
+  var col = -1;
+  var std = BMI_STD || defaultBmiStd();
+  (std.ages || []).forEach(function (a, i) {
+    if (col >= 0) { return; }
+    var nums = (a.match(/\d+/g) || []).map(Number);
+    if (a.indexOf('以下') >= 0) { if (age == null || age <= (nums[0] || 24)) { col = i; } }
+    else if (a.indexOf('以上') >= 0) { if (age == null || age >= (nums[0] || 60)) { col = i; } }
+    else if (nums.length >= 2) { if (age == null || (age >= nums[0] && age <= nums[1])) { col = i; } }
+  });
+  var pair = (row.w && col >= 0) ? row.w[col] : null;
+  if (!pair) { return [false, '无标准', '#8a97a8', null]; }
+  var inRange = weightKg >= pair[0] && weightKg <= pair[1];
+  var desc = side + ' ' + (std.ages[col] || '') + ' ' + row.h.toFixed(2) + 'm:' + pair[0] + '~' + pair[1] + 'kg';
+  if (inRange) { return [true, '合格', '#2ea44f', desc]; }
+  if (weightKg < pair[0]) { return [false, '体重偏轻不合格', '#2f6fd6', desc]; }
+  return [false, '体重超标不合格', '#d9463e', desc];
 }
 
 var GRADE_RULE = null;
@@ -3160,101 +3179,179 @@ function openGradeRuleManager() {
   });
 }
 
-/** BMI 标准:按性别×年龄段配置合格区间(表格式编辑,与体能评分标准风格一致) */
+/** 体重标准(原BMI):按性别 × 身高行 × 年龄列的合格体重区间矩阵 */
 function openBmiStdManager() {
   var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
   ready.then(function (std) {
-    var ranges = (normBmiStd(std).ranges || []).map(function (r) {
-      return { gender: r.gender || '男', ageMin: r.ageMin == null ? 0 : r.ageMin, ageMax: r.ageMax == null ? 99 : r.ageMax, min: r.min, max: r.max };
-    });
-    var listBox = h('div');
+    var AGE_DEFAULTS = ['24岁以下', '25-29岁', '30-39岁', '40-49岁', '50-59岁', '60岁以上'];
+    var data = normWeightStd(std);
 
-    function inp(val, ph, step) {
-      var i = h('input', { type: 'number', step: step || '0.1', placeholder: ph || '', style: 'width:100%;height:28px;padding:0 4px;border:1px solid transparent;border-radius:3px;font-size:13px;text-align:center;background:transparent' });
-      i.value = val;
-      return i;
-    }
-    function genderSel(g) {
-      var s = h('select', { style: 'width:100%;height:28px;font-size:13px;padding:0 2px;border:1px solid transparent;border-radius:3px;background:transparent;text-align:center' });
-      ['男', '女'].forEach(function (x) { s.appendChild(h('option', { value: x, text: x })); });
-      s.value = g === '女' ? '女' : '男';
-      return s;
-    }
-    var rows = [];
-    function renderRows() {
-      rows = [];
-      listBox.innerHTML = '';
-      var table = h('table', { class: 'grid', style: 'width:100%' });
-      table.appendChild(h('thead', {}, h('tr', {},
-        h('th', { style: 'width:70px', text: '性别' }),
-        h('th', { style: 'width:90px', text: '年龄起(岁)' }),
-        h('th', { style: 'width:90px', text: '年龄止(岁)' }),
-        h('th', { style: 'width:100px', text: 'BMI 下限' }),
-        h('th', { style: 'width:100px', text: 'BMI 上限' }),
-        h('th', { style: 'width:60px', text: '操作' }))));
-      var tb = h('tbody');
-      ranges.forEach(function (r, idx) {
-        var g = genderSel(r.gender);
-        var aMin = inp(r.ageMin, '如 0', '1'), aMax = inp(r.ageMax, '如 99', '1');
-        var bMin = inp(r.min, '如 17.5'), bMax = inp(r.max, '如 27.5');
-        rows.push({ g: g, aMin: aMin, aMax: aMax, bMin: bMin, bMax: bMax });
-        tb.appendChild(h('tr', {},
-          h('td', {}, g),
-          h('td', {}, aMin),
-          h('td', {}, aMax),
-          h('td', {}, bMin),
-          h('td', {}, bMax),
-          h('td', {}, h('button', { class: 'btn-link danger', text: '删除', onclick: function () { ranges.splice(idx, 1); renderRows(); } }))));
-      });
-      if (!ranges.length) {
-        tb.appendChild(h('tr', {}, h('td', { colspan: '6', class: 'empty-row', text: '暂无标准行,点击下方"添加一行"按钮' })));
+    function normWeightStd(v) {
+      if (v && v.ages && v.male && v.male.rows) {
+        return { ages: v.ages, male: v.male, female: v.female || { rows: [] } };
       }
-      table.appendChild(tb);
-      listBox.appendChild(h('div', { class: 'table-wrap' }, table));
+      // 旧BMI区间格式 → 生成 1.50~2.00m 等值区间表
+      var mk = function (lo, hi) {
+        var rows = [];
+        for (var h = 150; h <= 200; h++) {
+          var m2 = h / 100;
+          rows.push({ h: m2, w: [Math.round(m2 * m2 * lo * 10) / 10, Math.round(m2 * m2 * hi * 10) / 10] });
+        }
+        return { rows: rows };
+      };
+      var m = (v && v.male) ? v.male : [17.5, 27.5];
+      var f = (v && v.female) ? v.female : [17, 24.5];
+      return { ages: AGE_DEFAULTS.slice(), male: mk(m[0], m[1]), female: mk(f[0], f[1]) };
     }
-    renderRows();
+
+    var cur = { gender: '男' };
+    var gBtns = {};
+    var gridBox = h('div');
+
+    function renderGrid() {
+      var side = data[cur.gender];
+      gridBox.innerHTML = '';
+      var table = h('table', { class: 'grid', style: 'width:100%;white-space:nowrap' });
+      var hr = h('tr', {}, h('th', { style: 'min-width:74px', html: '体重(kg)<br>身高(m)' }));
+      data.ages.forEach(function (a) {
+        var cell = h('th');
+        var i = h('input', { value: a, title: '年龄组名', style: 'width:78px;border:1px solid transparent;background:transparent;color:#fff;font-weight:600;text-align:center' });
+        i.addEventListener('input', function () {
+          var idx = data.ages.indexOf(a);
+          if (idx >= 0) { data.ages[idx] = i.value; }
+        });
+        cell.appendChild(i);
+        cell.appendChild(h('button', { class: 'btn-link danger', style: 'margin-left:3px', text: '×', title: '删除该年龄组', onclick: function () {
+          if (data.ages.length <= 1) { toast('至少保留一个年龄组', 'err'); return; }
+          var idx = data.ages.indexOf(a);
+          data.ages.splice(idx, 1);
+          side.rows.forEach(function (r) { if (r.w && r.w.length > data.ages.length) { r.w.splice(idx, 1); } });
+          renderGrid();
+        } }));
+        hr.appendChild(cell);
+      });
+      table.appendChild(h('thead', {}, hr));
+      var tb = h('tbody');
+      side.rows.forEach(function (r) {
+        var tr = h('tr', {});
+        var th = h('td', { style: 'font-weight:600;text-align:center;background:#f5f8fc;white-space:nowrap' });
+        var hi = h('input', { value: r.h.toFixed(2), style: 'width:52px;border:1px solid transparent;background:transparent;text-align:center;font-weight:600' });
+        hi.addEventListener('input', function () {
+          var v = Number(hi.value);
+          if (!isNaN(v) && v >= 1.2 && v <= 2.3) { r.h = v; }
+        });
+        th.appendChild(hi);
+        th.appendChild(h('button', { class: 'btn-link danger', style: 'margin-left:2px', text: '×', title: '删除该身高行', onclick: function () {
+          side.rows = side.rows.filter(function (x) { return x !== r; });
+          renderGrid();
+        } }));
+        tr.appendChild(th);
+        data.ages.forEach(function (a, ai) {
+          var lo = (r.w && r.w[ai]) ? r.w[ai][0] : '';
+          var hv = (r.w && r.w[ai]) ? r.w[ai][1] : '';
+          var cellIn = h('input', { value: lo === '' ? '' : (lo + '~' + hv), placeholder: '下限~上限', style: 'width:92px;border:1px solid transparent;border-radius:3px;text-align:center;font-size:12.5px' });
+          cellIn.addEventListener('input', function () {
+            if (!r.w) { r.w = []; }
+            var m = /^\s*([0-9.]+)\s*[~～-]\s*([0-9.]+)\s*$/.exec(cellIn.value);
+            if (m) {
+              r.w[ai] = [Number(m[1]), Number(m[2])];
+              cellIn.style.background = '#eaf6ec';
+            } else {
+              cellIn.style.background = '#fdf0ef';
+            }
+          });
+          tr.appendChild(h('td', { style: 'text-align:center;padding:2px' }, cellIn));
+        });
+        tb.appendChild(tr);
+      });
+      table.appendChild(tb);
+      gridBox.appendChild(h('div', { class: 'table-wrap', style: 'max-height:46vh' }, table));
+      gridBox.appendChild(h('div', { style: 'display:flex;gap:10px;margin-top:10px;flex-wrap:wrap' },
+        h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加身高行', onclick: function () {
+          var last = side.rows.length ? side.rows[side.rows.length - 1].h : 1.4;
+          side.rows.push({ h: Math.round((last + 0.01) * 100) / 100, w: new Array(data.ages.length).fill(null) });
+          renderGrid();
+        } }),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加年龄组', onclick: function () {
+          var n = prompt('年龄组名称(如 31-35岁):', '');
+          if (n && n.trim()) {
+            data.ages.push(n.trim());
+            side.rows.forEach(function (r) { if (!r.w) { r.w = []; } r.w.push(null); });
+            renderGrid();
+          }
+        } }),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '相邻行填充空白', onclick: function () {
+          side.rows.forEach(function (r) {
+            if (!r.w) { r.w = []; }
+            for (var i = 0; i < data.ages.length; i++) {
+              if (!r.w[i]) {
+                var src2 = null;
+                for (var j = i - 1; j >= 0 && !src2; j--) { if (r.w[j]) { src2 = r.w[j]; } }
+                for (var j2 = i + 1; j2 < data.ages.length && !src2; j2++) { if (r.w[j2]) { src2 = r.w[j2]; } }
+                r.w[i] = src2 ? src2.slice() : null;
+              }
+            }
+          });
+          renderGrid();
+        } })));
+    }
+
+    var body = h('div', {},
+      h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:10px;line-height:1.7',
+        text: '体重合格标准:行=身高(米),列=年龄段,单元格=合格体重区间(填 47.4~66.3)。判定:人员身高匹配最接近的行、年龄匹配列,体重在区间内为及格(体能档案与体重考核导入共用)。' }),
+      h('div', { style: 'display:flex;gap:8px;margin-bottom:10px;align-items:center' },
+        (function () {
+          var box = h('div', { style: 'display:flex;gap:6px' });
+          [['男', 'male'], ['女', 'female']].forEach(function (g) {
+            var b = h('button', { type: 'button', class: 'btn btn-sm', text: g[0] + '标准', style: 'border-radius:14px' });
+            b.addEventListener('click', function () { cur.gender = g[0]; renderGrid(); paintG(); });
+            gBtns[g[1]] = b;
+            box.appendChild(b);
+          });
+          function paintG() {
+            Object.keys(gBtns).forEach(function (k) {
+              gBtns[k].className = 'btn btn-sm' + (cur.gender === (k === 'male' ? '男' : '女') ? ' btn-primary' : ' btn-ghost');
+            });
+          }
+          paintG();
+          return box;
+        })(),
+        h('span', { style: 'flex:1' }),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '生成完整身高表(1.50~2.00m)', onclick: function () {
+          if (!confirm('将生成 1.50~2.00m 共51行(保留已填数据),确定?')) { return; }
+          var side = data[cur.gender];
+          var map = {};
+          side.rows.forEach(function (r) { map[Math.round(r.h * 100)] = r; });
+          side.rows = [];
+          for (var hcm = 150; hcm <= 200; hcm++) {
+            if (map[hcm]) { side.rows.push(map[hcm]); }
+            else { side.rows.push({ h: hcm / 100, w: new Array(data.ages.length).fill(null) }); }
+          }
+          renderGrid();
+        } })),
+      gridBox);
 
     var m = openModal({
-      title: 'BMI 标准(按性别 × 年龄段配置合格区间)',
-      body: h('div', {},
-        h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:12px;line-height:1.7',
-          text: 'BMI = 体重(kg) ÷ 身高(m)²。判定时按性别和实际年龄命中一行;用于体能档案判定与 BMI 考核导入评分(区间内 100 分及格,区间外 0 分不及格)。' }),
-        listBox,
-        h('div', { style: 'display:flex;gap:10px;margin-top:12px' },
-          h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加一行', onclick: function () {
-            ranges.push({ gender: '男', ageMin: 0, ageMax: 99, min: 17.5, max: 27.5 });
-            renderRows();
-          } }),
-          h('button', { class: 'btn btn-ghost btn-sm', text: '恢复默认(男17.5~27.5 / 女17~24.5)', onclick: function () {
-            ranges = defaultBmiStd().ranges.map(function (r) { return { gender: r.gender, ageMin: r.ageMin, ageMax: r.ageMax, min: r.min, max: r.max }; });
-            renderRows();
-          } }))),
+      title: '体重标准(身高 × 年龄段 合格区间矩阵)', body: body, wide: true,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', {
           class: 'btn btn-primary', text: '保存',
           onclick: function () {
-            var out = [];
-            for (var i = 0; i < rows.length; i++) {
-              var r = rows[i];
-              var a1 = parseInt(r.aMin.value, 10), a2 = parseInt(r.aMax.value, 10);
-              var b1 = Number(r.bMin.value), b2 = Number(r.bMax.value);
-              if (isNaN(a1) || isNaN(a2) || isNaN(b1) || isNaN(b2) || a1 > a2 || b1 >= b2) {
-                toast('第' + (i + 1) + '行数值有误(年龄起≤年龄止,BMI下限<上限)', 'err');
-                return;
-              }
-              out.push({ gender: r.g.value, ageMin: a1, ageMax: a2, min: b1, max: b2 });
-            }
-            if (!out.length) { toast('至少保留一行标准', 'err'); return; }
-            PUT('/api/setting/bmi_standard', { ranges: out }).then(function () {
-              BMI_STD = { ranges: out };
+            var missing = 0;
+            data.male.rows.forEach(function (r) { (r.w || []).forEach(function (x) { if (!x) { missing++; } }); });
+            data.female.rows.forEach(function (r) { (r.w || []).forEach(function (x) { if (!x) { missing++; } }); });
+            if (missing > 0 && !confirm('还有 ' + missing + ' 个空单元格,空白将视为无标准(该人员不判分)。继续保存?')) { return; }
+            PUT('/api/setting/bmi_standard', { ages: data.ages, male: data.male, female: data.female }).then(function () {
+              BMI_STD = data;
               m.close();
-              toast('BMI标准已保存(' + out.length + '行)');
+              toast('体重标准已保存');
             }).catch(function (e) { toast(e.message, 'err'); });
           }
         })
       ]
     });
+    renderGrid();
   });
 }
 
