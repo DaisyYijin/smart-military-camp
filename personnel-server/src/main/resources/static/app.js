@@ -204,7 +204,7 @@ function makeDateField() {
       var today = new Date();
       var base = view._yearPage != null ? view._yearPage : view.y - 4;
       title.textContent = base + ' - ' + (base + 15) + ' 年';
-      title.title = '点击返回月份选择';
+      title.title = '点击选择年份';
       grid.innerHTML = '';
       for (var yy = base; yy < base + 16; yy++) {
         (function (year) {
@@ -224,6 +224,7 @@ function makeDateField() {
 
     function renderMonthPicker() {
       title.textContent = view.y + ' 年';
+      title.title = '点击回到年份选择';
       grid.innerHTML = '';
       var monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
       var today = new Date();
@@ -243,9 +244,25 @@ function makeDateField() {
     renderPanel = function () {
       if (viewMode === 'year') { renderYearPicker(); return; }
       if (viewMode === 'month') { renderMonthPicker(); return; }
-      title.textContent = view.y + ' 年 ' + (view.m + 1) + ' 月';
-      title.style.cursor = 'pointer';
-      title.title = '点击选年份';
+      title.textContent = '';
+      title.title = '';
+      var yLink = h('span', { class: 'cal-title-y', text: view.y + '年' });
+      yLink.title = '点击选年份';
+      yLink.addEventListener('click', function (e) {
+        e.stopPropagation();
+        viewMode = 'year';
+        renderPanel();
+      });
+      var mLink = h('span', { class: 'cal-title-m', text: (view.m + 1) + '月' });
+      mLink.title = '点击选月份';
+      mLink.addEventListener('click', function (e) {
+        e.stopPropagation();
+        viewMode = 'month';
+        renderPanel();
+      });
+      title.appendChild(yLink);
+      title.appendChild(document.createTextNode(' '));
+      title.appendChild(mLink);
       grid.innerHTML = '';
       var offset = (new Date(view.y, view.m, 1).getDay() + 6) % 7;
       var days = new Date(view.y, view.m + 1, 0).getDate();
@@ -299,12 +316,11 @@ function makeDateField() {
         view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderPanel();
       }
     });
-    // 点击标题 → 年份选择(再点月份)
+    // 整标题点击 → 年份选择(日视图时; 年/月视图由子链接处理)
     title.addEventListener('click', function () {
-      if (viewMode === 'day') { viewMode = 'year'; }
-      else if (viewMode === 'year') { viewMode = 'month'; }
-      else { viewMode = 'day'; }
-      renderPanel();
+      if (viewMode === 'day') { viewMode = 'year'; renderPanel(); }
+      else if (viewMode === 'year') { viewMode = 'month'; renderPanel(); }
+      else { viewMode = 'day'; renderPanel(); }
     });
     todayBtn.addEventListener('click', function () {
       input.value = fmt(new Date());
