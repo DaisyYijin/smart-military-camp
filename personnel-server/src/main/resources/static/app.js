@@ -5654,6 +5654,14 @@ function settingsView() {
   return { render: render };
 }
 
+/** 字节数 → 可读大小 */
+function fmtSize(bytes) {
+  if (bytes == null) { return ''; }
+  if (bytes < 1024) { return bytes + ' B'; }
+  if (bytes < 1024 * 1024) { return (bytes / 1024).toFixed(1) + ' KB'; }
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
 function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 | 'report' 仅数据上报
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
   var MODULES = [];   // [{key,label}]
