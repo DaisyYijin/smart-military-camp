@@ -82,16 +82,6 @@ public class DashboardController {
             }
         }
 
-        // 入伍周年纪念日(未来7天内,满整年;不含入党纪念日)
-        for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT name, entry_date FROM personnel WHERE entry_date LIKE '____-__-__'")) {
-            String src = String.valueOf(r.get("entry_date"));
-            String d = anniversaryDate(src, today, 7);
-            if (d != null && anniversaryYears(src, d) >= 1) {
-                list.add(event("info", "纪念日", r.get("name") + " 入伍" + anniversaryYears(src, d) + "周年(" + fmtDate(d) + ")", d, 4));
-            }
-        }
-
         // 预备党员即将转正(转正日期未来30天内)
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT name, party_full_date FROM personnel WHERE party_full_date LIKE '____-__-__' " +

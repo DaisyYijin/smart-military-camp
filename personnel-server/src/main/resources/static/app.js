@@ -4890,7 +4890,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '生日', '纪念日', '党务', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '生日', '党务', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {
