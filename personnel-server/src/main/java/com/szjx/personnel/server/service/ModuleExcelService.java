@@ -564,7 +564,8 @@ public class ModuleExcelService {
             String gender = "";
             List<Map<String, Object>> g = jdbc.queryForList("SELECT gender FROM personnel WHERE id=?", pid);
             if (!g.isEmpty() && g.get(0).get("gender") != null) { gender = String.valueOf(g.get(0).get("gender")); }
-            double[] range = bmiRange("女".equals(gender));
+            Integer age = ageAt(birthdayOf(pid), null);   // 按实际年龄选区间
+            double[] range = bmiRange(gender, age);
             boolean pass = bmi >= range[0] && bmi <= range[1];
             vals.put("personnelId", pid);
             vals.put("points", pass ? 100.0 : 0.0);
@@ -592,23 +593,42 @@ public class ModuleExcelService {
         return null;
     }
 
-    /** BMI 合格区间(可配置:sys_setting.bmi_standard {"male":[min,max],"female":[min,max]}) */
-    private double[] bmiRange(boolean female) {
-        double[] def = female ? new double[]{17.0, 24.5} : new double[]{17.5, 27.5};
+    /**
+     * BMI 合格区间:按性别+年龄选行。
+     * 新格式 {"ranges":[{gender,ageMin,ageMax,min,max},...]};兼容旧 {"male":[..],"female":[..]}。
+     */
+    private double[] bmiRange(String gender, Integer age) {
+        double[] def = "女".equals(gender) ? new double[]{17.0, 24.5} : new double[]{17.5, 27.5};
         try {
             String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='bmi_standard'", String.class);
-            if (v != null) {
-                com.fasterxml.jackson.databind.JsonNode node =
-                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
-                com.fasterxml.jackson.databind.JsonNode arr = node.get(female ? "female" : "male");
+            if (v == null) { return def; }
+            com.fasterxml.jackson.databind.JsonNode node =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
+            com.fasterxml.jackson.databind.JsonNode ranges = node.get("ranges");
+            if (ranges == null || !ranges.isArray() || ranges.size() == 0) {
+                // 旧格式
+                com.fasterxml.jackson.databind.JsonNode arr = node.get("女".equals(gender) ? "female" : "male");
                 if (arr != null && arr.isArray() && arr.size() == 2) {
                     return new double[]{arr.get(0).asDouble(), arr.get(1).asDouble()};
                 }
+                return def;
             }
+            double[] fallback = null;
+            for (int i = 0; i < ranges.size(); i++) {
+                com.fasterxml.jackson.databind.JsonNode r = ranges.get(i);
+                String rg = r.has("gender") ? r.get("gender").asText("") : "男";
+                if (!rg.equals(gender == null || gender.isEmpty() ? "男" : gender)) { continue; }
+                int aMin = r.has("ageMin") ? r.get("ageMin").asInt(0) : 0;
+                int aMax = r.has("ageMax") ? r.get("ageMax").asInt(99) : 99;
+                if (fallback == null) { fallback = new double[]{r.get("min").asDouble(), r.get("max").asDouble()}; }
+                if (age == null || (age >= aMin && age <= aMax)) {
+                    return new double[]{r.get("min").asDouble(), r.get("max").asDouble()};
+                }
+            }
+            return fallback != null ? fallback : def;
         } catch (Exception ignore) {
-            // 用默认
+            return def;
         }
-        return def;
     }
 
     private String birthdayOf(Long pid) {
