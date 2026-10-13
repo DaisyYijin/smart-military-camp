@@ -44,8 +44,8 @@ public class DashboardController {
                 "SELECT name, quantity, min_quantity FROM material " +
                 "WHERE CAST(min_quantity AS REAL) > 0 AND CAST(quantity AS REAL) < CAST(min_quantity AS REAL) " +
                 "ORDER BY CAST(quantity AS REAL) - CAST(min_quantity AS REAL) LIMIT 20")) {
-            list.add(event("danger", "物资", "「" + r.get("name") + "」库存不足:当前 " + numStr(r.get("quantity"))
-                    + " 件,低于预警下限 " + numStr(r.get("min_quantity")) + " 件", t0, 0));
+            list.add(event("danger", "物资", "「" + r.get("name") + "」库存不足(当前" + numStr(r.get("quantity"))
+                    + "/下限" + numStr(r.get("min_quantity")) + "件)", t0, 0));
         }
 
         // 人员休假归队(结束日期 近3天前 ~ 10天后)
