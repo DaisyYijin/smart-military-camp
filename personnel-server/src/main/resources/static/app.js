@@ -3523,6 +3523,7 @@ var fitnessCfg = {
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
     { key: 'item', label: '考核项目' },
     { key: 'score', label: '成绩' },
     { key: 'points', label: '分数', render: function (r) { return r.points != null && r.points !== '' ? r.points : '—'; } },
