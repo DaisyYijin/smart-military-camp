@@ -534,11 +534,8 @@ table.grid td.empty-row { text-align: center; }
   border-left: none;
   background: rgba(47,111,214,.35);
 }
-.sidebar.collapsed .menu-item.active::before {
-  content: '';
-  position: absolute; left: 4px; top: 25%; bottom: 25%; width: 3px;
-  border-radius: 2px; background: #5b9bff;
-}
+/* 不画 active 指示条:收起态背景色已区分,额外竖条观感像误出的蓝框 */
+.sidebar.collapsed .menu-item.active::before { content: none; }
 
 /* 收起/展开按钮 */
 /* 注意:箭头方向由 JS 直接切换(展开=‹ 收起=›),此处不得再对 .ic 做 rotate,
@@ -576,12 +573,7 @@ table.grid td.empty-row { text-align: center; }
   pointer-events: none;
   z-index: 61;
 }
-.sidebar.collapsed .menu-item.active::before {
-  /* active 的 ::before 已用于指示条,tooltip 三角不需要 */
-}
-.sidebar.collapsed .menu-item:not(.active)::before {
-  /* 只有非 active 项才显示三角(active 的 ::before 是指示条) */
-}
+/* active 项不显示 tooltip 三角(::before 已禁用),非 active 项悬停才有 */
 .sidebar.collapsed .menu-item:hover:not(.active)::before {
   opacity: 1;
   transform: translateY(-50%) translateX(0);
