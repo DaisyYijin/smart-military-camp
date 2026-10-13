@@ -36,6 +36,7 @@ public class MaterialDao {
             m.setKeeperId(rs.getLong("keeper_id"));
             m.setKeeperName(rs.getString("keeper_name"));
             m.setLocation(rs.getString("location"));
+            m.setDetailLocation(rs.getString("detail_location"));
             m.setRemark(rs.getString("remark"));
             m.setCreatedAt(rs.getString("created_at"));
             m.setUpdatedAt(rs.getString("updated_at"));
@@ -85,23 +86,23 @@ public class MaterialDao {
 
     public long insert(Material m) {
         return jdbc.queryForObject(
-                "INSERT INTO material(name, category, spec, unit, quantity, min_quantity, keeper_id, location, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO material(name, category, spec, unit, quantity, min_quantity, keeper_id, location, detail_location, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(m.getName()), nvl(m.getCategory()), nvl(m.getSpec()), nvl(m.getUnit()),
                 m.getQuantity() == null ? 0 : m.getQuantity(),
                 m.getMinQuantity() == null ? 0 : m.getMinQuantity(),
-                m.getKeeperId(), nvl(m.getLocation()), nvl(m.getRemark()));
+                m.getKeeperId(), nvl(m.getLocation()), nvl(m.getDetailLocation()), nvl(m.getRemark()));
     }
 
     public void update(Material m) {
         jdbc.update(
                 "UPDATE material SET name=?, category=?, spec=?, unit=?, quantity=?, min_quantity=?, keeper_id=?, " +
-                "location=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                "location=?, detail_location=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
                 nvl(m.getName()), nvl(m.getCategory()), nvl(m.getSpec()), nvl(m.getUnit()),
                 m.getQuantity() == null ? 0 : m.getQuantity(),
                 m.getMinQuantity() == null ? 0 : m.getMinQuantity(),
-                m.getKeeperId(), nvl(m.getLocation()), nvl(m.getRemark()), m.getId());
+                m.getKeeperId(), nvl(m.getLocation()), nvl(m.getDetailLocation()), nvl(m.getRemark()), m.getId());
     }
 
     public void delete(Long id) {

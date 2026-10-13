@@ -46,7 +46,7 @@ public class MaterialController {
         StringBuilder sql = new StringBuilder(
             "SELECT m.id, m.name, m.category, m.spec, m.unit, m.quantity, " +
             "m.min_quantity AS minQuantity, m.keeper_id AS keeperId, p.name AS keeperName, " +
-            "p.id_card AS keeperIdCard, m.location, m.remark, " +
+            "p.id_card AS keeperIdCard, m.location, m.detail_location AS detailLocation, m.remark, " +
             "m.created_at AS createdAt, m.updated_at AS updatedAt " +
             "FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(

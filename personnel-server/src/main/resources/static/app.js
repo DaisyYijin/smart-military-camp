@@ -3240,7 +3240,7 @@ var materialCfg = {
   moreFilters: [
     { key: 'spec', label: '规格' },
     { key: 'keeperName', label: '责任人' },
-    { key: 'location', label: '存放位置' }
+    { key: 'location', label: '存放位置', type: 'select', options: function () { return dictLabels('material_location'); } }
   ],
   columns: [
     { key: 'name', label: '物资名称' },
@@ -3255,7 +3255,9 @@ var materialCfg = {
     },
     { key: 'minQuantity', label: '预警下限' },
     { key: 'keeperName', label: '责任人' },
-    { key: 'location', label: '存放位置' }
+    { key: 'location', label: '存放位置', render: function (r) {
+        return [r.location, r.detailLocation].filter(Boolean).join(' · ') || '—';
+      } }
   ],
   rowTitle: function (r) { return r.name; },
   form: [
@@ -3268,7 +3270,8 @@ var materialCfg = {
     { key: 'keeperIdCard', label: '责任人身份证', placeholder: '输入后自动带出姓名' },
     { key: 'keeperName', label: '责任人姓名', readonly: true, placeholder: '按身份证号自动获取' },
     { key: 'keeperId', type: 'hidden' },
-    { key: 'location', label: '存放位置' },
+    { key: 'location', label: '存放位置', type: 'select', options: function () { return dictLabels('material_location'); } },
+    { key: 'detailLocation', label: '详细存放点', placeholder: '如 A区3排2层' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   beforeSave: function (data) {

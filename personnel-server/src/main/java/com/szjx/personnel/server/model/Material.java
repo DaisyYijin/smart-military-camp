@@ -14,7 +14,8 @@ public class Material {
     private Double minQuantity;  // 库存预警下限
     private Long keeperId;       // 责任人ID
     private String keeperName;   // 责任人姓名(查询时附带)
-    private String location;     // 存放位置
+    private String location;         // 存放位置(字典 material_location)
+    private String detailLocation;   // 详细存放点(如 A区3排2层)
     private String remark;
     private String createdAt;
     private String updatedAt;
@@ -89,6 +90,14 @@ public class Material {
 
     public void setKeeperName(String keeperName) {
         this.keeperName = keeperName;
+    }
+
+    public String getDetailLocation() {
+        return detailLocation;
+    }
+
+    public void setDetailLocation(String detailLocation) {
+        this.detailLocation = detailLocation;
     }
 
     public String getLocation() {

@@ -90,6 +90,7 @@ public class ModuleExcelService {
                         new Col("库存预警下限", "minQuantity", "number"),
                         new Col("责任人", "keeperId", "ref-personnel"),
                         new Col("存放位置", "location", "text"),
+                        new Col("详细存放点", "detailLocation", "text"),
                         new Col("备注", "remark", "text")),
                 "name"));
         MODULES.put("vehicle", new ModuleDef("vehicle", "车辆", "vehicle", "车辆",

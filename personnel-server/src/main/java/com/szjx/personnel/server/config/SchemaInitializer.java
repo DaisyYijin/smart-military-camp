@@ -62,6 +62,7 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("equipment_category", new String[]{"枪械", "防护", "通信", "侦察", "生活", "其他"});
         addDict("equipment_status", new String[]{"在用", "库存", "维修", "报废"});
         addDict("material_category", new String[]{"办公", "被装", "食品", "医药", "工具", "其他"});
+        addDict("material_location", new String[]{"一号库房", "二号库房", "器材库", "给养库", "油料库", "弹药库", "车间", "办公室", "其他"});
         addDict("vehicle_type", new String[]{"轿车", "客车", "卡车", "越野车", "特种车", "其他"});
         addDict("vehicle_status", new String[]{"可用", "出车", "维修", "停用"});
         addDict("vehicle_fuel", new String[]{"汽油", "柴油", "电", "混合动力", "其他"});
@@ -531,6 +532,12 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_material_keeper ON material(keeper_id)");
+
+        // 物资详细存放点
+        try { jdbc.execute("ALTER TABLE material ADD COLUMN detail_location TEXT DEFAULT ''"); } catch (Exception ignore) {}
+        // 已用的存放位置收进字典,老数据下拉仍可选
+        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                "SELECT 'material_location', location, 90, 1, '', 0 FROM material WHERE location IS NOT NULL AND TRIM(location) <> ''");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS vehicle (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

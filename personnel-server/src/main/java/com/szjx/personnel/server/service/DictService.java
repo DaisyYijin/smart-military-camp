@@ -49,6 +49,7 @@ public class DictService {
         TYPE_NAMES.put("house_nature", "房屋性质");
         TYPE_NAMES.put("has_cert", "是否有房产证");
         TYPE_NAMES.put("loan_status", "贷款情况");
+        TYPE_NAMES.put("material_location", "物资存放位置");
         TYPE_NAMES.put("personnel_category", "人员类别");
         TYPE_NAMES.put("vehicle_brand", "车辆品牌");
         TYPE_NAMES.put("vehicle_fuel", "车辆燃料");
