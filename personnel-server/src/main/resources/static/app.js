@@ -3147,6 +3147,7 @@ var equipmentCfg = {
 var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
   clickKey: 'name', addLabel: '新增物资',
+  personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
   filters: [
     { key: 'name', label: '名称' },
     { key: 'category', label: '分类', type: 'select', options: function () { return dictLabels('material_category'); } }
@@ -3179,10 +3180,18 @@ var materialCfg = {
     { key: 'unit', label: '单位', placeholder: '个/箱/件…' },
     { key: 'quantity', label: '数量', type: 'number', step: '0.01' },
     { key: 'minQuantity', label: '库存预警下限', type: 'number', step: '0.01' },
-    { key: 'keeperId', label: '责任人', type: 'personnel' },
+    { key: 'keeperIdCard', label: '责任人身份证', placeholder: '输入后自动带出姓名' },
+    { key: 'keeperName', label: '责任人姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'keeperId', type: 'hidden' },
     { key: 'location', label: '存放位置' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+  ],
+  beforeSave: function (data) {
+    // keeperIdCard/keeperName 仅用于表单展示,不提交
+    delete data.keeperIdCard;
+    delete data.keeperName;
+    return data;
+  }
 };
 
 var vehicleCfg = {

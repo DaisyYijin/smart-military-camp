@@ -44,7 +44,11 @@ public class MaterialController {
         if (page < 1) page = 1;
         if (size < 1 || size > 200) size = 50;
         StringBuilder sql = new StringBuilder(
-            "SELECT m.*, p.name AS keeperName FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+            "SELECT m.id, m.name, m.category, m.spec, m.unit, m.quantity, " +
+            "m.min_quantity AS minQuantity, m.keeper_id AS keeperId, p.name AS keeperName, " +
+            "p.id_card AS keeperIdCard, m.location, m.remark, " +
+            "m.created_at AS createdAt, m.updated_at AS updatedAt " +
+            "FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
