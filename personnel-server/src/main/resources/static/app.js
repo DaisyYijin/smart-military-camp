@@ -3429,6 +3429,13 @@ function dictView() {
     });
   }
 
+  /** 记住最后浏览的字典类型,刷新后停留在原处 */
+  function saveCurrentType() {
+    if (currentType) {
+      try { localStorage.setItem('lastDictType', currentType); } catch (e) { /* 忽略 */ }
+    }
+  }
+
   function renderItems() {
     var main = $('.dict-main', root);
     main.innerHTML = '';
@@ -3436,6 +3443,7 @@ function dictView() {
       main.appendChild(h('div', { class: 'panel' }, h('div', { class: 'empty-row', text: '暂无字典数据' })));
       return;
     }
+    saveCurrentType();
     var g = typeGroup(currentType) || { items: [] };
     var items = g.items || [];
     var byId = {};
@@ -3647,7 +3655,12 @@ function dictView() {
   }
 
   function renderAll() {
-    if (!currentType && Ctx.dictTypes.length) currentType = Ctx.dictTypes[0].type;
+    if (!currentType && Ctx.dictTypes.length) {
+      // 恢复上次浏览的类型;已不存在则回退到第一个
+      var saved = null;
+      try { saved = localStorage.getItem('lastDictType'); } catch (e) { /* 忽略 */ }
+      currentType = (saved && typeGroup(saved)) ? saved : Ctx.dictTypes[0].type;
+    }
     renderTypeList();
     renderItems();
   }
