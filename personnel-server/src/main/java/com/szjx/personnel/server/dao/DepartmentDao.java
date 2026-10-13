@@ -33,12 +33,34 @@ public class DepartmentDao {
             d.setParentId(rs.getLong("parent_id"));
             d.setSort(rs.getInt("sort"));
             d.setRemark(rs.getString("remark"));
+            long lid = rs.getLong("leader_id");
+            d.setLeaderId(lid);
             return d;
         }
     };
 
     public List<Department> findAll() {
         return jdbc.query("SELECT * FROM department ORDER BY sort, id", MAPPER);
+    }
+
+    /** 各部门直属人员数 */
+    public Map<Long, Long> personnelCounts() {
+        Map<Long, Long> m = new HashMap<Long, Long>();
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT department_id, COUNT(*) AS c FROM personnel WHERE department_id > 0 GROUP BY department_id")) {
+            m.put(((Number) r.get("department_id")).longValue(), ((Number) r.get("c")).longValue());
+        }
+        return m;
+    }
+
+    /** 各部门负责人姓名 */
+    public Map<Long, String> leaderNames() {
+        Map<Long, String> m = new HashMap<Long, String>();
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT d.id, p.name FROM department d JOIN personnel p ON d.leader_id = p.id WHERE d.leader_id > 0")) {
+            m.put(((Number) r.get("id")).longValue(), String.valueOf(r.get("name")));
+        }
+        return m;
     }
 
     /**
@@ -60,7 +82,31 @@ public class DepartmentDao {
                 roots.add(d);
             }
         }
+        // 附带人员统计与负责人
+        Map<Long, Long> cnt = personnelCounts();
+        Map<Long, String> leaders = leaderNames();
+        for (Department d : all) {
+            Long c = cnt.get(d.getId());
+            d.setCount(c == null ? 0L : c);
+            d.setLeaderName(leaders.get(d.getId()));
+            d.setTotal(0L);
+        }
+        for (Department r : roots) {
+            sumTotal(r);
+        }
         return roots;
+    }
+
+    /** 自底向上汇总含下级的人员数 */
+    private long sumTotal(Department d) {
+        long t = d.getCount() == null ? 0 : d.getCount();
+        if (d.getChildren() != null) {
+            for (Department c : d.getChildren()) {
+                t += sumTotal(c);
+            }
+        }
+        d.setTotal(t);
+        return t;
     }
 
     public Department findById(Long id) {
@@ -70,20 +116,22 @@ public class DepartmentDao {
 
     public long insert(Department d) {
         return jdbc.queryForObject(
-                "INSERT INTO department(name, parent_id, sort, remark) VALUES(?,?,?,?) RETURNING id",
+                "INSERT INTO department(name, parent_id, sort, remark, leader_id) VALUES(?,?,?,?,?) RETURNING id",
                 Long.class,
                 d.getName(),
                 d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
-                d.getRemark() == null ? "" : d.getRemark());
+                d.getRemark() == null ? "" : d.getRemark(),
+                d.getLeaderId() == null ? 0 : d.getLeaderId());
     }
 
     public void update(Department d) {
-        jdbc.update("UPDATE department SET name=?, parent_id=?, sort=?, remark=? WHERE id=?",
+        jdbc.update("UPDATE department SET name=?, parent_id=?, sort=?, remark=?, leader_id=? WHERE id=?",
                 d.getName(),
                 d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getRemark() == null ? "" : d.getRemark(),
+                d.getLeaderId() == null ? 0 : d.getLeaderId(),
                 d.getId());
     }
 

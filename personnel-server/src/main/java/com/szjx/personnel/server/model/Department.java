@@ -13,6 +13,10 @@ public class Department {
     private Long parentId;
     private Integer sort;
     private String remark;
+    private Long leaderId;          // 负责人(人员ID,0=未设置)
+    private String leaderName;      // 负责人姓名(查询时附带)
+    private Long count;             // 直属人员数(查询时附带)
+    private Long total;             // 含下级人员数(查询时附带)
     private List<Department> children = new ArrayList<>();
 
     public Long getId() {
@@ -53,6 +57,38 @@ public class Department {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public Long getLeaderId() {
+        return leaderId;
+    }
+
+    public void setLeaderId(Long leaderId) {
+        this.leaderId = leaderId;
+    }
+
+    public String getLeaderName() {
+        return leaderName;
+    }
+
+    public void setLeaderName(String leaderName) {
+        this.leaderName = leaderName;
+    }
+
+    public Long getCount() {
+        return count;
+    }
+
+    public void setCount(Long count) {
+        this.count = count;
+    }
+
+    public Long getTotal() {
+        return total;
+    }
+
+    public void setTotal(Long total) {
+        this.total = total;
     }
 
     public List<Department> getChildren() {

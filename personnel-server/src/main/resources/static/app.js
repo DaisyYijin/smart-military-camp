@@ -3998,16 +3998,115 @@ var fitnessCfg = {
 
 function departmentView() {
   var root = h('div');
+  var kw = '';          // 搜索关键字
+  var statsEl = h('div', { class: 'dept-stats' });
+  var stats = { depts: 0, assigned: 0, personTotal: 0 };
+
+  function walk(nodes, fn) {
+    nodes.forEach(function (n) {
+      fn(n);
+      if (n.children && n.children.length) { walk(n.children, fn); }
+    });
+  }
+
+  /** 标记命中节点:自身或任一下级名称含关键字则保留;命中路径上的父级强制展开 */
+  function filterTree(nodes) {
+    var any = false;
+    nodes.forEach(function (n) {
+      n._hit = !!kw && (n.name || '').indexOf(kw) >= 0;
+      var kidAny = (n.children && n.children.length) ? filterTree(n.children) : false;
+      n._keep = n._hit || kidAny;
+      if (kw && kidAny) { n._open = true; }
+      if (n._keep) { any = true; }
+    });
+    return any;
+  }
+
+  function chip(text, color) {
+    return h('span', { class: 'dept-chip', style: color ? 'color:' + color : '', text: text });
+  }
+
+  function openDeptPersonnel(node) {
+    var body = h('div');
+    var m = openModal({
+      title: node.name + ' · 直属人员(' + (node.count || 0) + ' 人)',
+      body: body, wide: true,
+      footer: [
+        h('button', {
+          class: 'btn btn-ghost', text: '去人员管理筛选此部门',
+          onclick: function () {
+            m.close();
+            if (location.hash !== '#personnel') { location.hash = 'personnel'; }
+            var tries = 0;
+            (function apply() {
+              var el = document.querySelector('[data-fkey="departmentId"]');
+              if (el) {
+                el.value = String(node.id);
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              } else if (++tries < 10) {
+                setTimeout(apply, 300);
+              }
+            })();
+          }
+        }),
+        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })
+      ]
+    });
+    body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+    GET('/api/personnel?departmentId=' + node.id + '&size=200').then(function (d) {
+      var rows = (d && d.list) || [];
+      body.innerHTML = '';
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.appendChild(h('thead', {}, h('tr', {},
+        h('th', { text: '姓名' }), h('th', { text: '性别' }), h('th', { text: '人员类别' }),
+        h('th', { text: '军衔' }), h('th', { text: '职务' }), h('th', { text: '状态' }))));
+      var tbody = h('tbody');
+      rows.forEach(function (p) {
+        tbody.appendChild(h('tr', {},
+          h('td', { text: p.name || '' }),
+          h('td', { text: p.gender || '—' }),
+          h('td', { text: p.category || '—' }),
+          h('td', { text: p.rank || '—' }),
+          h('td', { text: p.post || '—' }),
+          h('td', { html: badge(p.status) })));
+      });
+      table.appendChild(tbody);
+      body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:52vh;overflow:auto' }, table));
+      if (!rows.length) {
+        body.appendChild(h('div', { class: 'empty-row', text: '该部门暂无直属人员' }));
+      }
+      if ((node.total || 0) > (node.count || 0)) {
+        body.appendChild(h('div', {
+          style: 'margin-top:10px;font-size:13px;color:#66788c',
+          text: '含下级部门共 ' + node.total + ' 人,此处仅列出直属人员;点击"去人员管理筛选此部门"可查看并维护。'
+        }));
+      }
+    }).catch(function (e) {
+      body.innerHTML = '';
+      body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+    });
+  }
 
   function nodeRow(node, depth) {
     var hasKids = node.children && node.children.length;
     var expand = hasKids
       ? h('span', { class: 'tw', text: node._open === false ? '▸' : '▾', onclick: function () { node._open = node._open === false; renderTree(); } })
       : h('span', { class: 'tw', text: '·' });
+    var nameHtml = kw && node._hit
+      ? esc(node.name).split(esc(kw)).join('<b>' + esc(kw) + '</b>')
+      : esc(node.name);
     var row = h('div', { class: 'dept-row' }, expand,
-      h('span', { class: 'name', text: node.name }),
-      hasKids ? h('span', { class: 'cnt', text: hasKids + ' 个子部门' }) : null,
+      h('span', { class: 'dept-ic', html: iconSvg('building') }),
+      h('span', {
+        class: 'name clickable', html: nameHtml, title: '点击查看该部门人员',
+        onclick: function () { openDeptPersonnel(node); }
+      }),
+      node.leaderName ? chip('负责人 ' + node.leaderName, '#66788c') : null,
+      chip('直属 ' + (node.count || 0) + ' 人', (node.count || 0) > 0 ? '#2f6fd6' : ''),
+      hasKids && (node.total || 0) !== (node.count || 0) ? chip('含下级 ' + (node.total || 0) + ' 人', '#2ea44f') : null,
+      hasKids ? chip(hasKids + ' 个子部门', '') : null,
       h('span', { class: 'acts' },
+        (node.count || 0) > 0 ? h('button', { class: 'btn-link', text: '查看人员', onclick: function () { openDeptPersonnel(node); } }) : null,
         h('button', { class: 'btn-link', text: '加子级', onclick: function () { openForm(null, node.id); } }),
         h('button', { class: 'btn-link', text: '编辑', onclick: function () { openForm(node); } }),
         h('button', {
@@ -4017,7 +4116,7 @@ function departmentView() {
               if (!yes) return;
               DEL('/api/departments/' + node.id).then(function () {
                 toast('已删除');
-                refreshDepts().then(renderTree);
+                refreshDepts().then(function () { loadStats(); renderTree(); });
               }).catch(function (e) { toast(e.message, 'err'); });
             });
           }
@@ -4033,21 +4132,60 @@ function departmentView() {
       box.appendChild(h('div', { class: 'empty-row', text: '暂无部门,点击上方按钮创建' }));
       return;
     }
+    if (kw) { filterTree(Ctx.deptTree); }
+    var found = 0;
     (function emit(nodes, depth) {
       nodes.forEach(function (n) {
+        if (kw && !n._keep) { return; }
+        found++;
         box.appendChild(nodeRow(n, depth));
-        if (n._open !== false && n.children && n.children.length) emit(n.children, depth + 1);
+        if (n._open !== false && n.children && n.children.length) { emit(n.children, depth + 1); }
       });
     })(Ctx.deptTree, 0);
+    if (kw && !found) {
+      box.appendChild(h('div', { class: 'empty-row', text: '没有名称包含「' + kw + '」的部门' }));
+    }
+  }
+
+  function renderStats() {
+    statsEl.innerHTML = '';
+    var unassigned = Math.max(0, stats.personTotal - stats.assigned);
+    [
+      { num: stats.depts, lbl: '部门总数', ic: 'building', bg: '#e8f0fd', fg: '#2f6fd6' },
+      { num: stats.personTotal, lbl: '人员总数', ic: 'users', bg: '#e9f7ef', fg: '#2ea44f' },
+      { num: stats.assigned, lbl: '已分配部门', ic: 'check', bg: '#eef4ff', fg: '#16437e' },
+      { num: unassigned, lbl: '未分配部门', ic: 'shield', bg: '#fdf1e7', fg: '#e8743b' }
+    ].forEach(function (c) {
+      statsEl.appendChild(h('div', { class: 'dept-stat-card' },
+        h('span', { class: 'dept-stat-ic', style: 'background:' + c.bg + ';color:' + c.fg, html: iconSvg(c.ic) }),
+        h('div', {},
+          h('div', { class: 'num', text: String(c.num) }),
+          h('div', { class: 'lbl', text: c.lbl }))));
+    });
+  }
+
+  function loadStats() {
+    stats.depts = 0;
+    stats.assigned = 0;
+    walk(Ctx.deptTree, function (n) {
+      stats.depts++;
+      stats.assigned += n.count || 0;
+    });
+    GET('/api/personnel?size=1').then(function (d) {
+      stats.personTotal = (d && d.total) || 0;
+    }).catch(function () { stats.personTotal = 0; }).then(renderStats);
   }
 
   function openForm(node, parentId) {
     var form = buildForm([
       { key: 'name', label: '部门名称', required: true },
       { key: 'parentId', label: '上级部门', type: 'dept' },
+      { key: 'leaderId', label: '负责人', type: 'personnel' },
       { key: 'sort', label: '排序号', type: 'number', step: '1', placeholder: '小的排前面' },
       { key: 'remark', label: '备注', span: 'full' }
-    ], node || { parentId: parentId || null });
+    ], node
+      ? { name: node.name, parentId: node.parentId, leaderId: node.leaderId > 0 ? node.leaderId : null, sort: node.sort, remark: node.remark }
+      : { parentId: parentId || null });
     var m = openModal({
       title: node ? '编辑部门 - ' + node.name : '新增部门',
       body: form.el,
@@ -4059,12 +4197,13 @@ function departmentView() {
             var data = form.get();
             if (!data) return;
             if (data.parentId === '') data.parentId = null;
+            if (data.leaderId === '' || data.leaderId == null) data.leaderId = 0;
             if (data.sort === null) data.sort = 0;
             var done = node ? PUT('/api/departments/' + node.id, data) : POST('/api/departments', data);
             done.then(function () {
               m.close();
               toast('保存成功');
-              refreshDepts().then(renderTree);
+              refreshDepts().then(function () { loadStats(); renderTree(); });
             }).catch(function (e) { form.setError(e.message); });
           }
         })
@@ -4072,16 +4211,40 @@ function departmentView() {
     });
   }
 
+  var searchTimer = null;
+  var searchInput = h('input', {
+    type: 'text', class: 'dept-search', placeholder: '搜索部门名称…',
+    style: 'margin-left:8px'
+  });
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      kw = searchInput.value.trim();
+      renderTree();
+    }, 200);
+  });
+
   function render(container) {
-    root.appendChild(h('div', { class: 'panel' },
+    root.appendChild(statsEl);
+    root.appendChild(h('div', { class: 'panel', style: 'margin-top:14px' },
       h('div', { class: 'dept-toolbar' },
         h('button', { class: 'btn btn-primary', text: '＋ 新增部门', onclick: function () { openForm(null, null); } }),
         h('button', {
-          class: 'btn btn-ghost', text: '刷新', style: 'margin-left:8px',
-          onclick: function () { refreshDepts().then(renderTree); }
+          class: 'btn btn-ghost', text: '全部展开', style: 'margin-left:8px',
+          onclick: function () { walk(Ctx.deptTree, function (n) { n._open = true; }); renderTree(); }
+        }),
+        h('button', {
+          class: 'btn btn-ghost', text: '全部收起',
+          onclick: function () { walk(Ctx.deptTree, function (n) { n._open = false; }); renderTree(); }
+        }),
+        searchInput,
+        h('button', {
+          class: 'btn btn-ghost', text: '刷新', style: 'margin-left:auto',
+          onclick: function () { refreshDepts().then(function () { loadStats(); renderTree(); }); }
         })),
       h('div', { class: 'dept-tree' })));
     renderTree();
+    loadStats();
     container.appendChild(root);
   }
   return { render: render };

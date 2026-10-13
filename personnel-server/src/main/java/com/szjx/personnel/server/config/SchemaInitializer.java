@@ -153,6 +153,7 @@ public class SchemaInitializer implements CommandLineRunner {
                 "sort INTEGER DEFAULT 0," +
                 "remark TEXT DEFAULT ''" +
                 ")");
+        ensureColumn("department", "leader_id", "leader_id INTEGER DEFAULT 0");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS personnel (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
