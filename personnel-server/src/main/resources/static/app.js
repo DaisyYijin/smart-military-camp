@@ -1640,10 +1640,10 @@ function crudView(cfg) {
       });
     });
     toolbar.appendChild(importInput);
-    if (cfg.key === 'personnel') {
+    {
       toolbar.appendChild(h('button', {
         class: 'btn btn-ghost', text: '下载模板',
-        title: '下载多 Sheet 导入模板(含人员/任职经历/奖惩/家庭成员等)',
+        title: cfg.key === 'personnel' ? '下载多 Sheet 导入模板(含人员/任职经历/奖惩/家庭成员等)' : '下载本模块导入模板(第一行为列头,含示例行)',
         onclick: function () {
           var pm = showProgressModal('下载模板');
           pm.setStatus('正在生成模板…');
@@ -4216,6 +4216,7 @@ function renderShell() {
 
   function navigate(view) {
     currentView = view;
+    refreshDicts(); // 字典可能在别处被修改,切页时刷新缓存保证筛选/表单下拉最新
     // 记住当前页面:URL 锚点(刷新/分享/前进后退)+ localStorage 兜底
     if (('#' + view) !== location.hash) {
       try { history.replaceState(null, '', '#' + view); } catch (e) { location.hash = view; }

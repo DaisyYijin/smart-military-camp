@@ -176,6 +176,51 @@ public class ModuleExcelService {
 
     /* ================= 导出 ================= */
 
+    /** 通用导入模板:列头 + 一行示例 */
+    public byte[] template(String moduleKey) throws Exception {
+        ModuleDef def = MODULES.get(moduleKey);
+        if (def == null) {
+            throw new IllegalArgumentException("不支持的模块: " + moduleKey);
+        }
+        org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        try {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.createSheet(def.sheet);
+            org.apache.poi.ss.usermodel.CellStyle headStyle = wb.createCellStyle();
+            org.apache.poi.ss.usermodel.Font font = wb.createFont();
+            font.setBold(true);
+            headStyle.setFont(font);
+            org.apache.poi.ss.usermodel.Row hr = sh.createRow(0);
+            for (int i = 0; i < def.cols.size(); i++) {
+                org.apache.poi.ss.usermodel.Cell c = hr.createCell(i);
+                c.setCellValue(def.cols.get(i).header);
+                c.setCellStyle(headStyle);
+                sh.setColumnWidth(i, 16 * 256);
+            }
+            org.apache.poi.ss.usermodel.Row er = sh.createRow(1);
+            for (int i = 0; i < def.cols.size(); i++) {
+                Col col = def.cols.get(i);
+                String v;
+                if ("ref-personnel".equals(col.type)) {
+                    v = "张三(填人员姓名)";
+                } else if ("number".equals(col.type)) {
+                    v = "0";
+                } else if ("int".equals(col.type)) {
+                    v = "0";
+                } else if (col.key != null && (col.key.toLowerCase().contains("date") || col.key.toLowerCase().contains("expiry"))) {
+                    v = "2026-01-31";
+                } else {
+                    v = "示例" + col.header;
+                }
+                er.createCell(i).setCellValue(v);
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            wb.write(out);
+            return out.toByteArray();
+        } finally {
+            wb.close();
+        }
+    }
+
     public byte[] export(String moduleKey, List<Long> ids) throws Exception {
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("请先勾选要导出的数据");

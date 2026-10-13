@@ -84,12 +84,18 @@ public class ModuleExcelController {
 
     @GetMapping("/api/{module}/template")
     public ResponseEntity<byte[]> template(@PathVariable String module) {
-        if (!"personnel".equals(module)) {
-            return ResponseEntity.notFound().build();
-        }
         try {
-            byte[] bytes = fullExcel.template();
-            String fileName = "人员信息导入模板.xlsx";
+            byte[] bytes;
+            String fileName;
+            if ("personnel".equals(module)) {
+                bytes = fullExcel.template();
+                fileName = "人员信息导入模板.xlsx";
+            } else if (excelService.supports(module)) {
+                bytes = excelService.template(module);
+                fileName = excelService.moduleName(module) + "导入模板.xlsx";
+            } else {
+                return ResponseEntity.notFound().build();
+            }
             String encoded = URLEncoder.encode(fileName, "UTF-8").replace("+", "%20");
             return ResponseEntity.ok()
                     .header("Content-Disposition", "attachment; filename*=UTF-8''" + encoded)
