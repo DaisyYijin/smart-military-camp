@@ -5693,17 +5693,8 @@ function backupView() {
           h('div', { style: 'padding:16px 20px;display:flex;gap:14px;flex-wrap:wrap;align-items:center' },
             h('button', {
               class: 'btn btn-primary', text: '⬆ 导出上报数据包',
-              title: '导出本单位全部数据(人员/子表/休假/体能)为上报包,发送给上级单位',
-              onclick: function () {
-                var pm = showProgressModal('导出上报包');
-                pm.setStatus('正在打包…');
-                apiBlobWithProgress('/api/report/export', function (pct) { pm.setProgress(pct); }).then(function (r) {
-                  pm.setProgress(100);
-                  pm.setStatus('下载完成');
-                  downloadBlob(r.blob, r.filename);
-                  setTimeout(function () { pm.close(); }, 500);
-                }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
-              }
+              title: '选择模块导出上报包,发送给上级单位',
+              onclick: openReportExport
             }),
             h('button', {
               class: 'btn btn-ghost', text: '⬇ 接收下级数据包',
@@ -5724,6 +5715,46 @@ function backupView() {
           document.body.appendChild(input);
           input.click();
           setTimeout(function () { input.remove(); }, 60000);
+        }
+
+        function openReportExport() {
+          var boxes = {};
+          var body = h('div', {},
+            h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:12px', text: '勾选要上报的模块(可只传部分数据):' }));
+          [['personnel', '人员信息(含任职/家庭等子表)', true],
+           ['leave', '休假记录', true],
+           ['fitness', '体能考核成绩', true]].forEach(function (m) {
+            var cb = h('input', { type: 'checkbox' });
+            cb.checked = m[2];
+            boxes[m[0]] = cb;
+            body.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;cursor:pointer' },
+              cb, h('span', { text: m[1] })));
+          });
+          body.appendChild(h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:6px;line-height:1.7',
+            text: '提示:只传休假/体能为增量补报;人员按身份证自动合并,不会重复。' }));
+          var m = openModal({
+            title: '导出上报数据包', body: body,
+            footer: [
+              h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+              h('button', {
+                class: 'btn btn-primary', text: '导出',
+                onclick: function () {
+                  var mods = [];
+                  ['personnel', 'leave', 'fitness'].forEach(function (k) { if (boxes[k].checked) { mods.push(k); } });
+                  if (!mods.length) { toast('至少选择一个模块', 'err'); return; }
+                  m.close();
+                  var pm = showProgressModal('导出上报包');
+                  pm.setStatus('正在打包(' + mods.length + '个模块)…');
+                  apiBlobWithProgress('/api/report/export?scope=' + mods.join(','), function (pct) { pm.setProgress(pct); }).then(function (r) {
+                    pm.setProgress(100);
+                    pm.setStatus('下载完成');
+                    downloadBlob(r.blob, r.filename);
+                    setTimeout(function () { pm.close(); }, 500);
+                  }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+                }
+              })
+            ]
+          });
         }
 
         function reportCheck(f) {

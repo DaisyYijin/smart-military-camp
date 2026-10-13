@@ -46,8 +46,18 @@ public class ReportController {
     /* ================= 下级导出 ================= */
 
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export() throws Exception {
+    public ResponseEntity<byte[]> export(@RequestParam(required = false) String scope) throws Exception {
+        // 模块选择:personnel(含子表)/leave/fitness,逗号分隔;默认全部
+        java.util.Set<String> s = new java.util.HashSet<String>();
+        if (scope == null || scope.trim().isEmpty()) {
+            s.add("personnel"); s.add("leave"); s.add("fitness");
+        } else {
+            for (String x : scope.split(",")) {
+                if (!x.trim().isEmpty()) { s.add(x.trim()); }
+            }
+        }
         Map<String, Object> pkg = new LinkedHashMap<String, Object>();
+        pkg.put("scope", new ArrayList<String>(s));
         // 单位名: 系统设置的网站名称(下级单位把系统名称设为本单位名,如"XX班")
         String unit = "";
         try {
@@ -70,20 +80,22 @@ public class ReportController {
         meta.put("version", 1);
         pkg.put("meta", meta);
 
-        List<Map<String, Object>> people = jdbc.queryForList("SELECT * FROM personnel ORDER BY id");
+        List<Map<String, Object>> people = s.contains("personnel")
+                ? jdbc.queryForList("SELECT * FROM personnel ORDER BY id")
+                : new ArrayList<Map<String, Object>>();
         pkg.put("personnel", people);
         Map<Long, String> cardOf = new HashMap<Long, String>();
-        for (Map<String, Object> p : people) {
+        for (Map<String, Object> p : jdbc.queryForList("SELECT id, id_card FROM personnel")) {
             cardOf.put(((Number) p.get("id")).longValue(), String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")));
         }
-        // 子表/休假/体能: 行内附 _card 便于上级按证件归属
+        // 子表/休假/体能: 行内附 _card 便于上级按证件归属(未选模块给空表,保持包结构完整)
         Map<String, Object> subs = new LinkedHashMap<String, Object>();
         for (String t : SUB_TABLES) {
-            subs.put(t, rowsWithCard(t, cardOf));
+            subs.put(t, s.contains("personnel") ? rowsWithCard(t, cardOf) : new ArrayList<Map<String, Object>>());
         }
         pkg.put("subs", subs);
-        pkg.put("leave", rowsWithCard("leave_record", cardOf));
-        pkg.put("fitness", rowsWithCard("fitness_record", cardOf));
+        pkg.put("leave", s.contains("leave") ? rowsWithCard("leave_record", cardOf) : new ArrayList<Map<String, Object>>());
+        pkg.put("fitness", s.contains("fitness") ? rowsWithCard("fitness_record", cardOf) : new ArrayList<Map<String, Object>>());
 
         byte[] body = mapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(pkg);
         String fileName = "上报数据_" + unit + "_" + new SimpleDateFormat("yyyyMMdd_HHmm").format(new Date()) + ".json";
@@ -170,9 +182,7 @@ public class ReportController {
         Map<String, Object> meta = (Map<String, Object>) pkg.get("meta");
         String unit = meta == null ? "未命名单位" : String.valueOf(meta.get("unit") == null ? "未命名单位" : meta.get("unit"));
         List<Map<String, Object>> people = (List<Map<String, Object>>) pkg.get("personnel");
-        if (people == null || people.isEmpty()) {
-            throw new IllegalArgumentException("数据包中没有人员数据");
-        }
+        if (people == null) { people = new ArrayList<Map<String, Object>>(); }
 
         // 目标部门
         long targetDept;
@@ -198,7 +208,7 @@ public class ReportController {
             localPidByCard.put(String.valueOf(row.get("id_card")).trim().toUpperCase(),
                     ((Number) row.get("id")).longValue());
         }
-        List<String> peopleCols = colsOf(people.get(0));
+        List<String> peopleCols = people.isEmpty() ? new ArrayList<String>() : colsOf(people.get(0));
         for (Map<String, Object> p : people) {
             String card = String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")).trim().toUpperCase();
             if (card.isEmpty()) {
