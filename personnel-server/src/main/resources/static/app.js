@@ -3940,7 +3940,9 @@ var leaveCfg = {
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
-    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'idCard', label: '身份证号', render: function (r) {
+        return r.idCard ? '<span class="view-detail" data-view-id="' + r.id + '" title="点击查看休假档案"><b>' + esc(r.idCard) + '</b></span>' : '—';
+      } },
     { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
     { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },
     { key: 'startDate', label: '开始日期' },
