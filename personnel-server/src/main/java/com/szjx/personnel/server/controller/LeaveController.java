@@ -35,6 +35,7 @@ public class LeaveController {
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String personnelName,
+                             @RequestParam(required = false) String idCard,
                              @RequestParam(required = false) String year,
                              @RequestParam(required = false) String leaveType,
                              @RequestParam(required = false) String startDate,
@@ -57,6 +58,10 @@ public class LeaveController {
         if (personnelName != null && !personnelName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
             csql.append(" AND p.name LIKE ?"); cargs.add("%" + personnelName.trim() + "%");
+        }
+        if (idCard != null && !idCard.trim().isEmpty()) {
+            sql.append(" AND p.id_card = ?"); args.add(idCard.trim());
+            csql.append(" AND p.id_card = ?"); cargs.add(idCard.trim());
         }
         if (year != null && !year.trim().isEmpty()) {
             sql.append(" AND CAST(l.year AS TEXT) = ?"); args.add(year.trim());

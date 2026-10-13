@@ -3857,6 +3857,75 @@ var vehicleCfg = {
   }
 };
 
+/** 休假档案:某人全部历史休假(按年度分组+汇总) */
+function openLeaveHistory(rw, act) {
+  var body = h('div');
+  var m = openModal({
+    title: '休假档案 · ' + (rw.personnelName || ''),
+    body: body, wide: true,
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
+      h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })
+    ]
+  });
+  body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+  var q = '/api/leave?size=500';
+  if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
+  else { q += '&personnelName=' + encodeURIComponent(rw.personnelName || ''); }
+  GET(q).then(function (d) {
+    var rows = (d && d.list) || [];
+    body.innerHTML = '';
+    if (!rows.length) {
+      body.appendChild(h('div', { class: 'empty-row', text: '暂无休假记录' }));
+      return;
+    }
+    // 汇总
+    var totalDays = 0, yearNow = String(new Date().getFullYear()), nowDays = 0;
+    rows.forEach(function (x) {
+      var t = (Number(x.days) || 0) + (Number(x.travelDays) || 0) + (Number(x.holidayDays) || 0);
+      totalDays += t;
+      if (String(x.year) === yearNow) { nowDays += t; }
+    });
+    body.appendChild(h('div', { style: 'display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap' },
+      h('span', { style: 'background:#eef4ff;color:#16437e;border-radius:8px;padding:6px 14px;font-size:13px', text: '累计休假 ' + rows.length + ' 次' }),
+      h('span', { style: 'background:#e9f7ef;color:#22633c;border-radius:8px;padding:6px 14px;font-size:13px', text: '累计 ' + (Math.round(totalDays * 10) / 10) + ' 天(含路途/节假日)' }),
+      h('span', { style: 'background:#fdf1e7;color:#8a5a1a;border-radius:8px;padding:6px 14px;font-size:13px', text: yearNow + ' 年已休 ' + (Math.round(nowDays * 10) / 10) + ' 天' })));
+    // 按年度分组(新→旧)
+    var byYear = {};
+    rows.forEach(function (x) { (byYear[x.year || '未填年度'] = byYear[x.year || '未填年度'] || []).push(x); });
+    var years = Object.keys(byYear).sort(function (a, b) { return a < b ? 1 : -1; });
+    years.forEach(function (y) {
+      var list = byYear[y];
+      var yDays = 0;
+      list.forEach(function (x) { yDays += (Number(x.days) || 0) + (Number(x.travelDays) || 0) + (Number(x.holidayDays) || 0); });
+      body.appendChild(h('div', { style: 'font-weight:600;color:#1d2c40;margin:12px 0 6px;font-size:14px', text: y + ' 年(' + list.length + ' 次 · 共 ' + (Math.round(yDays * 10) / 10) + ' 天)' }));
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.appendChild(h('thead', {}, h('tr', {},
+        h('th', { text: '类型' }), h('th', { text: '开始' }), h('th', { text: '结束' }),
+        h('th', { text: '基本' }), h('th', { text: '路途' }), h('th', { text: '节假日' }),
+        h('th', { text: '合计' }), h('th', { text: '事由' }))));
+      var tb = h('tbody');
+      list.forEach(function (x) {
+        var sum = (Number(x.days) || 0) + (Number(x.travelDays) || 0) + (Number(x.holidayDays) || 0);
+        tb.appendChild(h('tr', {},
+          h('td', { html: badge(x.leaveType) }),
+          h('td', { text: x.startDate || '' }),
+          h('td', { text: x.endDate || '' }),
+          h('td', { text: String(Number(x.days) || 0) }),
+          h('td', { text: Number(x.travelDays) > 0 ? String(x.travelDays) : '—' }),
+          h('td', { text: Number(x.holidayDays) > 0 ? String(x.holidayDays) : '—' }),
+          h('td', { html: '<b>' + (Math.round(sum * 10) / 10) + '</b>' }),
+          h('td', { text: x.reason || '', style: 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' })));
+      });
+      table.appendChild(tb);
+      body.appendChild(h('div', { class: 'table-wrap' }, table));
+    });
+  }).catch(function (e) {
+    body.innerHTML = '';
+    body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+  });
+}
+
 var leaveCfg = {
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
   clickKey: 'personnelName', addLabel: '新增休假',
@@ -3887,6 +3956,8 @@ var leaveCfg = {
   ],
   rowTitle: function (r) { return r.personnelName; },
   delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假记录吗?'; },
+  // 点击姓名 → 该人历史休假档案
+  onView: function (rw, act) { openLeaveHistory(rw, act); },
   form: [
     { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
     { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
