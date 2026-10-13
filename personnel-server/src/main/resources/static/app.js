@@ -82,8 +82,8 @@ function badge(text) {
   var cls = 'badge';
   if (/在职|正常|优秀|已归还|启用|奖励/.test(t)) cls += ' green';
   else if (/休假|借调|培训|良好|使用中/.test(t)) cls += ' blue';
-  else if (/维修|保养|及格|预警|缺货/.test(t)) cls += ' orange';
   else if (/离职|报废|不及格|损坏|停用|处分/.test(t)) cls += ' red';
+  else if (/维修|保养|及格|预警|缺货/.test(t)) cls += ' orange';
   else if (/其他|未填写/.test(t)) cls += ' gray';
   return '<span class="' + cls + '">' + esc(t || '-') + '</span>';
 }
