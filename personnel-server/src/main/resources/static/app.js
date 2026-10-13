@@ -6116,14 +6116,18 @@ function renderLogin(msg) {
         : h('div', { class: 'login-emblem', text: '★' }),
       h('div', { class: 'login-title', text: SITE.title || '数智军营人员管理系统' }),
       SITE.subtitle && SITE.subtitle !== '人员管理系统' ? h('div', { class: 'login-subtitle', text: SITE.subtitle }) : null,
-      h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
-      h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
-      h('label', { class: 'login-remember', for: 'remember-me' },
-        rememberCb,
-        h('span', { text: '保持登录(记住我)' }),
-        h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录' })),
-      errBox,
-      btn,
+      h('form', {
+        class: 'login-form', autocomplete: 'on',
+        onsubmit: function (e) { e.preventDefault(); submit(); }
+      },
+        h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
+        h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
+        h('label', { class: 'login-remember', for: 'remember-me' },
+          rememberCb,
+          h('span', { text: '保持登录(记住我)' }),
+          h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录' })),
+        errBox,
+        btn),
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
   userInput.focus();
 }

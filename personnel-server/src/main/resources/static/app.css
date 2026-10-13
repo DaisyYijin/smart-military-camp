@@ -971,3 +971,5 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 }
 .login-remember input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--pri, #2f6fd6); cursor: pointer; }
 .login-remember .hint { color: #a6b1bf; font-size: 12px; }
+
+.login-form { display: block; }
