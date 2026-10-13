@@ -201,11 +201,12 @@ function makeDateField() {
     var viewMode = 'day';
 
     function renderYearPicker() {
-      title.textContent = (view._yearPage || view.y) + ' - ' + ((view._yearPage || view.y) + 11) + ' 年';
-      grid.innerHTML = '';
-      var base = view._yearPage || view.y;
       var today = new Date();
-      for (var yy = base; yy < base + 12; yy++) {
+      var base = view._yearPage != null ? view._yearPage : view.y - 4;
+      title.textContent = base + ' - ' + (base + 15) + ' 年';
+      title.title = '点击返回月份选择';
+      grid.innerHTML = '';
+      for (var yy = base; yy < base + 16; yy++) {
         (function (year) {
           var cls = 'cal-year-cell' + (year === view.y ? ' sel' : '') + (year === today.getFullYear() ? ' today' : '');
           grid.appendChild(h('span', {
@@ -278,7 +279,8 @@ function makeDateField() {
     };
     prevBtn.addEventListener('click', function () {
       if (viewMode === 'year') {
-        view._yearPage = (view._yearPage || view.y) - 12;
+        var base = view._yearPage != null ? view._yearPage : view.y - 4;
+        view._yearPage = base - 16;
         renderYearPicker();
       } else if (viewMode === 'month') {
         view.y--; renderMonthPicker();
@@ -288,7 +290,8 @@ function makeDateField() {
     });
     nextBtn.addEventListener('click', function () {
       if (viewMode === 'year') {
-        view._yearPage = (view._yearPage || view.y) + 12;
+        var base2 = view._yearPage != null ? view._yearPage : view.y - 4;
+        view._yearPage = base2 + 16;
         renderYearPicker();
       } else if (viewMode === 'month') {
         view.y++; renderMonthPicker();

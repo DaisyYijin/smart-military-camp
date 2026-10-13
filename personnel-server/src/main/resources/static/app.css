@@ -977,6 +977,8 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .dialog.xxwide { width: 1240px; }
 
 /* 日期选择器: 年份/月份网格 */
+.cal-grid { grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-panel .cal-grid { grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 4px; }
 .cal-year-cell {
   display: flex; align-items: center; justify-content: center;
   height: 34px; border-radius: 5px; cursor: pointer; font-size: 13px; color: #445262;
