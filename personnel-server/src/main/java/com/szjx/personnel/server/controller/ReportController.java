@@ -103,22 +103,42 @@ public class ReportController {
         meta.put("version", 1);
         pkg.put("meta", meta);
 
-        // 部门过滤:depts=部门ID逗号串(空=全部);未选人员模块时不出人员
+        // 部门过滤:depts=部门ID逗号串(空=全部);选父单位自动含其全部下级
         StringBuilder deptWhere = new StringBuilder();
         List<Object> deptArgs = new ArrayList<Object>();
         if (depts != null && !depts.trim().isEmpty() && s.contains("personnel")) {
-            StringBuilder in = new StringBuilder();
+            java.util.Set<Long> picked = new java.util.HashSet<Long>();
             for (String d : depts.split(",")) {
                 try {
-                    long v = Long.parseLong(d.trim());
-                    if (in.length() > 0) { in.append(","); }
-                    in.append("?");
-                    deptArgs.add(v);
+                    picked.add(Long.parseLong(d.trim()));
                 } catch (NumberFormatException ignore) {
                     // 跳过非法id
                 }
             }
-            if (in.length() > 0) { deptWhere.append(" AND department_id IN (").append(in).append(")"); }
+            if (!picked.isEmpty()) {
+                // 自底向上:任何祖先被选中即视为选中(等效于父级向下扩展)
+                Map<Long, Long> parentOf = new HashMap<Long, Long>();
+                for (Map<String, Object> d : jdbc.queryForList("SELECT id, parent_id FROM department")) {
+                    parentOf.put(((Number) d.get("id")).longValue(),
+                            d.get("parent_id") == null ? 0L : ((Number) d.get("parent_id")).longValue());
+                }
+                java.util.Set<Long> eff = new java.util.HashSet<Long>(picked);
+                for (Long id : parentOf.keySet()) {
+                    Long cur = id;
+                    int guard = 0;
+                    while (cur != null && cur != 0L && guard++ < 20) {
+                        if (picked.contains(cur)) { eff.add(id); break; }
+                        cur = parentOf.get(cur);
+                    }
+                }
+                StringBuilder in = new StringBuilder();
+                for (Long v : eff) {
+                    if (in.length() > 0) { in.append(","); }
+                    in.append("?");
+                    deptArgs.add(v);
+                }
+                if (in.length() > 0) { deptWhere.append(" AND department_id IN (").append(in).append(")"); }
+            }
         }
         List<Map<String, Object>> people = s.contains("personnel")
                 ? jdbc.queryForList("SELECT * FROM personnel WHERE 1=1" + deptWhere + " ORDER BY id", deptArgs.toArray())

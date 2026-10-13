@@ -730,12 +730,12 @@ function refreshDepts() {
   return GET('/api/departments').then(function (tree) {
     Ctx.deptTree = tree || [];
     Ctx.deptFlat = [];
-    (function walk(nodes, depth) {
+    (function walk(nodes, depth, parentId) {
       (nodes || []).forEach(function (n) {
-        Ctx.deptFlat.push({ id: n.id, name: n.name, depth: depth });
-        walk(n.children, depth + 1);
+        Ctx.deptFlat.push({ id: n.id, name: n.name, depth: depth, parentId: parentId });
+        walk(n.children, depth + 1, n.id);
       });
-    })(Ctx.deptTree, 0);
+    })(Ctx.deptTree, 0, null);
   }).catch(function () { Ctx.deptTree = []; Ctx.deptFlat = []; });
 }
 
@@ -5731,15 +5731,28 @@ function backupView() {
               type: 'button', class: 'pick-kind-btn', style: 'font-size:12px;padding:0 10px;height:26px;',
               text: new Array(d.depth + 1).join('　') + d.name
             });
+            // 点父单位自动连带其全部下级(选中/取消都联动)
+            var kidsOf = {};
+            (Ctx.deptFlat || []).forEach(function (x) {
+              (kidsOf[x.parentId] = kidsOf[x.parentId] || []).push(x.id);
+            });
+            function descendants(id) {
+              var out = [id];
+              (kidsOf[id] || []).forEach(function (k) {
+                descendants(k).forEach(function (kk) { out.push(kk); });
+              });
+              return out;
+            }
+            b.title = (kidsOf[d.id] && kidsOf[d.id].length) ? '点击选择「' + d.name + '」及其全部下级' : '';
             b.addEventListener('click', function () {
               if (allDept) {
                 deptSel = {};
-                deptSel[d.id] = true;
                 allDept = false;
+                descendants(d.id).forEach(function (k) { deptSel[k] = true; });
               } else if (deptSel[d.id]) {
-                delete deptSel[d.id];
+                descendants(d.id).forEach(function (k) { delete deptSel[k]; });
               } else {
-                deptSel[d.id] = true;
+                descendants(d.id).forEach(function (k) { deptSel[k] = true; });
               }
               paint();
             });
