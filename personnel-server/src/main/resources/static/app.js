@@ -50,7 +50,7 @@ function openModal(opt) {
   var head = h('div', { class: 'dialog-head' }, h('div', { class: 'ttl', text: opt.title || '' }), closeBtn);
   var body = h('div', { class: 'dialog-body' });
   if (opt.body) body.appendChild(opt.body);
-  var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') + (opt.xwide ? ' xwide' : '') }, head, body);
+  var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') + (opt.xwide ? ' xwide' : '') + (opt.xxwide ? ' xxwide' : '') }, head, body);
   if (opt.footer) dlg.appendChild(h('div', { class: 'dialog-foot' }, opt.footer));
   mask.appendChild(dlg);
   mask.addEventListener('mousedown', function (e) { if (e.target === mask) close(); });
@@ -3373,7 +3373,7 @@ function openBodyStdManager() {
 
     var m;
     var m = openModal({
-      title: '体型标准(身高 × 年龄段 体重合格区间矩阵)', body: body, wide: true,
+      title: '体型标准(身高 × 年龄段 体重合格区间矩阵)', body: body, wide: true, xxwide: true,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', {
