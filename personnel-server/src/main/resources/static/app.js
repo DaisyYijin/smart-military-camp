@@ -5718,23 +5718,78 @@ function backupView() {
         }
 
         function openReportExport() {
-          var boxes = {};
-          var body = h('div', {},
-            h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:12px', text: '勾选要上报的模块(可只传部分数据):' }));
-          [['personnel', '人员信息(含任职/家庭等子表)', true],
-           ['equipment', '装备台账', true],
-           ['material', '物资台账', true],
-           ['vehicle', '车辆信息', true],
-           ['leave', '休假记录', true],
-           ['fitness', '体能考核成绩', true]].forEach(function (m) {
-            var cb = h('input', { type: 'checkbox' });
-            cb.checked = m[2];
-            boxes[m[0]] = cb;
-            body.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;cursor:pointer' },
-              cb, h('span', { text: m[1] })));
+          var mods = { personnel: true, equipment: true, material: true, vehicle: true, leave: true, fitness: true };
+          var deptSel = {};          // 空=默认全选
+          var allDept = true;
+          var modBtns = {};
+          var deptBtns = {};
+
+          var modBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+          [['personnel', '人员及子表'], ['equipment', '装备'], ['material', '物资'], ['vehicle', '车辆'], ['leave', '休假'], ['fitness', '体能']].forEach(function (m) {
+            var b = h('button', { type: 'button', class: 'pick-kind-btn', text: m[1] });
+            b.addEventListener('click', function () {
+              mods[m[0]] = !mods[m[0]];
+              paint();
+            });
+            modBtns[m[0]] = b;
+            modBox.appendChild(b);
           });
-          body.appendChild(h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:6px;line-height:1.7',
-            text: '提示:只传休假/体能为增量补报;人员按身份证自动合并,不会重复。' }));
+
+          var deptBox = h('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;max-height:170px;overflow:auto;padding:2px' });
+          (Ctx.deptFlat || []).forEach(function (d) {
+            var b = h('button', {
+              type: 'button', class: 'pick-kind-btn', style: 'font-size:12px;padding:0 10px;height:26px;',
+              text: new Array(d.depth + 1).join('　') + d.name
+            });
+            b.addEventListener('click', function () {
+              if (allDept) {
+                // 从"全选"切到手动:先清空,只点中这个
+                deptSel = {};
+                deptSel[d.id] = true;
+                allDept = false;
+              } else if (deptSel[d.id]) {
+                delete deptSel[d.id];
+              } else {
+                deptSel[d.id] = true;
+              }
+              paint();
+            });
+            deptBtns[d.id] = b;
+            deptBox.appendChild(b);
+          });
+          if (!(Ctx.deptFlat || []).length) {
+            deptBox.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '(暂无部门)' }));
+          }
+
+          function paint() {
+            Object.keys(modBtns).forEach(function (k) {
+              modBtns[k].className = 'pick-kind-btn' + (mods[k] ? ' mod-on' : '');
+              modBtns[k].style.cssText = '';
+            });
+            Object.keys(deptBtns).forEach(function (id) {
+              var on = allDept || deptSel[id];
+              deptBtns[id].className = 'pick-kind-btn' + (on ? ' mod-on' : '');
+              deptBtns[id].style.cssText = 'font-size:12px;padding:0 10px;height:26px;';
+            });
+            countLbl.textContent = allDept ? '已选:全部单位' : ('已选:' + Object.keys(deptSel).length + ' 个单位');
+          }
+
+          var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
+
+          var body = h('div', {},
+            h('div', { style: 'font-weight:600;margin-bottom:8px', text: '① 数据模块(点亮=导出)' }),
+            modBox,
+            h('div', { style: 'font-weight:600;margin:14px 0 4px;display:flex;align-items:center;gap:10px' },
+              h('span', { text: '② 人员范围(单位)' }),
+              countLbl,
+              h('span', { style: 'flex:1' }),
+              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () { allDept = true; deptSel = {}; paint(); } }),
+              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () { allDept = false; deptSel = {}; paint(); } })),
+            deptBox,
+            h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:10px;line-height:1.7',
+              text: '人员/子表/休假/体能只导所选单位的人员;装备/物资/车辆为全单位数据(不按部门)。人员按身份证合并,不会重复。' }));
+          paint();
+
           var m = openModal({
             title: '导出上报数据包', body: body,
             footer: [
@@ -5742,13 +5797,18 @@ function backupView() {
               h('button', {
                 class: 'btn btn-primary', text: '导出',
                 onclick: function () {
-                  var mods = [];
-                  ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness'].forEach(function (k) { if (boxes[k].checked) { mods.push(k); } });
-                  if (!mods.length) { toast('至少选择一个模块', 'err'); return; }
+                  var sel = [];
+                  ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness'].forEach(function (k) { if (mods[k]) { sel.push(k); } });
+                  if (!sel.length) { toast('至少选择一个模块', 'err'); return; }
+                  var needPeople = sel.indexOf('personnel') >= 0 || sel.indexOf('leave') >= 0 || sel.indexOf('fitness') >= 0;
+                  var deptIds = Object.keys(deptSel);
+                  if (needPeople && !allDept && !deptIds.length) { toast('请至少选择一个单位(或点全选)', 'err'); return; }
+                  var url = '/api/report/export?scope=' + sel.join(',');
+                  if (needPeople && !allDept) { url += '&depts=' + deptIds.join(','); }
                   m.close();
                   var pm = showProgressModal('导出上报包');
-                  pm.setStatus('正在打包(' + mods.length + '个模块)…');
-                  apiBlobWithProgress('/api/report/export?scope=' + mods.join(','), function (pct) { pm.setProgress(pct); }).then(function (r) {
+                  pm.setStatus('正在打包(' + sel.length + '个模块' + (needPeople ? (allDept ? ',全部单位' : ',' + deptIds.length + '个单位') : '') + ')…');
+                  apiBlobWithProgress(url, function (pct) { pm.setProgress(pct); }).then(function (r) {
                     pm.setProgress(100);
                     pm.setStatus('下载完成');
                     downloadBlob(r.blob, r.filename);
@@ -5757,29 +5817,6 @@ function backupView() {
                 }
               })
             ]
-          });
-        }
-
-        function openReportResult(r) {
-          function row(name, a, b, total) {
-            return h('tr', {},
-              h('td', { text: name }),
-              h('td', { text: a + (b ? ' / 更新 ' + b : '') }),
-              h('td', { text: '包内共 ' + total + ' 条' }));
-          }
-          var table = h('table', { class: 'grid', style: 'width:100%' },
-            h('thead', {}, h('tr', {}, h('th', { text: '模块' }), h('th', { text: '处理结果' }), h('th', { text: '数据包' }))),
-            h('tbody', {},
-              row('人员', '新增 ' + r.added, r.updated, r.added + r.updated + (r.skipped || 0)),
-              h('tr', {}, h('td', { text: '人员子表' }), h('td', { text: '重建 ' + r.subRows + ' 条' }), h('td', { text: '以下级为准替换' })),
-              row('休假', '新增 ' + r.leaveAdded, null, r.leaveTotal),
-              row('体能', '新增 ' + r.fitnessAdded, null, r.fitnessTotal),
-              row('装备', '新增 ' + r.equipmentAdded, r.equipmentUpdated, r.equipmentTotal),
-              row('物资', '新增 ' + r.materialAdded, r.materialUpdated, r.materialTotal),
-              row('车辆', '新增 ' + r.vehicleAdded, r.vehicleUpdated, r.vehicleTotal)));
-          var mm = openModal({
-            title: '导入完成 · 接收部门「' + r.deptName + '」' + (r.created ? '(新建)' : ''), body: h('div', {}, table), wide: true,
-            footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { mm.close(); } })]
           });
         }
 

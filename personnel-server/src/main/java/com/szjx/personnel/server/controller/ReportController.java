@@ -67,7 +67,8 @@ public class ReportController {
     /* ================= 下级导出 ================= */
 
     @GetMapping("/export")
-    public ResponseEntity<byte[]> export(@RequestParam(required = false) String scope) throws Exception {
+    public ResponseEntity<byte[]> export(@RequestParam(required = false) String scope,
+                                         @RequestParam(required = false) String depts) throws Exception {
         // 模块选择:personnel(含子表)/leave/fitness,逗号分隔;默认全部
         java.util.Set<String> s = new java.util.HashSet<String>();
         if (scope == null || scope.trim().isEmpty()) {
@@ -102,12 +103,29 @@ public class ReportController {
         meta.put("version", 1);
         pkg.put("meta", meta);
 
+        // 部门过滤:depts=部门ID逗号串(空=全部);未选人员模块时不出人员
+        StringBuilder deptWhere = new StringBuilder();
+        List<Object> deptArgs = new ArrayList<Object>();
+        if (depts != null && !depts.trim().isEmpty() && s.contains("personnel")) {
+            StringBuilder in = new StringBuilder();
+            for (String d : depts.split(",")) {
+                try {
+                    long v = Long.parseLong(d.trim());
+                    if (in.length() > 0) { in.append(","); }
+                    in.append("?");
+                    deptArgs.add(v);
+                } catch (NumberFormatException ignore) {
+                    // 跳过非法id
+                }
+            }
+            if (in.length() > 0) { deptWhere.append(" AND department_id IN (").append(in).append(")"); }
+        }
         List<Map<String, Object>> people = s.contains("personnel")
-                ? jdbc.queryForList("SELECT * FROM personnel ORDER BY id")
+                ? jdbc.queryForList("SELECT * FROM personnel WHERE 1=1" + deptWhere + " ORDER BY id", deptArgs.toArray())
                 : new ArrayList<Map<String, Object>>();
         pkg.put("personnel", people);
         Map<Long, String> cardOf = new HashMap<Long, String>();
-        for (Map<String, Object> p : jdbc.queryForList("SELECT id, id_card FROM personnel")) {
+        for (Map<String, Object> p : people) {
             cardOf.put(((Number) p.get("id")).longValue(), String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")));
         }
         // 子表/休假/体能: 行内附 _card 便于上级按证件归属(未选模块给空表,保持包结构完整)
@@ -133,12 +151,21 @@ public class ReportController {
     }
 
     private List<Map<String, Object>> rowsWithCard(String table, Map<Long, String> cardOf) {
-        List<Map<String, Object>> rows = jdbc.queryForList("SELECT * FROM " + table + " ORDER BY id");
-        for (Map<String, Object> r : rows) {
+        List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+        for (Map<String, Object> r : jdbc.queryForList("SELECT * FROM " + table + " ORDER BY id")) {
             Object pid = r.get("personnel_id");
-            r.put("_card", pid == null ? "" : cardOf.get(((Number) pid).longValue()));
+            String card = "";
+            if (pid instanceof Number) {
+                String c = cardOf.get(((Number) pid).longValue());
+                card = c == null ? "" : c;
+            }
+            if (card.isEmpty() && !cardOf.isEmpty()) {
+                continue;   // 不在所选人员范围(或人员缺失)的行不进包
+            }
+            r.put("_card", card);
+            out.add(r);
         }
-        return rows;
+        return out;
     }
 
     /* ================= 上级预检 ================= */
