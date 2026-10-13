@@ -197,8 +197,54 @@ function makeDateField() {
       h('div', { class: 'cal-foot' }, todayBtn, clearBtn));
     wrap.appendChild(panel);
 
+    // 视图模式: 'day'(日历) | 'year'(年份选取) | 'month'(月份选取)
+    var viewMode = 'day';
+
+    function renderYearPicker() {
+      title.textContent = (view._yearPage || view.y) + ' - ' + ((view._yearPage || view.y) + 11) + ' 年';
+      grid.innerHTML = '';
+      var base = view._yearPage || view.y;
+      var today = new Date();
+      for (var yy = base; yy < base + 12; yy++) {
+        (function (year) {
+          var cls = 'cal-year-cell' + (year === view.y ? ' sel' : '') + (year === today.getFullYear() ? ' today' : '');
+          grid.appendChild(h('span', {
+            class: cls, text: String(year),
+            onclick: function () {
+              view.y = year;
+              view._yearPage = null;
+              viewMode = 'month';
+              renderPanel();
+            }
+          }));
+        })(yy);
+      }
+    }
+
+    function renderMonthPicker() {
+      title.textContent = view.y + ' 年';
+      grid.innerHTML = '';
+      var monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+      var today = new Date();
+      monthNames.forEach(function (mn, idx) {
+        var cls = 'cal-year-cell' + (idx === view.m ? ' sel' : '') + (view.y === today.getFullYear() && idx === today.getMonth() ? ' today' : '');
+        grid.appendChild(h('span', {
+          class: cls, text: mn,
+          onclick: function () {
+            view.m = idx;
+            viewMode = 'day';
+            renderPanel();
+          }
+        }));
+      });
+    }
+
     renderPanel = function () {
+      if (viewMode === 'year') { renderYearPicker(); return; }
+      if (viewMode === 'month') { renderMonthPicker(); return; }
       title.textContent = view.y + ' 年 ' + (view.m + 1) + ' 月';
+      title.style.cursor = 'pointer';
+      title.title = '点击选年份';
       grid.innerHTML = '';
       var offset = (new Date(view.y, view.m, 1).getDay() + 6) % 7;
       var days = new Date(view.y, view.m + 1, 0).getDate();
@@ -231,10 +277,31 @@ function makeDateField() {
       }
     };
     prevBtn.addEventListener('click', function () {
-      view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderPanel();
+      if (viewMode === 'year') {
+        view._yearPage = (view._yearPage || view.y) - 12;
+        renderYearPicker();
+      } else if (viewMode === 'month') {
+        view.y--; renderMonthPicker();
+      } else {
+        view.m--; if (view.m < 0) { view.m = 11; view.y--; } renderPanel();
+      }
     });
     nextBtn.addEventListener('click', function () {
-      view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderPanel();
+      if (viewMode === 'year') {
+        view._yearPage = (view._yearPage || view.y) + 12;
+        renderYearPicker();
+      } else if (viewMode === 'month') {
+        view.y++; renderMonthPicker();
+      } else {
+        view.m++; if (view.m > 11) { view.m = 0; view.y++; } renderPanel();
+      }
+    });
+    // 点击标题 → 年份选择(再点月份)
+    title.addEventListener('click', function () {
+      if (viewMode === 'day') { viewMode = 'year'; }
+      else if (viewMode === 'year') { viewMode = 'month'; }
+      else { viewMode = 'day'; }
+      renderPanel();
     });
     todayBtn.addEventListener('click', function () {
       input.value = fmt(new Date());

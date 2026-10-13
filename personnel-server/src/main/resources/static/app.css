@@ -975,3 +975,14 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .login-form { display: block; }
 
 .dialog.xxwide { width: 1240px; }
+
+/* 日期选择器: 年份/月份网格 */
+.cal-year-cell {
+  display: flex; align-items: center; justify-content: center;
+  height: 34px; border-radius: 5px; cursor: pointer; font-size: 13px; color: #445262;
+}
+.cal-year-cell:hover { background: #e8f0fd; color: var(--pri, #2f6fd6); }
+.cal-year-cell.sel { background: var(--pri, #2f6fd6); color: #fff; font-weight: 700; }
+.cal-year-cell.today { border: 1px solid var(--pri, #2f6fd6); }
+.cal-title { cursor: pointer; user-select: none; }
+.cal-title:hover { color: var(--pri, #2f6fd6); }
