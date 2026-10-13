@@ -226,7 +226,7 @@ public class FitnessStdExcelController {
                         if (cells != null && i < cells.size() && cells.get(i) instanceof List) {
                             List<?> pair = (List<?>) cells.get(i);
                             if (pair.size() == 2) {
-                                cellText = pair.get(0) + "~" + pair.get(1);
+                                cellText = pair.get(0) + "-" + pair.get(1);
                             }
                         }
                         xr.createCell(i + 1).setCellValue(cellText);

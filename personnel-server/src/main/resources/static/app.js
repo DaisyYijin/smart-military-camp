@@ -3011,7 +3011,7 @@ function weightVerdict(weightKg, heightCm, gender, age) {
   var pair = (row.w && col >= 0) ? row.w[col] : null;
   if (!pair) { return [false, '无标准', '#8a97a8', null]; }
   var inRange = weightKg >= pair[0] && weightKg <= pair[1];
-  var desc = side + ' ' + (std.ages[col] || '') + ' ' + row.h.toFixed(2) + 'm:' + pair[0] + '~' + pair[1] + 'kg';
+  var desc = side + ' ' + (std.ages[col] || '') + ' ' + row.h.toFixed(2) + 'm:' + pair[0] + '-' + pair[1] + 'kg';
   if (inRange) { return [true, '合格', '#2ea44f', desc]; }
   if (weightKg < pair[0]) { return [false, '体重偏轻不合格', '#2f6fd6', desc]; }
   return [false, '体重超标不合格', '#d9463e', desc];
@@ -3275,7 +3275,7 @@ function openBmiStdManager() {
         data.ages.forEach(function (a, ai) {
           var lo = (r.w && r.w[ai]) ? r.w[ai][0] : '';
           var hv = (r.w && r.w[ai]) ? r.w[ai][1] : '';
-          var cellIn = h('input', { value: lo === '' ? '' : (lo + '~' + hv), placeholder: '下限~上限', style: 'width:92px;border:1px solid transparent;border-radius:3px;text-align:center;font-size:12.5px' });
+          var cellIn = h('input', { value: lo === '' ? '' : (lo + '-' + hv), placeholder: '下限-上限', style: 'width:92px;border:1px solid transparent;border-radius:3px;text-align:center;font-size:12.5px' });
           cellIn.addEventListener('input', function () {
             if (!r.w) { r.w = []; }
             var m = /^\s*([0-9.]+)\s*[~～-]\s*([0-9.]+)\s*$/.exec(cellIn.value);
