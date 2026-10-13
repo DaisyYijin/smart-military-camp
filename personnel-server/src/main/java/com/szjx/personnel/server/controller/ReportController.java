@@ -37,10 +37,31 @@ public class ReportController {
             "driver_license", "personal_card", "private_vehicle", "housing_info"};
 
     private final JdbcTemplate jdbc;
+    private final org.springframework.transaction.support.TransactionTemplate txTpl;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ReportController(JdbcTemplate jdbc) {
+    public ReportController(JdbcTemplate jdbc, org.springframework.transaction.PlatformTransactionManager txManager) {
         this.jdbc = jdbc;
+        this.txTpl = new org.springframework.transaction.support.TransactionTemplate(txManager);
+    }
+
+    /* ================= 导入进度(前端轮询) ================= */
+    private static final java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>> PROGRESS =
+            new java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>>();
+
+    @GetMapping("/progress")
+    public ApiResponse progress(@RequestParam String id) {
+        Map<String, Object> m = PROGRESS.get(id);
+        return ApiResponse.ok(m == null ? new LinkedHashMap<String, Object>() : m);
+    }
+
+    private void prog(String pid, int pct, String stage, String detail) {
+        if (pid == null) { return; }
+        Map<String, Object> m = new LinkedHashMap<String, Object>();
+        m.put("pct", pct);
+        m.put("stage", stage);
+        m.put("detail", detail == null ? "" : detail);
+        PROGRESS.put(pid, m);
     }
 
     /* ================= 下级导出 ================= */
@@ -185,14 +206,41 @@ public class ReportController {
     public ApiResponse importPackage(@RequestParam("file") MultipartFile file,
                                      @RequestParam(required = false) Long deptId,
                                      @RequestParam(required = false, defaultValue = "false") boolean createNew,
-                                     @RequestParam(required = false) Long parentId) throws Exception {
+                                     @RequestParam(required = false) Long parentId,
+                                     @RequestParam(required = false) String progressId) throws Exception {
+        try {
+            // 全程单事务:几千条语句一次提交,失败整体回滚(中途出错不会留半截数据)
+            return txTpl.execute(new org.springframework.transaction.support.TransactionCallback<ApiResponse>() {
+                @Override
+                public ApiResponse doInTransaction(org.springframework.transaction.TransactionStatus status) {
+                    try {
+                        return doImport(file, deptId, createNew, parentId, progressId);
+                    } catch (IllegalArgumentException e) {
+                        status.setRollbackOnly();
+                        throw e;
+                    } catch (Exception e) {
+                        status.setRollbackOnly();
+                        throw new IllegalArgumentException("导入失败:" + e.getMessage());
+                    }
+                }
+            });
+        } finally {
+            if (progressId != null) {
+                PROGRESS.remove(progressId);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ApiResponse doImport(MultipartFile file, Long deptId, boolean createNew, Long parentId, String pid) throws Exception {
+        prog(pid, 3, "解析数据包", "读取文件…");
         Map<String, Object> pkg = mapper.readValue(file.getInputStream(), Map.class);
         Map<String, Object> meta = (Map<String, Object>) pkg.get("meta");
         String unit = meta == null ? "未命名单位" : String.valueOf(meta.get("unit") == null ? "未命名单位" : meta.get("unit"));
         List<Map<String, Object>> people = (List<Map<String, Object>>) pkg.get("personnel");
         if (people == null) { people = new ArrayList<Map<String, Object>>(); }
 
-        // 目标部门
+        prog(pid, 8, "准备接收部门", null);
         long targetDept;
         String deptName;
         if (createNew) {
@@ -209,7 +257,8 @@ public class ReportController {
             deptName = String.valueOf(jdbc.queryForObject("SELECT name FROM department WHERE id=?", String.class, deptId));
         }
 
-        // 人员合并:按身份证 → 已存在则更新基本信息(不改单位),新人员插入目标部门
+        // ---- 人员合并(按身份证;批量更新,新插入需逐条取id) ----
+        prog(pid, 12, "合并人员", "0/" + people.size());
         int added = 0, updated = 0, skipped = 0;
         Map<String, Long> localPidByCard = new HashMap<String, Long>();
         for (Map<String, Object> row : jdbc.queryForList("SELECT id, id_card FROM personnel WHERE id_card IS NOT NULL AND id_card != ''")) {
@@ -217,100 +266,119 @@ public class ReportController {
                     ((Number) row.get("id")).longValue());
         }
         List<String> peopleCols = people.isEmpty() ? new ArrayList<String>() : colsOf(people.get(0));
+        List<String> updCols = new ArrayList<String>();
+        for (String c : peopleCols) {
+            if (c.equals("id") || c.equals("id_card") || c.equals("department_id")
+                    || c.equals("created_at") || c.startsWith("_")) { continue; }
+            updCols.add(c);
+        }
+        List<Object[]> updateBatch = new ArrayList<Object[]>();
+        List<Map<String, Object>> toInsert = new ArrayList<Map<String, Object>>();
+        int pi = 0;
         for (Map<String, Object> p : people) {
             String card = String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")).trim().toUpperCase();
-            if (card.isEmpty()) {
-                skipped++;
-                continue;
-            }
+            pi++;
+            if (pi % 25 == 0) { prog(pid, 12 + (int) (30.0 * pi / Math.max(people.size(), 1)), "合并人员", pi + "/" + people.size()); }
+            if (card.isEmpty()) { skipped++; continue; }
             Long exist = localPidByCard.get(card);
             if (exist != null) {
-                // 更新(不改动本地单位归属与主键)
-                StringBuilder sql = new StringBuilder("UPDATE personnel SET ");
-                List<Object> args = new ArrayList<Object>();
-                for (String c : peopleCols) {
-                    if (c.equals("id") || c.equals("id_card") || c.equals("department_id")
-                            || c.equals("created_at") || c.startsWith("_")) {
-                        continue;
-                    }
-                    if (sql.indexOf("SET ") != sql.length() - 4 && sql.charAt(sql.length() - 1) != ' ') {
-                        sql.append(", ");
-                    }
-                    sql.append(c).append("=?");
-                    args.add(p.get(c));
-                }
-                sql.append(", updated_at=datetime('now','localtime') WHERE id=?");
-                args.add(exist);
-                jdbc.update(sql.toString(), args.toArray());
+                Object[] row = new Object[updCols.size() + 1];
+                for (int i = 0; i < updCols.size(); i++) { row[i] = p.get(updCols.get(i)); }
+                row[updCols.size()] = exist;
+                updateBatch.add(row);
                 updated++;
             } else {
-                List<String> insCols = new ArrayList<String>();
-                List<Object> insArgs = new ArrayList<Object>();
-                for (String c : peopleCols) {
-                    if (c.equals("id") || c.equals("created_at") || c.startsWith("_")) {
-                        continue;
-                    }
-                    insCols.add(c);
-                    insArgs.add(c.equals("department_id") ? targetDept : p.get(c));
-                }
-                jdbc.update("INSERT INTO personnel(" + join(insCols) + ") VALUES(" + marks(insCols.size()) + ")",
-                        insArgs.toArray());
-                Long newId = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
-                localPidByCard.put(card, newId);
-                added++;
+                toInsert.add(p);
             }
         }
+        if (!updateBatch.isEmpty() && !updCols.isEmpty()) {
+            StringBuilder sql = new StringBuilder("UPDATE personnel SET ");
+            for (int i = 0; i < updCols.size(); i++) {
+                if (i > 0) { sql.append(","); }
+                sql.append(updCols.get(i)).append("=?");
+            }
+            sql.append(", updated_at=datetime('now','localtime') WHERE id=?");
+            jdbc.batchUpdate(sql.toString(), updateBatch);
+        }
+        for (Map<String, Object> p : toInsert) {
+            List<String> insCols = new ArrayList<String>();
+            List<Object> insArgs = new ArrayList<Object>();
+            for (String c : peopleCols) {
+                if (c.equals("id") || c.equals("created_at") || c.startsWith("_")) { continue; }
+                insCols.add(c);
+                insArgs.add(c.equals("department_id") ? targetDept : p.get(c));
+            }
+            jdbc.update("INSERT INTO personnel(" + join(insCols) + ") VALUES(" + marks(insCols.size()) + ")", insArgs.toArray());
+            Long newId = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+            localPidByCard.put(String.valueOf(p.get("id_card")).trim().toUpperCase(), newId);
+            added++;
+        }
 
-        // 子表替换(该人的本地子记录清空后按包重建)
+        // ---- 子表替换(先批量删后批量插) ----
         Map<String, Object> subs = (Map<String, Object>) pkg.get("subs");
         int subRows = 0;
         if (subs != null) {
             for (Map.Entry<String, Object> e : subs.entrySet()) {
                 String table = e.getKey();
                 List<Map<String, Object>> rows = (List<Map<String, Object>>) e.getValue();
+                if (rows.isEmpty()) { continue; }
+                prog(pid, 45, "合并子表", tableLabel(table) + " " + rows.size() + " 条");
+                List<Object[]> dels = new ArrayList<Object[]>();
                 for (Map<String, Object> r : rows) {
-                    Long pid = pidOfCard(r.get("_card"), localPidByCard);
-                    if (pid == null) {
-                        continue;
-                    }
-                    jdbc.update("DELETE FROM " + table + " WHERE personnel_id = ?", pid);
+                    Long id2 = pidOfCard(r.get("_card"), localPidByCard);
+                    if (id2 != null) { dels.add(new Object[]{id2}); }
                 }
+                if (!dels.isEmpty()) { jdbc.batchUpdate("DELETE FROM " + table + " WHERE personnel_id=?", dels); }
+                List<Object[]> ins = new ArrayList<Object[]>();
+                List<String> insCols = new ArrayList<String>();
                 for (Map<String, Object> r : rows) {
-                    Long pid = pidOfCard(r.get("_card"), localPidByCard);
-                    if (pid == null) {
-                        continue;
-                    }
-                    List<String> insCols = new ArrayList<String>();
-                    List<Object> insArgs = new ArrayList<Object>();
-                    for (Map.Entry<String, Object> c : r.entrySet()) {
-                        String k = c.getKey();
-                        if (k.equals("id") || k.equals("personnel_id") || k.startsWith("_") || k.equals("created_at")) {
-                            continue;
+                    Long personId = pidOfCard(r.get("_card"), localPidByCard);
+                    if (personId == null) { continue; }
+                    if (insCols.isEmpty()) {
+                        for (Map.Entry<String, Object> c : r.entrySet()) {
+                            String k = c.getKey();
+                            if (k.equals("id") || k.equals("personnel_id") || k.startsWith("_") || k.equals("created_at")) { continue; }
+                            insCols.add(k);
                         }
-                        insCols.add(k);
-                        insArgs.add(c.getValue());
                     }
-                    jdbc.update("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")",
-                            append(pid, insArgs));
+                    Object[] row = new Object[insCols.size() + 1];
+                    row[0] = personId;
+                    int i = 1;
+                    for (String c : insCols) { row[i++] = r.get(c); }
+                    ins.add(row);
                     subRows++;
+                }
+                if (!ins.isEmpty()) {
+                    jdbc.batchUpdate("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
                 }
             }
         }
 
-        // 休假/体能:去重后新增(同人+同类型+同起止 / 同人+同项目+同日期)
-        int leaveAdded = 0, fitnessAdded = 0;
-        leaveAdded = mergeRows("leave_record", (List<Map<String, Object>>) pkg.get("leave"), localPidByCard,
-                "SELECT COUNT(*) FROM leave_record WHERE personnel_id=? AND leave_type=? AND start_date=? AND end_date=?",
+        // ---- 休假/体能(预载去重键 + 批量插入) ----
+        prog(pid, 65, "合并休假记录", null);
+        java.util.Set<String> leaveKeys = new java.util.HashSet<String>();
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT personnel_id, leave_type, start_date, end_date FROM leave_record")) {
+            leaveKeys.add(key(r.get("personnel_id"), r.get("leave_type"), r.get("start_date"), r.get("end_date")));
+        }
+        int leaveAdded = batchMerge(pid, 65, 72, "合并休假记录", "leave_record",
+                (List<Map<String, Object>>) pkg.get("leave"), localPidByCard, leaveKeys,
                 new String[]{"leave_type", "start_date", "end_date"});
-        fitnessAdded = mergeRows("fitness_record", (List<Map<String, Object>>) pkg.get("fitness"), localPidByCard,
-                "SELECT COUNT(*) FROM fitness_record WHERE personnel_id=? AND item=? AND test_date=?",
+        prog(pid, 72, "合并体能成绩", null);
+        java.util.Set<String> fitKeys = new java.util.HashSet<String>();
+        for (Map<String, Object> r : jdbc.queryForList("SELECT personnel_id, item, test_date FROM fitness_record")) {
+            fitKeys.add(key(r.get("personnel_id"), r.get("item"), r.get("test_date")));
+        }
+        int fitnessAdded = batchMerge(pid, 72, 80, "合并体能成绩", "fitness_record",
+                (List<Map<String, Object>>) pkg.get("fitness"), localPidByCard, fitKeys,
                 new String[]{"item", "test_date"});
 
-        // 资产合并
-        Map<String, Integer> eqR = mergeAssets("equipment", (List<Map<String, Object>>) pkg.get("equipment"), "装备", "code", "name");
-        Map<String, Integer> mtR = mergeAssets("material", (List<Map<String, Object>>) pkg.get("material"), "物资", "name", null);
-        Map<String, Integer> veR = mergeAssets("vehicle", (List<Map<String, Object>>) pkg.get("vehicle"), "车辆", "plate_no", null);
+        // ---- 资产 ----
+        Map<String, Integer> eqR = mergeAssets(pid, 80, 86, "equipment", (List<Map<String, Object>>) pkg.get("equipment"), "code", "name");
+        Map<String, Integer> mtR = mergeAssets(pid, 86, 92, "material", (List<Map<String, Object>>) pkg.get("material"), "name", null);
+        Map<String, Integer> veR = mergeAssets(pid, 92, 98, "vehicle", (List<Map<String, Object>>) pkg.get("vehicle"), "plate_no", null);
 
+        prog(pid, 100, "导入完成", null);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("deptName", deptName);
         result.put("created", createNew);
@@ -319,103 +387,144 @@ public class ReportController {
         result.put("skipped", skipped);
         result.put("subRows", subRows);
         result.put("leaveAdded", leaveAdded);
+        result.put("leaveTotal", ((List<?>) pkg.get("leave")).size());
         result.put("fitnessAdded", fitnessAdded);
+        result.put("fitnessTotal", ((List<?>) pkg.get("fitness")).size());
         result.put("equipmentAdded", eqR.get("added"));
         result.put("equipmentUpdated", eqR.get("updated"));
+        result.put("equipmentTotal", ((List<?>) pkg.get("equipment")).size());
         result.put("materialAdded", mtR.get("added"));
         result.put("materialUpdated", mtR.get("updated"));
+        result.put("materialTotal", ((List<?>) pkg.get("material")).size());
         result.put("vehicleAdded", veR.get("added"));
         result.put("vehicleUpdated", veR.get("updated"));
+        result.put("vehicleTotal", ((List<?>) pkg.get("vehicle")).size());
         return ApiResponse.ok(result);
     }
 
-    /**
-     * 资产表合并:主键在本地存在则整行更新,否则新增。
-     * key1 优先业务键(装备编号/车牌号),为空时退回 key2(名称)。
-     */
-    private Map<String, Integer> mergeAssets(String table, List<Map<String, Object>> rows,
-                                             String label, String key1, String key2) {
+    /** 批量合并带去重键的表(休假/体能) */
+    @SuppressWarnings("unchecked")
+    private int batchMerge(String pid, int pctFrom, int pctTo, String stage, String table,
+                           List<Map<String, Object>> rows, Map<String, Long> pidByCard,
+                           java.util.Set<String> existingKeys, String[] keyCols) {
+        if (rows == null || rows.isEmpty()) { return 0; }
+        List<Object[]> ins = new ArrayList<Object[]>();
+        List<String> insCols = new ArrayList<String>();
+        int n = 0;
+        int i = 0;
+        for (Map<String, Object> r : rows) {
+            i++;
+            if (i % 50 == 0) { prog(pid, pctFrom + (int) ((pctTo - pctFrom) * i / rows.size()), stage, i + "/" + rows.size()); }
+            Long personId = pidOfCard(r.get("_card"), pidByCard);
+            if (personId == null) { continue; }
+            Object[] kv = new Object[keyCols.length];
+            for (int k = 0; k < keyCols.length; k++) { kv[k] = r.get(keyCols[k]); }
+            Object[] keyParts = new Object[keyCols.length + 1];
+            keyParts[0] = personId;
+            System.arraycopy(kv, 0, keyParts, 1, keyCols.length);
+            if (existingKeys.contains(key(keyParts))) { continue; }
+            if (insCols.isEmpty()) {
+                for (Map.Entry<String, Object> c : r.entrySet()) {
+                    String k = c.getKey();
+                    if (k.equals("id") || k.equals("personnel_id") || k.startsWith("_") || k.equals("created_at")) { continue; }
+                    insCols.add(k);
+                }
+            }
+            Object[] row = new Object[insCols.size() + 1];
+            row[0] = personId;
+            int x = 1;
+            for (String c : insCols) { row[x++] = r.get(c); }
+            ins.add(row);
+            n++;
+        }
+        if (!ins.isEmpty()) {
+            jdbc.batchUpdate("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
+        }
+        return n;
+    }
+
+    private static String key(Object... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (Object p : parts) {
+            if (sb.length() > 0) { sb.append('|'); }
+            sb.append(p == null ? "" : String.valueOf(p));
+        }
+        return sb.toString();
+    }
+
+    private static String tableLabel(String table) {
+        String[][] zh = {{"position_history", "任职经历"}, {"reward_punish", "奖惩情况"}, {"child_info", "子女信息"},
+                {"family_member", "家庭成员"}, {"driver_license", "驾驶证"}, {"personal_card", "个人卡号"},
+                {"private_vehicle", "私家车"}, {"housing_info", "住房情况"}, {"equipment", "装备"}, {"material", "物资"}, {"vehicle", "车辆"}};
+        for (String[] z : zh) {
+            if (z[0].equals(table)) { return z[1]; }
+        }
+        return table;
+    }
+
+    /** 资产表合并:预载业务键表,批量更新/插入 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Integer> mergeAssets(String pid, int pctFrom, int pctTo, String table,
+                                             List<Map<String, Object>> rows, String key1, String key2) {
         Map<String, Integer> out = new LinkedHashMap<String, Integer>();
         out.put("added", 0);
         out.put("updated", 0);
-        if (rows == null || rows.isEmpty()) {
-            return out;
+        if (rows == null || rows.isEmpty()) { return out; }
+        prog(pid, pctFrom, "合并" + tableLabel(table), rows.size() + " 项");
+        Map<String, Long> byKey = new HashMap<String, Long>();
+        for (Map<String, Object> r : jdbc.queryForList("SELECT id, " + key1 + (key2 == null ? "" : "," + key2) + " FROM " + table)) {
+            Long id = ((Number) r.get("id")).longValue();
+            String k1 = String.valueOf(r.get(key1) == null ? "" : r.get(key1)).trim();
+            if (!k1.isEmpty()) { byKey.put(key1 + "=" + k1, id); }
+            if (key2 != null) {
+                String k2 = String.valueOf(r.get(key2) == null ? "" : r.get(key2)).trim();
+                if (!k2.isEmpty()) { byKey.put(key2 + "=" + k2, id); }
+            }
         }
+        List<Object[]> upd = new ArrayList<Object[]>();
+        List<Object[]> ins = new ArrayList<Object[]>();
+        List<String> cols0 = new ArrayList<String>();
+        int i = 0;
         for (Map<String, Object> r : rows) {
-            Object v1 = r.get(key1);
-            Object v2 = key2 == null ? null : r.get(key2);
-            String k1s = v1 == null ? "" : String.valueOf(v1).trim();
-            String k2s = v2 == null ? "" : String.valueOf(v2).trim();
+            i++;
+            if (i % 20 == 0) { prog(pid, pctFrom + (int) ((pctTo - pctFrom) * i / rows.size()), "合并" + tableLabel(table), i + "/" + rows.size()); }
+            String k1 = String.valueOf(r.get(key1) == null ? "" : r.get(key1)).trim();
+            String k2 = key2 == null ? "" : String.valueOf(r.get(key2) == null ? "" : r.get(key2)).trim();
             Long existId = null;
-            if (!k1s.isEmpty()) {
-                List<Map<String, Object>> hit = jdbc.queryForList("SELECT id FROM " + table + " WHERE " + key1 + " = ?", k1s);
-                if (!hit.isEmpty()) { existId = ((Number) hit.get(0).get("id")).longValue(); }
-            }
-            if (existId == null && !k2s.isEmpty()) {
-                List<Map<String, Object>> hit = jdbc.queryForList("SELECT id FROM " + table + " WHERE " + key2 + " = ?", k2s);
-                if (!hit.isEmpty()) { existId = ((Number) hit.get(0).get("id")).longValue(); }
-            }
-            List<String> cols = new ArrayList<String>();
-            List<Object> args = new ArrayList<Object>();
-            for (Map.Entry<String, Object> e : r.entrySet()) {
-                String k = e.getKey();
-                if (k.equals("id") || k.equals("created_at") || k.startsWith("_")) { continue; }
-                cols.add(k);
-                args.add(e.getValue());
-            }
-            if (existId != null) {
-                StringBuilder sql = new StringBuilder("UPDATE " + table + " SET ");
-                for (int i = 0; i < cols.size(); i++) {
-                    if (i > 0) { sql.append(","); }
-                    sql.append(cols.get(i)).append("=?");
+            if (!k1.isEmpty()) { existId = byKey.get(key1 + "=" + k1); }
+            if (existId == null && !k2.isEmpty()) { existId = byKey.get(key2 + "=" + k2); }
+            if (cols0.isEmpty()) {
+                for (String k : r.keySet()) {
+                    if (k.equals("id") || k.equals("created_at") || k.startsWith("_")) { continue; }
+                    cols0.add(k);
                 }
-                sql.append(", updated_at=datetime('now','localtime') WHERE id=?");
-                args.add(existId);
-                jdbc.update(sql.toString(), args.toArray());
+            }
+            Object[] args = new Object[cols0.size()];
+            for (int c = 0; c < cols0.size(); c++) { args[c] = r.get(cols0.get(c)); }
+            if (existId != null) {
+                Object[] row = new Object[args.length + 1];
+                System.arraycopy(args, 0, row, 0, args.length);
+                row[args.length] = existId;
+                upd.add(row);
                 out.put("updated", out.get("updated") + 1);
             } else {
-                jdbc.update("INSERT INTO " + table + "(" + join(cols) + ") VALUES(" + marks(cols.size()) + ")", args.toArray());
+                ins.add(args);
                 out.put("added", out.get("added") + 1);
             }
         }
+        if (!ins.isEmpty()) {
+            jdbc.batchUpdate("INSERT INTO " + table + "(" + join(cols0) + ") VALUES(" + marks(cols0.size()) + ")", ins);
+        }
+        if (!upd.isEmpty()) {
+            StringBuilder sql = new StringBuilder("UPDATE " + table + " SET ");
+            for (int c = 0; c < cols0.size(); c++) {
+                if (c > 0) { sql.append(","); }
+                sql.append(cols0.get(c)).append("=?");
+            }
+            sql.append(", updated_at=datetime('now','localtime') WHERE id=?");
+            jdbc.batchUpdate(sql.toString(), upd);
+        }
         return out;
-    }
-
-    private int mergeRows(String table, List<Map<String, Object>> rows, Map<String, Long> pidByCard,
-                          String dupSql, String[] dupCols) {
-        if (rows == null || rows.isEmpty()) {
-            return 0;
-        }
-        int n = 0;
-        for (Map<String, Object> r : rows) {
-            Long pid = pidOfCard(r.get("_card"), pidByCard);
-            if (pid == null) {
-                continue;
-            }
-            Object[] dargs = new Object[1 + dupCols.length];
-            dargs[0] = pid;
-            for (int i = 0; i < dupCols.length; i++) {
-                dargs[i + 1] = r.get(dupCols[i]);
-            }
-            Long c = jdbc.queryForObject(dupSql, Long.class, dargs);
-            if (c != null && c > 0) {
-                continue;
-            }
-            List<String> insCols = new ArrayList<String>();
-            List<Object> insArgs = new ArrayList<Object>();
-            for (Map.Entry<String, Object> e : r.entrySet()) {
-                String k = e.getKey();
-                if (k.equals("id") || k.equals("personnel_id") || k.startsWith("_") || k.equals("created_at")) {
-                    continue;
-                }
-                insCols.add(k);
-                insArgs.add(e.getValue());
-            }
-            jdbc.update("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")",
-                    append(pid, insArgs));
-            n++;
-        }
-        return n;
     }
 
     private static Long pidOfCard(Object card, Map<String, Long> pidByCard) {

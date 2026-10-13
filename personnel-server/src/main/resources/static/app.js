@@ -5760,6 +5760,29 @@ function backupView() {
           });
         }
 
+        function openReportResult(r) {
+          function row(name, a, b, total) {
+            return h('tr', {},
+              h('td', { text: name }),
+              h('td', { text: a + (b ? ' / 更新 ' + b : '') }),
+              h('td', { text: '包内共 ' + total + ' 条' }));
+          }
+          var table = h('table', { class: 'grid', style: 'width:100%' },
+            h('thead', {}, h('tr', {}, h('th', { text: '模块' }), h('th', { text: '处理结果' }), h('th', { text: '数据包' }))),
+            h('tbody', {},
+              row('人员', '新增 ' + r.added, r.updated, r.added + r.updated + (r.skipped || 0)),
+              h('tr', {}, h('td', { text: '人员子表' }), h('td', { text: '重建 ' + r.subRows + ' 条' }), h('td', { text: '以下级为准替换' })),
+              row('休假', '新增 ' + r.leaveAdded, null, r.leaveTotal),
+              row('体能', '新增 ' + r.fitnessAdded, null, r.fitnessTotal),
+              row('装备', '新增 ' + r.equipmentAdded, r.equipmentUpdated, r.equipmentTotal),
+              row('物资', '新增 ' + r.materialAdded, r.materialUpdated, r.materialTotal),
+              row('车辆', '新增 ' + r.vehicleAdded, r.vehicleUpdated, r.vehicleTotal)));
+          var mm = openModal({
+            title: '导入完成 · 接收部门「' + r.deptName + '」' + (r.created ? '(新建)' : ''), body: h('div', {}, table), wide: true,
+            footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { mm.close(); } })]
+          });
+        }
+
         function reportCheck(f) {
           var pm = showProgressModal('解析上报包');
           pm.setStatus('正在解析 ' + f.name + '…');
@@ -5850,14 +5873,35 @@ function backupView() {
                     if (!useDeptId) { toast('请选择接收部门', 'err'); return; }
                     fd.append('deptId', useDeptId);
                   }
+                  var pid = 'imp' + Date.now() + Math.floor(Math.random() * 1000);
+                  fd.append('progressId', pid);
                   var pm = showProgressModal('导入上报包');
-                  pm.setStatus('正在合并数据…');
-                  postFormWithProgress('/api/report/import', fd, function () { }).then(function (r) {
-                    pm.close();
+                  pm.setStatus('上传中…');
+                  // 轮询服务端真实进度(阶段+明细+百分比)
+                  var poll = setInterval(function () {
+                    GET('/api/report/progress?id=' + pid).then(function (pg) {
+                      if (pg && pg.pct !== undefined) {
+                        pm.setProgress(Math.max(2, Math.round(pg.pct)));
+                        pm.setStatus((pg.stage || '处理中') + (pg.detail ? ' · ' + pg.detail : ''));
+                      }
+                    }).catch(function () { });
+                  }, 400);
+                  postFormWithProgress('/api/report/import', fd, function (pct) {
+                    pm.setProgress(Math.max(1, Math.round(pct * 8)));
+                    pm.setStatus('上传中… ' + Math.round(pct) + '%');
+                  }).then(function (r) {
+                    clearInterval(poll);
+                    pm.setProgress(100);
+                    pm.setStatus('导入完成');
+                    setTimeout(function () { pm.close(); }, 300);
                     m.close();
-                    toast('导入完成:新增 ' + r.added + ' 人,更新 ' + r.updated + ' 人,装备+' + r.equipmentAdded + ',物资+' + r.materialAdded + ',车辆+' + r.vehicleAdded + (r.created ? ',新建「' + r.deptName + '」' : ''), 'ok');
+                    openReportResult(r);
                     refreshDepts();
-                  }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+                  }).catch(function (e) {
+                    clearInterval(poll);
+                    pm.close();
+                    toast(e.message, 'err');
+                  });
                 }
               })
             ]
