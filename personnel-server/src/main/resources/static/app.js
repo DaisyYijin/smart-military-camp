@@ -80,11 +80,11 @@ function confirmBox(msg, danger) {
 function badge(text) {
   var t = text || '';
   var cls = 'badge';
-  if (/在职|正常|优秀|已归还|启用|奖励/.test(t)) cls += ' green';
-  else if (/休假|借调|培训|良好|使用中/.test(t)) cls += ' blue';
+  if (/在职|正常|优秀|已归还|启用|奖励|已执行/.test(t)) cls += ' green';
+  else if (/休假|借调|培训|良好|使用中|计划中/.test(t)) cls += ' blue';
   else if (/离职|报废|不及格|损坏|停用|处分/.test(t)) cls += ' red';
   else if (/维修|保养|及格|预警|缺货/.test(t)) cls += ' orange';
-  else if (/其他|未填写/.test(t)) cls += ' gray';
+  else if (/其他|未填写|已取消/.test(t)) cls += ' gray';
   return '<span class="' + cls + '">' + esc(t || '-') + '</span>';
 }
 
@@ -104,7 +104,8 @@ var ICON_PATHS = {
   check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
   chevronL: '<polyline points="15 18 9 12 15 6"/>',
-  chevronR: '<polyline points="9 18 15 12 9 6"/>'
+  chevronR: '<polyline points="9 18 15 12 9 6"/>',
+  schedule: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
 };
 
 /**
@@ -1385,6 +1386,10 @@ function crudView(cfg) {
     // 休假模块特殊逻辑:自动计算 + 路途检查
     if (cfg.key === 'leave') {
       setupLeaveAutoCalc(form, row);
+    }
+    // 模块自定义表单联动(如休假计划自动算天数)
+    if (cfg.formSetup) {
+      cfg.formSetup(form, row);
     }
     // 体能考核:填分数自动按评定标准评级(可手动改)
     if (cfg.key === 'fitness') {
@@ -3853,6 +3858,86 @@ var leaveCfg = {
   }
 };
 
+/** 休假计划联动:开始/结束日期变化 → 自动算天数,年度为空时按开始日期带出 */
+function setupLeavePlanCalc(form) {
+  var startEl = form.inputs['startDate'];
+  var endEl = form.inputs['endDate'];
+  var daysEl = form.inputs['days'];
+  var yearEl = form.inputs['year'];
+  if (!startEl || !endEl) { return; }
+  function calc() {
+    var s = String(startEl.value || '').trim();
+    var e = String(endEl.value || '').trim();
+    if (s && e) {
+      var t1 = new Date(s + 'T00:00:00');
+      var t2 = new Date(e + 'T00:00:00');
+      if (!isNaN(t1) && !isNaN(t2) && t2 >= t1) {
+        if (daysEl) { daysEl.value = String(Math.round((t2 - t1) / 86400000) + 1); }
+        if (yearEl && !String(yearEl.value || '').trim()) { yearEl.value = s.slice(0, 4); }
+        endEl.classList.remove('bad');
+      } else {
+        if (daysEl) { daysEl.value = ''; }
+        if (!isNaN(t1) && !isNaN(t2)) { endEl.classList.add('bad'); }
+      }
+    } else if (daysEl) {
+      daysEl.value = '';
+    }
+  }
+  startEl.addEventListener('change', calc);
+  endEl.addEventListener('change', calc);
+  calc();
+}
+
+var leavePlanCfg = {
+  key: 'leavePlan', title: '休假计划', icon: 'schedule', endpoint: '/api/leave-plan',
+  clickKey: 'personnelName', addLabel: '新增休假计划',
+  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
+  formSetup: function (form, row) {
+    setupLeavePlanCalc(form);
+    // 新增时状态默认"计划中"(编辑已有状态则不动)
+    var st = form.inputs['status'];
+    if (st && !String(st.value || '').trim()) { st.value = '计划中'; }
+  },
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('leave_plan_status'); } }
+  ],
+  moreFilters: [
+    { key: 'idCard', label: '身份证号' },
+    { key: 'year', label: '年度', placeholder: '如 2026' }
+  ],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
+    { key: 'startDate', label: '计划开始' },
+    { key: 'endDate', label: '计划结束' },
+    { key: 'days', label: '天数', render: function (r) { return Number(r.days) > 0 ? Number(r.days) + ' 天' : '—'; } },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'remark', label: '备注' }
+  ],
+  rowTitle: function (r) { return r.personnelName; },
+  delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假计划吗?'; },
+  form: [
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'year', label: '年度', type: 'number', required: true, min: '1990', max: '2100', step: '1', placeholder: '如 2026' },
+    { key: 'startDate', label: '计划开始日期', type: 'date', required: true },
+    { key: 'endDate', label: '计划结束日期', type: 'date', required: true },
+    { key: 'days', label: '天数', readonly: true, placeholder: '按日期自动计算' },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('leave_plan_status'); } },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ],
+  beforeSave: function (data) {
+    // idCard/personnelName/days 仅用于表单展示,天数由服务端按日期重算
+    delete data.idCard;
+    delete data.personnelName;
+    delete data.days;
+    return data;
+  }
+};
+
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
   clickKey: 'personnelName', addLabel: '新增考核记录',
@@ -4667,7 +4752,7 @@ function openChangePassword() {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, fitnessCfg];
+var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, fitnessCfg];
 
 function renderShell() {
   if (!TOKEN) {

@@ -89,6 +89,9 @@ public class ModuleExcelService {
         m = new java.util.HashMap<String, String>();
         m.put("leaveType", "leave_type"); m.put("holidayName", "holiday_type");
         DICT_COLS.put("leave", m);
+        m = new java.util.HashMap<String, String>();
+        m.put("status", "leave_plan_status");
+        DICT_COLS.put("leave-plan", m);
     }
 
     /** 值不在字典中时自动登记,返回是否新增 */
@@ -157,6 +160,17 @@ public class ModuleExcelService {
                         new Col("节假日加假", "holidayDays", "number"),
                         new Col("节假日名称", "holidayName", "text"),
                         new Col("事由", "reason", "text"),
+                        new Col("备注", "remark", "text")),
+                ""));
+        MODULES.put("leave-plan", new ModuleDef("leave-plan", "休假计划", "leave_plan", "休假计划",
+                Arrays.asList(
+                        new Col("姓名", "personName", "text"),
+                        new Col("身份证号码", "idCard", "text"),
+                        new Col("年度", "year", "text"),
+                        new Col("计划开始日期", "startDate", "text"),
+                        new Col("计划结束日期", "endDate", "text"),
+                        new Col("天数", "days", "number", true),
+                        new Col("状态", "status", "text"),
                         new Col("备注", "remark", "text")),
                 ""));
         MODULES.put("fitness", new ModuleDef("fitness", "体能考核", "fitness_record", "体能考核",
@@ -296,7 +310,8 @@ public class ModuleExcelService {
 
         Map<Long, String> personNames = personNameMap();
         Map<Long, java.util.Map<String, String>> personInfo = new java.util.HashMap<Long, java.util.Map<String, String>>();
-        if ("fitness".equals(moduleKey)) {
+        boolean needPersonInfo = "fitness".equals(moduleKey) || "leave-plan".equals(moduleKey);
+        if (needPersonInfo) {
             for (Map<String, Object> pr : jdbc.queryForList("SELECT id, name, id_card FROM personnel")) {
                 java.util.Map<String, String> info = new java.util.HashMap<String, String>();
                 info.put("name", String.valueOf(pr.get("name") == null ? "" : pr.get("name")));
@@ -321,7 +336,7 @@ public class ModuleExcelService {
             for (int i = 0; i < def.cols.size(); i++) {
                 Col col = def.cols.get(i);
                 Object v = row.get(snake(col.key));
-                if (v == null && "fitness".equals(moduleKey)
+                if (v == null && needPersonInfo
                         && ("personName".equals(col.key) || "idCard".equals(col.key))) {
                     Object pidv = row.get("personnel_id");
                     if (pidv != null) {
@@ -497,6 +512,13 @@ public class ModuleExcelService {
                             addError(errors, r, err);
                             continue;
                         }
+                    } else if ("leave-plan".equals(moduleKey)) {
+                        String err = prepareLeavePlanRow(vals, cardMap, personIds);
+                        if (err != null) {
+                            failed++;
+                            addError(errors, r, err);
+                            continue;
+                        }
                     }
                     // 必填与业务键
                     String nameVal = String.valueOf(vals.get(def.cols.get(0).key));
@@ -576,6 +598,46 @@ public class ModuleExcelService {
     private String birthdayOf(Long pid) {
         List<Map<String, Object>> r = jdbc.queryForList("SELECT birthday FROM personnel WHERE id=?", pid);
         return r.isEmpty() || r.get(0).get("birthday") == null ? "" : String.valueOf(r.get(0).get("birthday"));
+    }
+
+    /** 休假计划行准备:匹配人员 → 校验日期 → 自动算天数/年度/状态;返回错误信息或 null */
+    private String prepareLeavePlanRow(Map<String, Object> vals, Map<String, Long> cardMap, Map<String, Long> nameMap) {
+        String card = str(vals.get("idCard"));
+        String name = str(vals.get("personName"));
+        Long pid = null;
+        if (!card.isEmpty()) {
+            pid = cardMap.get(card.trim().toUpperCase());
+        }
+        if (pid == null && !name.isEmpty()) {
+            pid = nameMap.get(name.trim());
+        }
+        if (pid == null || pid == 0) {
+            return "人员不存在(按身份证号/姓名均未匹配)";
+        }
+        String s = str(vals.get("startDate"));
+        String e = str(vals.get("endDate"));
+        if (s.length() < 10 || e.length() < 10) {
+            return "计划开始/结束日期为空或格式不对(应为 2026-01-31)";
+        }
+        try {
+            java.time.LocalDate d1 = java.time.LocalDate.parse(s);
+            java.time.LocalDate d2 = java.time.LocalDate.parse(e);
+            if (d2.isBefore(d1)) {
+                return "计划结束日期早于开始日期";
+            }
+            vals.put("days", (double) java.time.temporal.ChronoUnit.DAYS.between(d1, d2) + 1);
+            if (str(vals.get("year")).isEmpty()) {
+                vals.put("year", s.substring(0, 4));
+            }
+        } catch (Exception ex) {
+            return "计划日期格式不对(应为 2026-01-31)";
+        }
+        if (str(vals.get("status")).isEmpty()) {
+            vals.put("status", "计划中");
+        }
+        vals.put("personnelId", pid);
+        // idCard/personName 保留在 vals(必填检查用),入库时由 UPSERT_SKIP 排除
+        return null;
     }
 
     private static Integer ageAt(String birthday, String date) {

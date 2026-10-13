@@ -46,6 +46,7 @@ public class SchemaInitializer implements CommandLineRunner {
     private void initDefaultDict() {
         addDict("leave_type", new String[]{"事假", "病假", "年假", "探亲假", "婚假", "产假", "陪产假", "其他"});
         addDict("holiday_type", new String[]{"元旦", "春节", "清明节", "劳动节", "端午节", "中秋节", "国庆节", "其他"});
+        addDict("leave_plan_status", new String[]{"计划中", "已执行", "已取消"});
         addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "其他"});
         addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
         addDict("personnel_status", new String[]{"在职", "休假", "培训", "借调", "离职", "其他"});
@@ -221,6 +222,21 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_personnel ON leave_record(personnel_id)");
+
+        // 休假计划:预先安排的休假意向(状态:计划中/已执行/已取消)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS leave_plan (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER DEFAULT 0," +
+                "year TEXT DEFAULT ''," +
+                "start_date TEXT DEFAULT ''," +
+                "end_date TEXT DEFAULT ''," +
+                "days REAL DEFAULT 0," +
+                "status TEXT DEFAULT '计划中'," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_plan_personnel ON leave_plan(personnel_id)");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
