@@ -2968,7 +2968,7 @@ function normWeightStd(v) {
   };
   var m = (v && v.male) ? v.male : [17.5, 27.5];
   var f = (v && v.female) ? v.female : [17, 24.5];
-  return { ages: ['24岁以下', '25-29岁', '30-39岁', '40-49岁', '50-59岁', '60岁以上'], male: mk(m[0], m[1]), female: mk(f[0], f[1]) };
+  return { ages: ['0-24', '25-29', '30-39', '40-49', '50-59', '60-99'], male: mk(m[0], m[1]), female: mk(f[0], f[1]) };
 }
 function loadBmiStd() {
   return GET('/api/setting/bmi_standard').then(function (r) {
@@ -3208,7 +3208,7 @@ function importStdExcel(kind, done) {
 function openBmiStdManager() {
   var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
   ready.then(function (std) {
-    var AGE_DEFAULTS = ['24岁以下', '25-29岁', '30-39岁', '40-49岁', '50-59岁', '60岁以上'];
+    var AGE_DEFAULTS = ['0-24', '25-29', '30-39', '40-49', '50-59', '60-99'];
     var data = normWeightStd(std);
 
     function normWeightStd(v) {
@@ -3550,7 +3550,7 @@ function openFitnessStdManager() {
             var unit = unitDD.value;
             if (!unit) { toast('请选择计分方式(次数型或时间型)', 'err'); return; }
             m2.close();
-            var defaultAges = ['24岁以下', '25-27', '28-30', '31-33', '34-36', '37-39'];
+            var defaultAges = ['0-24', '25-27', '28-30', '31-33', '34-36', '37-39'];
             var defaultScores = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55];
             POST('/api/fitness-matrix/init', {
               item: name, unit: unit,
@@ -3597,7 +3597,7 @@ function openFitnessStdManager() {
     // 工具栏
     rightHead = h('div', { style: 'margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
       h('strong', { style: 'font-size:15px;color:#16437e', text: currentItem }),
-      h('span', { style: 'color:#a6b3c4;font-size:12px', text: '双击项目名重命名;单元格直接输入,失焦保存;双击表头删除' }),
+      h('span', { style: 'color:#a6b3c4;font-size:12px', text: '单元格直接输入,失焦保存;表头点击编辑年龄/分数;× 删除列' }),
       h('div', { style: 'flex:1' }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 年龄段', onclick: promptAgeGroup }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 分数行', onclick: promptScoreRow }));
@@ -3650,12 +3650,15 @@ function openFitnessStdManager() {
     var table = h('table', { class: 'grid sub-grid', style: 'background:#fff;border-radius:8px;overflow:hidden' });
     var head = '<thead><tr><th style="width:80px;text-align:center">分数\\年龄</th>';
     ageGroups.forEach(function (g) {
-      head += '<th class="mx-age-head" data-col="' + esc(g) + '" title="双击删除该列" style="text-align:center;cursor:pointer">' + esc(g) + '</th>';
+      head += '<th class="mx-age-head" data-col="' + esc(g) + '" style="text-align:center;white-space:nowrap">' +
+        '<input type="text" value="' + esc(g) + '" title="点击编辑年龄区间" style="width:64px;text-align:center;font-weight:700;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:4px;padding:2px 3px" />' +
+        '<button type="button" class="btn-link danger mx-age-del" data-col="' + esc(g) + '" title="删除该列" style="margin-left:3px;font-size:11px;vertical-align:middle">&times;</button></th>';
     });
     head += '</tr></thead>';
     var bodyHtml = '';
     scores.forEach(function (sc) {
-      bodyHtml += '<tr><th style="text-align:center;cursor:pointer" class="mx-score-head" data-score="' + sc + '" title="双击删除该行">' + sc + '</th>';
+      bodyHtml += '<tr><th style="text-align:center" class="mx-score-head" data-score="' + sc + '">' +
+        '<input type="text" value="' + sc + '" title="点击编辑分数" style="width:46px;text-align:center;font-weight:700;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:4px;padding:2px 3px" /></th>';
       ageGroups.forEach(function (g) {
         bodyHtml += '<td><input type="text" class="mx-input" data-col="' + esc(g) + '" data-score="' + sc +
           '" style="width:100%;height:28px;font-size:13px;padding:0 4px;text-align:center;border:1px solid transparent;border-radius:3px;background:transparent" /></td>';
@@ -3697,34 +3700,70 @@ function openFitnessStdManager() {
     });
     table.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.target.blur(); } });
 
-    // 双击表头删除
-    table.addEventListener('dblclick', function (e) {
+    // 年龄列删除按钮(×)
+    table.addEventListener('click', function (e) {
+      var del = e.target.closest('.mx-age-del');
+      if (!del) { return; }
+      var g = del.getAttribute('data-col');
+      confirmBox('确定删除年龄段「' + g + '」整列数据?', true).then(function (yes) {
+        if (!yes) { return; }
+        DEL('/api/fitness-matrix/column?item=' + encodeURIComponent(currentItem)
+          + '&age_group=' + encodeURIComponent(g)).then(function () {
+          ageGroups = ageGroups.filter(function (x) { return x !== g; });
+          renderRight();
+          reloadFitnessMatrix();
+        }).catch(function (err) { toast(err.message, 'err'); });
+      });
+    });
+
+    // 表头输入框:失焦/回车 → 重命名(年龄区间/分数,数据批量迁移到新名称)
+    table.addEventListener('change', function (e) {
+      if (e.target.tagName !== 'INPUT') { return; }
       var ageHead = e.target.closest('.mx-age-head');
       if (ageHead) {
-        var g = ageHead.getAttribute('data-col');
-        confirmBox('确定删除年龄段「' + g + '」整列数据?', true).then(function (yes) {
-          if (!yes) { return; }
-          DEL('/api/fitness-matrix/column?item=' + encodeURIComponent(currentItem)
-            + '&age_group=' + encodeURIComponent(g)).then(function () {
-            ageGroups = ageGroups.filter(function (x) { return x !== g; });
-            renderRight();
-            reloadFitnessMatrix();
-          }).catch(function (err) { toast(err.message, 'err'); });
-        });
+        var oldG = ageHead.getAttribute('data-col');
+        var newG = e.target.value.trim();
+        if (!newG || newG === oldG) { e.target.value = oldG; return; }
+        GET('/api/fitness-matrix?item=' + encodeURIComponent(currentItem)).then(function (rows) {
+          var chain = Promise.resolve();
+          (rows || []).filter(function (r) { return r.age_group === oldG; }).forEach(function (r) {
+            chain = chain.then(function () {
+              return POST('/api/fitness-matrix', { item: currentItem, age_group: newG, score: r.score, value: r.value });
+            });
+          });
+          return chain;
+        }).then(function () {
+          return DEL('/api/fitness-matrix/column?item=' + encodeURIComponent(currentItem)
+            + '&age_group=' + encodeURIComponent(oldG));
+        }).then(function () {
+          ageGroups = ageGroups.map(function (x) { return x === oldG ? newG : x; });
+          renderRight();
+          reloadFitnessMatrix();
+          toast('年龄区间已改为「' + newG + '」');
+        }).catch(function (err) { toast(err.message, 'err'); renderRight(); });
         return;
       }
       var scoreHead = e.target.closest('.mx-score-head');
       if (scoreHead) {
-        var sc = +scoreHead.getAttribute('data-score');
-        confirmBox('确定删除分数「' + sc + '」整行数据?', true).then(function (yes) {
-          if (!yes) { return; }
-          DEL('/api/fitness-matrix?item=' + encodeURIComponent(currentItem) + '&score=' + sc)
-            .then(function () {
-              scores = scores.filter(function (x) { return x !== sc; });
-              renderRight();
-              reloadFitnessMatrix();
-            }).catch(function (err) { toast(err.message, 'err'); });
-        });
+        var oldS = +scoreHead.getAttribute('data-score');
+        var newS = parseInt(e.target.value, 10);
+        if (isNaN(newS) || newS === oldS) { e.target.value = oldS; return; }
+        GET('/api/fitness-matrix?item=' + encodeURIComponent(currentItem)).then(function (rows) {
+          var chain = Promise.resolve();
+          (rows || []).filter(function (r) { return +r.score === oldS; }).forEach(function (r) {
+            chain = chain.then(function () {
+              return POST('/api/fitness-matrix', { item: currentItem, age_group: r.age_group, score: newS, value: r.value });
+            });
+          });
+          return chain;
+        }).then(function () {
+          return DEL('/api/fitness-matrix?item=' + encodeURIComponent(currentItem) + '&score=' + oldS);
+        }).then(function () {
+          scores = scores.map(function (x) { return +x === oldS ? newS : x; });
+          renderRight();
+          reloadFitnessMatrix();
+          toast('分数已改为 ' + newS);
+        }).catch(function (err) { toast(err.message, 'err'); renderRight(); });
       }
     });
 
@@ -3735,7 +3774,7 @@ function openFitnessStdManager() {
   /* ===== 弹窗式添加 ===== */
   function promptAgeGroup() {
     if (!currentItem) { toast('请先选择项目', 'err'); return; }
-    var input = h('input', { type: 'text', placeholder: '如:40-42、40以上、24岁以下', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
+    var input = h('input', { type: 'text', placeholder: '如:0-24、25-29、40-42', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
     var m2 = openModal({
       title: '添加年龄段',
       body: h('div', {}, h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:8px', text: '输入年龄段名称,将作为矩阵的新列:' }), input),
