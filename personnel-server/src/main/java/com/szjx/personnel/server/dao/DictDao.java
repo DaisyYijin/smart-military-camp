@@ -72,10 +72,10 @@ public class DictDao {
                 Long.class,
                 d.getDictType(),
                 d.getDictLabel(),
-                d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getEnabled() != null && d.getEnabled() ? 1 : 0,
-                d.getRemark() == null ? "" : d.getRemark());
+                d.getRemark() == null ? "" : d.getRemark(),
+                d.getParentId() == null ? 0 : d.getParentId());
     }
 
     public void update(DictItem d) {
@@ -83,10 +83,10 @@ public class DictDao {
                         "updated_at=datetime('now','localtime') WHERE id=?",
                 d.getDictType(),
                 d.getDictLabel(),
-                d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getEnabled() != null && d.getEnabled() ? 1 : 0,
                 d.getRemark() == null ? "" : d.getRemark(),
+                d.getParentId() == null ? 0 : d.getParentId(),
                 d.getId());
     }
 
