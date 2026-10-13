@@ -5608,22 +5608,32 @@ function settingsView() {
   /* ---- TAB 框架 ---- */
   var panels = {};
   var tabDefs = [
-    ['basic', '基础信息'],
-    ['theme', '主题与显示'],
-    ['backup', '备份恢复'],
-    ['report', '数据上报']
+    ['basic', '基础信息', null],
+    ['theme', '主题与显示', null],
+    ['backup', '备份恢复', function () { if (!backupLoaded) { backupLoaded = true; backupView('backup').render(panels.backup.firstChild); } }],
+    ['report', '数据上报', function () { if (!reportLoaded) { reportLoaded = true; backupView('report').render(panels.report.firstChild); } }]
   ];
+  // 记住最后浏览的TAB(刷新不跳回第一个)
+  var savedTab = null;
+  try { savedTab = localStorage.getItem('settingsTab'); } catch (e) { }
+  var activeIdx = 0;
+  tabDefs.forEach(function (td, idx) { if (td[0] === savedTab) { activeIdx = idx; } });
   var tabBar = h('div', { class: 'tabs panel', style: 'padding:0 8px;margin-bottom:16px' });
   var panelsBox = h('div');
+  var tabEls = [];
   tabDefs.forEach(function (td, idx) {
-    var body = h('div', { style: 'display:none' });
+    var on = idx === activeIdx;
+    var body = h('div', { style: on ? 'display:block' : 'display:none' });   // 修复:激活TAB的面板默认可见
     panels[td[0]] = body;
-    var tab = h('div', { class: 'tab' + (idx === 0 ? ' active' : ''), text: td[1], onclick: function () {
+    var tab = h('div', { class: 'tab' + (on ? ' active' : ''), text: td[1], onclick: function () {
       Array.prototype.forEach.call(tabBar.children, function (t) { t.classList.remove('active'); });
       tab.classList.add('active');
       Object.keys(panels).forEach(function (k) { panels[k].style.display = 'none'; });
       body.style.display = 'block';
+      try { localStorage.setItem('settingsTab', td[0]); } catch (e) { }
+      if (td[2]) { td[2](); }
     } });
+    tabEls.push(tab);
     tabBar.appendChild(tab);
   });
   panels.basic.appendChild(s1.box);
@@ -5634,20 +5644,12 @@ function settingsView() {
   panels.report.appendChild(h('div'));   // 数据上报(懒加载)
 
   var backupLoaded = false, reportLoaded = false;
-  tabBar.children[2].addEventListener('click', function () {
-    if (backupLoaded) { return; }
-    backupLoaded = true;
-    backupView('backup').render(panels.backup.firstChild);
-  });
-  tabBar.children[3].addEventListener('click', function () {
-    if (reportLoaded) { return; }
-    reportLoaded = true;
-    backupView('report').render(panels.report.firstChild);
-  });
 
   function render(container) {
     container.appendChild(h('div', {}, tabBar, panelsBox));
     tabDefs.forEach(function (td) { panelsBox.appendChild(panels[td[0]]); });
+    // 恢复到记忆的TAB:面板就绪后再触发懒加载
+    if (activeIdx > 0 && tabDefs[activeIdx][2]) { tabDefs[activeIdx][2](); }
   }
   return { render: render };
 }
