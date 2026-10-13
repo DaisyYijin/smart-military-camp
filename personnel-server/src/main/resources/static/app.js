@@ -596,17 +596,27 @@ function loadSiteSettings() {
 
 /* ================= API 层 ================= */
 
-var TOKEN = localStorage.getItem('tk') || '';
+var TOKEN = sessionStorage.getItem('tk') || localStorage.getItem('tk') || '';
 var USER = null;
-try { USER = JSON.parse(localStorage.getItem('usr') || 'null'); } catch (e) { USER = null; }
+try { USER = JSON.parse(sessionStorage.getItem('usr') || localStorage.getItem('usr') || 'null'); } catch (e) { USER = null; }
 
-function saveSession(token, user) {
+function saveSession(token, user, remember) {
   TOKEN = token; USER = user;
-  localStorage.setItem('tk', token);
-  localStorage.setItem('usr', JSON.stringify(user || {}));
+  try {
+    sessionStorage.setItem('tk', token);
+    sessionStorage.setItem('usr', JSON.stringify(user || {}));
+  } catch (e) { /* 隐私模式忽略 */ }
+  if (remember) {
+    localStorage.setItem('tk', token);
+    localStorage.setItem('usr', JSON.stringify(user || {}));
+  } else {
+    localStorage.removeItem('tk');
+    localStorage.removeItem('usr');
+  }
 }
 function clearSession() {
   TOKEN = ''; USER = null;
+  try { sessionStorage.removeItem('tk'); sessionStorage.removeItem('usr'); } catch (e) { }
   localStorage.removeItem('tk'); localStorage.removeItem('usr');
 }
 
@@ -6077,6 +6087,8 @@ function renderLogin(msg) {
   var errBox = h('div', { class: 'login-error' });
   var userInput = h('input', { type: 'text', placeholder: '请输入管理员账号', autocomplete: 'username' });
   var pwInput = h('input', { type: 'password', placeholder: '请输入密码', autocomplete: 'current-password' });
+  var rememberCb = h('input', { type: 'checkbox', id: 'remember-me' });
+  rememberCb.checked = true;
   var btn = h('button', { class: 'btn btn-primary login-btn', text: '登  录' });
 
   function submit() {
@@ -6086,7 +6098,7 @@ function renderLogin(msg) {
     btn.disabled = true; btn.textContent = '登录中…';
     errBox.textContent = '';
     api('POST', '/api/auth/login', { username: u, password: p }).then(function (data) {
-      saveSession(data.token, { username: data.username, displayName: data.displayName });
+      saveSession(data.token, { username: data.username, displayName: data.displayName }, rememberCb.checked);
       return refreshAll().then(renderShell);
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = '登  录';
@@ -6106,6 +6118,10 @@ function renderLogin(msg) {
       SITE.subtitle && SITE.subtitle !== '人员管理系统' ? h('div', { class: 'login-subtitle', text: SITE.subtitle }) : null,
       h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
       h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
+      h('label', { class: 'login-remember', for: 'remember-me' },
+        rememberCb,
+        h('span', { text: '保持登录(记住我)' }),
+        h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录' })),
       errBox,
       btn,
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));

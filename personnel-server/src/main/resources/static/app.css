@@ -963,3 +963,11 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .dept-group.nested { background: #fff; margin: 0; }
 .dept-children { margin-left: 20px; display: flex; flex-wrap: wrap; gap: 7px; align-items: flex-start; }
 .dept-children .dept-group { margin-bottom: 0; }
+
+/* 登录页:记住我 */
+.login-remember {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 16px;
+  font-size: 13px; color: #66788c; cursor: pointer; user-select: none;
+}
+.login-remember input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--pri, #2f6fd6); cursor: pointer; }
+.login-remember .hint { color: #a6b1bf; font-size: 12px; }
