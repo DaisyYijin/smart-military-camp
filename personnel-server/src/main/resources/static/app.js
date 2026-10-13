@@ -5722,6 +5722,9 @@ function backupView() {
           var body = h('div', {},
             h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:12px', text: '勾选要上报的模块(可只传部分数据):' }));
           [['personnel', '人员信息(含任职/家庭等子表)', true],
+           ['equipment', '装备台账', true],
+           ['material', '物资台账', true],
+           ['vehicle', '车辆信息', true],
            ['leave', '休假记录', true],
            ['fitness', '体能考核成绩', true]].forEach(function (m) {
             var cb = h('input', { type: 'checkbox' });
@@ -5740,7 +5743,7 @@ function backupView() {
                 class: 'btn btn-primary', text: '导出',
                 onclick: function () {
                   var mods = [];
-                  ['personnel', 'leave', 'fitness'].forEach(function (k) { if (boxes[k].checked) { mods.push(k); } });
+                  ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness'].forEach(function (k) { if (boxes[k].checked) { mods.push(k); } });
                   if (!mods.length) { toast('至少选择一个模块', 'err'); return; }
                   m.close();
                   var pm = showProgressModal('导出上报包');
@@ -5777,7 +5780,8 @@ function backupView() {
 
           body.appendChild(h('div', { style: 'background:#eef4ff;border-radius:8px;padding:12px 16px;margin-bottom:14px;line-height:1.9;font-size:13.5px' },
             h('div', { html: '上报单位:<b>' + esc(d.unit) + '</b>(' + esc(d.exportedAt || '') + ')' }),
-            h('div', { html: '人员 <b>' + d.personnelCount + '</b> 人(新 ' + d.newCount + ' / 本单位已存在 ' + d.existCount + '),子表 ' + d.subCount + ' 条,休假 ' + d.leaveCount + ' 条,体能 ' + d.fitnessCount + ' 条' })));
+            h('div', { html: '人员 <b>' + d.personnelCount + '</b> 人(新 ' + d.newCount + ' / 本单位已存在 ' + d.existCount + '),子表 ' + d.subCount + ' 条,休假 ' + d.leaveCount + ' 条,体能 ' + d.fitnessCount + ' 条' }),
+            h('div', { html: '装备 ' + d.equipmentCount + ' 项,物资 ' + d.materialCount + ' 项,车辆 ' + d.vehicleCount + ' 辆' })));
 
           var deptArea = h('div');
           function renderDeptChoice() {
@@ -5828,7 +5832,7 @@ function backupView() {
 
           body.appendChild(deptArea);
           body.appendChild(h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:12px;line-height:1.8',
-            text: '合并规则:按身份证去重,新人员进入所选部门;已存在人员只更新基本信息(不改动其现有单位);子表(任职/家庭等)以包为准替换;休假/体能自动跳过重复记录。' }));
+            text: '合并规则:人员按身份证去重(新人入所选部门,老人仅更新不改单位);子表以下级为准替换;休假/体能跳过重复;装备按编号、物资按名称、车辆按车牌去重(有则更新,无则新增)。' }));
 
           var m = openModal({
             title: '接收下级数据 - ' + d.unit, body: body, wide: true,
@@ -5851,7 +5855,7 @@ function backupView() {
                   postFormWithProgress('/api/report/import', fd, function () { }).then(function (r) {
                     pm.close();
                     m.close();
-                    toast('导入完成:新增 ' + r.added + ' 人,更新 ' + r.updated + ' 人' + (r.created ? ',新建部门「' + r.deptName + '」' : ''), 'ok');
+                    toast('导入完成:新增 ' + r.added + ' 人,更新 ' + r.updated + ' 人,装备+' + r.equipmentAdded + ',物资+' + r.materialAdded + ',车辆+' + r.vehicleAdded + (r.created ? ',新建「' + r.deptName + '」' : ''), 'ok');
                     refreshDepts();
                   }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
                 }
