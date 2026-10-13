@@ -3179,6 +3179,27 @@ function openGradeRuleManager() {
   });
 }
 
+/** 标准Excel导入(评分矩阵/体重标准),成功后回调刷新 */
+function importStdExcel(kind, done) {
+  var input = h('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
+  input.addEventListener('change', function () {
+    var f = input.files[0];
+    input.value = '';
+    if (!f) { return; }
+    var fd = new FormData();
+    fd.append('file', f);
+    postFormWithProgress('/api/fitness-std/' + kind + '/import', fd, function () { }).then(function (r) {
+      var msg = '导入完成:' + (r.added !== undefined ? '新增 ' + r.added + ' 格,更新 ' + r.updated + ' 格' : '共 ' + r.rows + ' 行') + (r.failed ? ',失败 ' + r.failed : '');
+      toast(msg, r.failed ? 'info' : 'ok');
+      if (r.errors && r.errors.length) { toast(r.errors.join('；'), 'err'); }
+      done(r);
+    }).catch(function (e) { toast(e.message, 'err'); });
+  });
+  document.body.appendChild(input);
+  input.click();
+  setTimeout(function () { input.remove(); }, 60000);
+}
+
 /** 体重标准(原BMI):按性别 × 身高行 × 年龄列的合格体重区间矩阵 */
 function openBmiStdManager() {
   var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
@@ -3301,8 +3322,19 @@ function openBmiStdManager() {
     }
 
     var body = h('div', {},
-      h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:10px;line-height:1.7',
-        text: '体重合格标准:行=身高(米),列=年龄段,单元格=合格体重区间(填 47.4~66.3)。判定:人员身高匹配最接近的行、年龄匹配列,体重在区间内为及格(体能档案与体重考核导入共用)。' }),
+      h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap' },
+        h('span', { style: 'font-size:13px;color:#66788c;flex:1;min-width:260px', text: '体重合格标准:行=身高(米),列=年龄段,单元格=合格体重区间(填 47.4~66.3)。判定:身高匹配行、年龄匹配列。' }),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '下载模板', onclick: function () {
+          var pm = showProgressModal('下载模板');
+          apiBlobWithProgress('/api/fitness-std/weight/template', function (p) { pm.setProgress(p); }).then(function (r) {
+            pm.setProgress(100); downloadBlob(r.blob, r.filename); setTimeout(function () { pm.close(); }, 400);
+          }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+        } }),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '导入Excel', onclick: function () {
+          importStdExcel('weight', function (r) {
+            loadBmiStd().then(function () { m.close(); openBmiStdManager(); });
+          });
+        } })),
       h('div', { style: 'display:flex;gap:8px;margin-bottom:10px;align-items:center' },
         (function () {
           var box = h('div', { style: 'display:flex;gap:6px' });
@@ -3335,6 +3367,7 @@ function openBmiStdManager() {
         } })),
       gridBox);
 
+    var m;
     var m = openModal({
       title: '体重标准(身高 × 年龄段 合格区间矩阵)', body: body, wide: true,
       footer: [
@@ -3371,7 +3404,16 @@ function openFitnessStdManager() {
   var topbar = h('div', { style: 'height:48px;flex:none;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px' },
     h('div', { style: 'display:flex;align-items:center;gap:14px' },
       h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
-      h('button', { class: 'btn btn-ghost btn-sm', text: 'BMI标准', title: '设置男女身高体重指数合格区间', onclick: openBmiStdManager })),
+      h('button', { class: 'btn btn-ghost btn-sm', text: 'BMI标准', title: '设置体重合格标准(身高×年龄)', onclick: openBmiStdManager }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: '下载模板', title: '下载评分标准Excel模板(每项目一个Sheet)', onclick: function () {
+        var pm = showProgressModal('下载模板');
+        apiBlobWithProgress('/api/fitness-std/matrix/template', function (p) { pm.setProgress(p); }).then(function (r) {
+          pm.setProgress(100); downloadBlob(r.blob, r.filename); setTimeout(function () { pm.close(); }, 400);
+        }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+      } }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: '导入Excel', title: '导入评分标准(每Sheet一个项目:分数列+各年龄段列)', onclick: function () {
+        importStdExcel('matrix', function () { refreshAll(); });
+      } })),
     h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: ' ' }),
     h('button', { class: 'btn btn-primary', text: '✕ 关闭', onclick: function () { overlay.remove(); reloadFitnessMatrix(); } }));
   var mainArea = h('div', { style: 'flex:1;display:flex;overflow:hidden' });
