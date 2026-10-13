@@ -795,6 +795,11 @@ function buildForm(fields, values, extraPanels) {
     wrap.appendChild(el);
     panel.appendChild(wrap);
 
+    // 人员下拉旁加"选择"按钮:弹窗按姓名/身份证/部门搜索选人
+    if (f.type === 'personnel') {
+      attachPersonPick(el, function (p) { el.value = String(p.id); });
+    }
+
     // 级联下拉:父字段选定后,本字段选项过滤为该父项的下级(如 品牌→型号)
     if (f.depends && f.type === 'select') {
       pendingDepends.push(f);
