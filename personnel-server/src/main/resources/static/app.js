@@ -5440,7 +5440,6 @@ function logView() {
 /* ================= 系统设置视图 ================= */
 
 function settingsView() {
-  var root = h('div');
   var vals = {
     siteName: SITE.name === '数智军营' ? '' : SITE.name,
     siteTitle: SITE.title === '数智军营人员管理系统' ? '' : SITE.title,
@@ -5448,14 +5447,14 @@ function settingsView() {
     siteLogo: SITE.logo || '', siteFavicon: SITE.favicon || '',
     themeColor: SITE.theme || '#2f6fd6', pageSize: String(SITE.pageSize || 20), backupKeep: '14'
   };
+  var root = h('div');
 
   function section(title) {
     var box = h('div', { class: 'panel', style: 'margin-bottom:16px' });
     box.appendChild(h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: title }));
     var body = h('div', { style: 'padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px' });
     box.appendChild(body);
-    root.appendChild(box);
-    return body;
+    return { box: box, body: body };
   }
   function field(label, el, hint) {
     return h('div', { class: 'form-item', style: 'margin:0' },
@@ -5470,13 +5469,12 @@ function settingsView() {
     return i;
   }
 
-  /* ---- 基础信息 ---- */
-  var basic = section('基础信息');
-  basic.appendChild(field('网站名称(侧栏主标题)', txt('siteName', '默认:数智军营')));
-  basic.appendChild(field('系统标题(浏览器标签页)', txt('siteTitle', '默认:数智军营人员管理系统')));
-  basic.appendChild(field('网站副标题(侧栏副标题)', txt('siteSubtitle', '默认:人员管理系统')));
-  basic.appendChild(h('div'));
-
+  /* ---- Tab1 基础信息 ---- */
+  var s1 = section('基础信息');
+  s1.body.appendChild(field('网站名称(侧栏主标题)', txt('siteName', '默认:数智军营')));
+  s1.body.appendChild(field('系统标题(浏览器标签页)', txt('siteTitle', '默认:数智军营人员管理系统')));
+  s1.body.appendChild(field('网站副标题(侧栏副标题)', txt('siteSubtitle', '默认:人员管理系统')));
+  s1.body.appendChild(h('div'));
   var logoPrev = h('div', { style: 'display:flex;align-items:center;gap:12px' });
   var logoImg = h('img', { src: vals.siteLogo, style: 'max-height:44px;max-width:150px;display:' + (vals.siteLogo ? 'block' : 'none') + ';border-radius:6px;border:1px solid #edf1f6' });
   var logoFile = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
@@ -5495,8 +5493,7 @@ function settingsView() {
     logoImg.style.display = 'none';
   } }));
   logoPrev.appendChild(logoFile);
-  basic.appendChild(field('LOGO(侧栏/登录页)', logoPrev, '建议 PNG 透明底,不超过 300KB'));
-
+  s1.body.appendChild(field('LOGO(侧栏/登录页)', logoPrev, '建议 PNG 透明底,不超过 300KB'));
   var favPrev = h('div', { style: 'display:flex;align-items:center;gap:12px' });
   var favImg = h('img', { src: vals.siteFavicon, style: 'width:32px;height:32px;border-radius:4px;display:' + (vals.siteFavicon ? 'block' : 'none') });
   var favFile = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
@@ -5515,18 +5512,11 @@ function settingsView() {
     favImg.style.display = 'none';
   } }));
   favPrev.appendChild(favFile);
-  basic.appendChild(field('网站图标(favicon)', favPrev, '建议 32x32 或 64x64,浏览器标签页小图标'));
+  s1.body.appendChild(field('网站图标(favicon)', favPrev, '建议 32x32 或 64x64,浏览器标签页小图标'));
 
-  /* ---- 主题色 ---- */
-  var themeSec = section('主题色');
+  /* ---- Tab2 主题与显示 ---- */
+  var s2 = section('主题色');
   var presets = ['#2f6fd6', '#4a7c59', '#1f3a5f', '#8a4a2f', '#7048b7', '#b03a3a', '#0d8484', '#5a5f6b'];
-  /** 选色即时保存到服务器(刷新/其他人打开都保持) */
-  function saveThemeNow(c) {
-    PUT('/api/setting/themeColor', c).then(function () {
-      SITE.theme = c;
-      toast('主题色已应用并保存', 'ok');
-    }).catch(function (e) { toast(e.message, 'err'); });
-  }
   var swatches = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' });
   presets.forEach(function (c) {
     var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? '#1d2c40' : 'transparent'), title: c });
@@ -5550,29 +5540,28 @@ function settingsView() {
   });
   swatches.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '自定义:' }));
   swatches.appendChild(customColor);
-  themeSec.appendChild(h('div', { style: 'grid-column:1/-1' }, swatches,
-    h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:8px', text: '点击即时预览;保存后对所有人生效,图表主色随主题变化' })));
+  s2.body.appendChild(h('div', { style: 'grid-column:1/-1' }, swatches,
+    h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:8px', text: '点击即时应用并保存;全站按钮/菜单/图表/侧栏随主题变化' })));
 
-  /* ---- 显示与维护 ---- */
-  var disp = section('显示与维护');
+  var s3 = section('显示与维护');
   var pageSizeSel = h('select', { style: 'width:100%;height:34px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
   ['10', '20', '50', '100'].forEach(function (n) {
     pageSizeSel.appendChild(h('option', { value: n, text: n + ' 条/页' }));
   });
   pageSizeSel.value = vals.pageSize;
   pageSizeSel.addEventListener('change', function () { vals.pageSize = pageSizeSel.value; });
-  disp.appendChild(field('列表每页条数', pageSizeSel, '保存后刷新页面生效'));
+  s3.body.appendChild(field('列表每页条数', pageSizeSel, '保存后刷新页面生效'));
   var keepInput = h('input', { type: 'number', min: '7', max: '60', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
   keepInput.value = vals.backupKeep;
   keepInput.addEventListener('input', function () { vals.backupKeep = keepInput.value; });
-  disp.appendChild(field('自动备份保留份数', keepInput, '每天 03:00 自动备份,超出自动轮转删除(7~60)'));
+  s3.body.appendChild(field('自动备份保留份数', keepInput, '每天 03:00 自动备份,超出自动轮转删除(7~60)'));
   GET('/api/setting/backupKeep').then(function (v) {
     if (v) { keepInput.value = v; vals.backupKeep = v; }
   }).catch(function () { });
 
-  /* ---- 操作条 ---- */
-  var bar = h('div', { class: 'panel', style: 'padding:14px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap' });
-  bar.appendChild(h('button', {
+  /* ---- 保存条(基础+主题+显示通用) ---- */
+  var saveBar = h('div', { class: 'panel', style: 'padding:14px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap' });
+  saveBar.appendChild(h('button', {
     class: 'btn btn-primary', text: '保存全部设置',
     onclick: function () {
       var keys = ['siteName', 'siteTitle', 'siteSubtitle', 'siteLogo', 'siteFavicon', 'themeColor', 'pageSize', 'backupKeep'];
@@ -5602,7 +5591,7 @@ function settingsView() {
       }).catch(function (e) { toast(e.message, 'err'); });
     }
   }));
-  bar.appendChild(h('button', {
+  saveBar.appendChild(h('button', {
     class: 'btn btn-ghost', text: '恢复默认外观',
     onclick: function () {
       confirmBox('确定恢复默认外观?标题/LOGO/图标/主题色将清空为默认值。', true).then(function (yes) {
@@ -5614,37 +5603,56 @@ function settingsView() {
       });
     }
   }));
-  bar.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '设置保存在服务器,对所有使用本系统的人生效' }));
-  root.appendChild(bar);
+  saveBar.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '设置保存在服务器,对所有使用本系统的人生效' }));
+
+  /* ---- TAB 框架 ---- */
+  var panels = {};
+  var tabDefs = [
+    ['basic', '基础信息'],
+    ['theme', '主题与显示'],
+    ['backup', '备份恢复'],
+    ['report', '数据上报']
+  ];
+  var tabBar = h('div', { class: 'tabs panel', style: 'padding:0 8px;margin-bottom:16px' });
+  var panelsBox = h('div');
+  tabDefs.forEach(function (td, idx) {
+    var body = h('div', { style: 'display:none' });
+    panels[td[0]] = body;
+    var tab = h('div', { class: 'tab' + (idx === 0 ? ' active' : ''), text: td[1], onclick: function () {
+      Array.prototype.forEach.call(tabBar.children, function (t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      Object.keys(panels).forEach(function (k) { panels[k].style.display = 'none'; });
+      body.style.display = 'block';
+    } });
+    tabBar.appendChild(tab);
+  });
+  panels.basic.appendChild(s1.box);
+  panels.theme.appendChild(s2.box);
+  panels.theme.appendChild(s3.box);
+  panels.theme.appendChild(saveBar);
+  panels.backup.appendChild(h('div'));   // 备份恢复(懒加载)
+  panels.report.appendChild(h('div'));   // 数据上报(懒加载)
+
+  var backupLoaded = false, reportLoaded = false;
+  tabBar.children[2].addEventListener('click', function () {
+    if (backupLoaded) { return; }
+    backupLoaded = true;
+    backupView('backup').render(panels.backup.firstChild);
+  });
+  tabBar.children[3].addEventListener('click', function () {
+    if (reportLoaded) { return; }
+    reportLoaded = true;
+    backupView('report').render(panels.report.firstChild);
+  });
 
   function render(container) {
-    container.appendChild(root);
+    container.appendChild(h('div', {}, tabBar, panelsBox));
+    tabDefs.forEach(function (td) { panelsBox.appendChild(panels[td[0]]); });
   }
   return { render: render };
 }
 
-/** 图片文件 → base64(限 300KB) */
-function readImage(file, cb) {
-  if (!file) { return; }
-  if (file.size > 300 * 1024) {
-    toast('图片过大(超过300KB),请压缩后再上传', 'err');
-    return;
-  }
-  var fr = new FileReader();
-  fr.onload = function () { cb(fr.result); };
-  fr.readAsDataURL(file);
-}
-
-
-
-function fmtSize(bytes) {
-  if (bytes == null) return '';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-}
-
-function backupView() {
+function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 | 'report' 仅数据上报
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
   var MODULES = [];   // [{key,label}]
 
@@ -5779,6 +5787,7 @@ function backupView() {
         root.innerHTML = '';
 
         /* ---- 数据上报(下级→上级) ---- */
+        if (mode !== 'backup')
         root.appendChild(h('div', { class: 'panel', style: 'margin-bottom:16px' },
           h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: '数据上报(下级单位 ↔ 上级单位)' }),
           h('div', { style: 'padding:16px 20px;display:flex;gap:14px;flex-wrap:wrap;align-items:center' },
@@ -6144,10 +6153,12 @@ function backupView() {
         var listCard = h('div', { class: 'chart-panel', style: 'padding:0' },
           h('div', { class: 'table-wrap' }, listTable));
 
+        if (mode !== 'report') {
         root.appendChild(autoCard);
         root.appendChild(manualCard);
         listCard.insertBefore(h('h3', { style: 'padding:18px 20px 0;margin-bottom:10px', text: '备份文件' }), listCard.firstChild);
         root.appendChild(listCard);
+        }
         loadList();
       })
       .catch(function (e) {
@@ -6277,6 +6288,7 @@ function renderShell() {
     if (view === 'department') { titleEl.textContent = '部门管理'; comp = departmentView(); }
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
     else if (view === 'settings') { titleEl.textContent = '系统设置'; comp = settingsView(); }
+    else if (view === 'backup') { view = 'settings'; titleEl.textContent = '系统设置'; comp = settingsView(); }
     else if (view === 'stats') { titleEl.textContent = '仪表盘'; comp = dashboardView(); }
     else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
     else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
@@ -6305,7 +6317,6 @@ function renderShell() {
   addMenu('department', 'building', '部门管理');
   addMenu('dict', 'book', '数据字典');
   addMenu('settings', 'shield', '系统设置');
-  addMenu('backup', 'database', '备份恢复');
   addMenu('log', 'fileText', '操作日志');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
