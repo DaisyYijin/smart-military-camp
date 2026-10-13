@@ -239,6 +239,21 @@ public class SchemaInitializer implements CommandLineRunner {
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
 
+        // 通用设置表(如体能评定标准)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS sys_setting (" +
+                "skey TEXT PRIMARY KEY," +
+                "svalue TEXT DEFAULT '')");
+        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey, svalue) VALUES('fitness_grade_rule', ?)",
+                "[{\"label\":\"优秀\",\"op\":\">=\",\"min\":90},{\"label\":\"良好\",\"op\":\">=\",\"min\":80},{\"label\":\"及格\",\"op\":\">=\",\"min\":60}]");
+
+        // 老数据迁移:grade 存数字分数的 → 挪到 points,并按默认阈值换算成评定
+        jdbc.update("UPDATE fitness_record SET points = CAST(TRIM(grade) AS REAL) " +
+                "WHERE (points IS NULL OR points = 0) AND TRIM(grade) GLOB '[0-9]*'");
+        jdbc.update("UPDATE fitness_record SET grade = CASE " +
+                "WHEN points >= 90 THEN '优秀' WHEN points >= 80 THEN '良好' " +
+                "WHEN points >= 60 THEN '及格' ELSE '不及格' END " +
+                "WHERE TRIM(grade) GLOB '[0-9]*'");
+
         jdbc.execute("CREATE TABLE IF NOT EXISTS admin_user (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "username TEXT NOT NULL UNIQUE," +

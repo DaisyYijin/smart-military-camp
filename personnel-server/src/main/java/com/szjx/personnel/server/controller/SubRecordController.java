@@ -66,7 +66,7 @@ public class SubRecordController {
         COLS.put("housing", new String[]{"housing_type", "address", "area", "house_nature", "has_cert", "loan_status", "purchase_date", "owner_name", "remark"});
 
         ORDER.put("fitness", "test_date");
-        COLS.put("fitness", new String[]{"item", "score", "grade", "test_date", "tester", "remark"});
+        COLS.put("fitness", new String[]{"item", "score", "points", "grade", "test_date", "remark"});
     }
 
     private final SubRecordDao dao;

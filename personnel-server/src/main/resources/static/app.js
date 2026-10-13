@@ -678,7 +678,7 @@ function refreshPersonnelOptions() {
 }
 
 function refreshAll() {
-  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions()]);
+  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions(), loadGradeRule()]);
 }
 
 function loadRowPhotos(root) {
@@ -1371,6 +1371,18 @@ function crudView(cfg) {
     // 休假模块特殊逻辑:自动计算 + 路途检查
     if (cfg.key === 'leave') {
       setupLeaveAutoCalc(form, row);
+    }
+    // 体能考核:填分数自动按评定标准评级(可手动改)
+    if (cfg.key === 'fitness') {
+      var ptsEl = form.inputs['points'];
+      var gradeEl = form.inputs['grade'];
+      if (ptsEl && gradeEl) {
+        if (!GRADE_RULE) { loadGradeRule(); }
+        ptsEl.addEventListener('input', function () {
+          var g = gradeForPoints(ptsEl.value);
+          if (g) { gradeEl.value = g; }
+        });
+      }
     }
     // 身份证反查人员(如车辆的驾驶员)
     if (cfg.personLookup) {
@@ -2154,13 +2166,13 @@ function subRecordsPanel(kind, personnelId, opt) {
     if (c.key === 'score' && value && opt.age !== undefined) {
       var age = calcAgeAt(opt.birthday, r.test_date) || opt.age;
       var g = calcFitnessGrade(r.item || '', value, age);
-      if (g) { r.grade = g; }
+      if (g) { r.points = g; r.grade = gradeForPoints(g); }
     }
-    // 考核日期变更后也重算等级(年龄可能跨档)
+    // 考核日期变更后也重算(年龄可能跨档)
     if (c.key === 'test_date' && r.score) {
       var age2 = calcAgeAt(opt.birthday, value) || opt.age;
       var g2 = calcFitnessGrade(r.item || '', r.score, age2);
-      if (g2) { r.grade = g2; }
+      if (g2) { r.points = g2; r.grade = gradeForPoints(g2); }
     }
     // 身份证号失焦:自动填充性别和出生日期
     if (c.key === 'id_card' && value) {
@@ -2368,14 +2380,9 @@ var FITNESS_SUB = {
   columns: [
     { key: 'item', label: '考核项目', required: true, w: 110 },
     { key: 'score', label: '成绩', required: true, w: 90 },
-    { key: 'grade', label: '分数', w: 60, auto: true },
-    { key: '__level', label: '等级', w: 60, virtual: true, render: function (r) {
-        var s = parseFloat(r.grade);
-        if (isNaN(s)) { return r.grade || '—'; }
-        if (s >= 90) { return '<span class="badge green">优秀</span>'; }
-        if (s >= 80) { return '<span class="badge blue">良好</span>'; }
-        if (s >= 60) { return '<span class="badge orange">及格</span>'; }
-        return '<span class="badge red">不及格</span>';
+    { key: 'points', label: '分数', w: 60, auto: true },
+    { key: 'grade', label: '评定', w: 70, auto: true, render: function (r) {
+        return r.grade ? '<span class="badge green">' + esc(r.grade) + '</span>' : '<span style="color:#c6cfda">—</span>';
       } },
     { key: 'test_date', label: '考核日期', type: 'date', required: true, w: 100 }
   ]
@@ -2507,6 +2514,29 @@ function batchImportPhotos(fileList) {
   });
 }
 
+/** 体能评定标准:[{label,op,min}] 按min降序;不及格为兜底 */
+var GRADE_RULE = null;
+function defaultGradeRule() {
+  return [{ label: '优秀', op: '>=', min: 90 }, { label: '良好', op: '>=', min: 80 }, { label: '及格', op: '>=', min: 60 }];
+}
+function loadGradeRule() {
+  return GET('/api/setting/fitness_grade_rule').then(function (r) {
+    GRADE_RULE = (r && r.length) ? r : defaultGradeRule();
+    GRADE_RULE.sort(function (a, b) { return (+b.min) - (+a.min); });
+    return GRADE_RULE;
+  }).catch(function () { GRADE_RULE = defaultGradeRule(); return GRADE_RULE; });
+}
+/** 按分数得评定(op 支持 >= 与 >),低于所有阈值 → 不及格 */
+function gradeForPoints(pts) {
+  if (pts === '' || pts === null || pts === undefined || isNaN(pts)) { return ''; }
+  pts = +pts;
+  var rule = GRADE_RULE || defaultGradeRule();
+  for (var i = 0; i < rule.length; i++) {
+    if (rule[i].op === '>' ? pts > +rule[i].min : pts >= +rule[i].min) { return rule[i].label; }
+  }
+  return '不及格';
+}
+
 /** 体能评分标准缓存(从服务端加载) */
 /** 体能评分矩阵缓存:item → [{age_group, score, value}] */
 var FITNESS_MATRIX_CACHE = {};
@@ -2587,6 +2617,70 @@ function calcFitnessGrade(item, scoreText, age) {
 /** 体能标准管理器:矩阵式编辑(项目选择 + 分数行 x 年龄段列) */
 /** 体能评分矩阵管理:左侧项目列表 + 右侧可直接输入的矩阵表格 */
 /** 体能标准管理(全屏页面):左侧固定项目列表 + 右侧矩阵表格直接输入 */
+/** 评定标准管理:用户自定义多少分为及格/良好/优秀(可选 ≥ 或 >) */
+function openGradeRuleManager() {
+  var rulesBox = h('div');
+  var rules = [];
+  function renderRules() {
+    rulesBox.innerHTML = '';
+    rules.forEach(function (r, i) {
+      var lbl = makeDropdown((dictLabels('fitness_grade').length ? dictLabels('fitness_grade') : ['优秀', '良好', '及格']).map(function (x) { return { v: x, l: x }; }), '评定');
+      lbl.value = r.label;
+      var op = makeDropdown([{ v: '>=', l: '≥ (大于等于)' }, { v: '>', l: '> (大于)' }], '比较');
+      op.value = r.op;
+      var min = h('input', { type: 'number', step: '0.5', value: r.min, style: 'width:90px' });
+      var row = h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px' },
+        h('span', { text: '分数' }), op, min,
+        h('span', { text: '时评为' }), lbl,
+        h('button', { class: 'btn-link danger', text: '删除', onclick: function () { rules.splice(i, 1); renderRules(); } }));
+      row._bind = function () { r.op = op.value; r.min = min.value; r.label = lbl.value; };
+      rulesBox.appendChild(row);
+      // 保存前收集
+      row.addEventListener('change', function () { r.op = op.value; r.min = min.value; r.label = lbl.value; });
+    });
+  }
+  rulesBox.addEventListener('change', function () {
+    Array.prototype.forEach.call(rulesBox.children, function (row, i) {
+      if (rules[i]) { rules[i]._saved = true; }
+    });
+  });
+  var m = openModal({
+    title: '体能评定标准(自上而下依次匹配,都不满足为不及格)',
+    body: h('div', {},
+      h('div', { text: '规则按分数从高到低依次判断;例如 "分数 ≥ 90 时评为 优秀"。', style: 'color:#66788c;font-size:13px;margin-bottom:12px' }),
+      rulesBox,
+      h('button', { class: 'btn btn-ghost', text: '＋ 添加规则', onclick: function () {
+        rules.push({ label: '及格', op: '>=', min: 60 });
+        renderRules();
+      } })),
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+      h('button', { class: 'btn btn-primary', text: '保存', onclick: function () {
+        // 收集行内最新值
+        Array.prototype.forEach.call(rulesBox.children, function (row, i) {
+          var op = row.querySelectorAll('.dd')[0];
+          var lbl = row.querySelectorAll('.dd')[1];
+          var min = row.querySelector('input[type=number]');
+          if (rules[i] && op && lbl && min) {
+            rules[i].op = op.value; rules[i].min = Number(min.value); rules[i].label = lbl.value;
+          }
+        });
+        if (!rules.length) { toast('至少保留一条规则', 'err'); return; }
+        var sorted = rules.slice().sort(function (a, b) { return (+b.min) - (+a.min); });
+        PUT('/api/setting/fitness_grade_rule', sorted).then(function () {
+          m.close();
+          toast('评定标准已保存');
+          loadGradeRule();
+        }).catch(function (e) { toast(e.message, 'err'); });
+      } })
+    ]
+  });
+  (GRADE_RULE ? Promise.resolve(GRADE_RULE) : loadGradeRule()).then(function (r) {
+    rules = (r || defaultGradeRule()).map(function (x) { return { label: x.label, op: x.op, min: x.min }; });
+    renderRules();
+  });
+}
+
 function openFitnessStdManager() {
   var items = [];
   var currentItem = null;
@@ -3408,8 +3502,13 @@ var fitnessCfg = {
   toolbarExtra: function (bar, act) {
     bar.appendChild(h('button', {
       class: 'btn btn-ghost', text: '体能标准',
-      title: '查看体能考核评分标准',
+      title: '查看体能考核评分标准(成绩→分数)',
       onclick: function () { openFitnessStdManager(); }
+    }));
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '评定标准',
+      title: '设置多少分为及格/良好/优秀',
+      onclick: function () { openGradeRuleManager(); }
     }));
   },
   filters: [
