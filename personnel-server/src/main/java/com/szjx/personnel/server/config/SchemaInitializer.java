@@ -206,6 +206,7 @@ public class SchemaInitializer implements CommandLineRunner {
         ensureColumn("personnel", "marriage_date", "marriage_date TEXT DEFAULT ''");
         ensureColumn("personnel", "height", "height REAL");
         ensureColumn("personnel", "weight", "weight REAL");
+        ensureColumn("personnel", "auto_leave", "auto_leave INTEGER DEFAULT 0");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_dept ON personnel(department_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_name ON personnel(name)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_idcard ON personnel(id_card)");

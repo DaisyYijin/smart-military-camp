@@ -16,10 +16,12 @@ public class LeaveService {
 
     private final LeaveDao leaveDao;
     private final PersonnelDao personnelDao;
+    private final LeaveStatusSyncService statusSync;
 
-    public LeaveService(LeaveDao leaveDao, PersonnelDao personnelDao) {
+    public LeaveService(LeaveDao leaveDao, PersonnelDao personnelDao, LeaveStatusSyncService statusSync) {
         this.leaveDao = leaveDao;
         this.personnelDao = personnelDao;
+        this.statusSync = statusSync;
     }
 
     public List<LeaveRecord> query(String keyword, int page, int size) {
@@ -33,6 +35,7 @@ public class LeaveService {
     public LeaveRecord create(LeaveRecord r) {
         validate(r);
         long id = leaveDao.insert(r);
+        statusSync.sync();   // 休假覆盖当天时,人员状态立即联动
         return leaveDao.findById(id);
     }
 
@@ -43,11 +46,13 @@ public class LeaveService {
         validate(r);
         r.setId(id);
         leaveDao.update(r);
+        statusSync.sync();
         return leaveDao.findById(id);
     }
 
     public void delete(Long id) {
         leaveDao.delete(id);
+        statusSync.sync();
     }
 
     private void validate(LeaveRecord r) {

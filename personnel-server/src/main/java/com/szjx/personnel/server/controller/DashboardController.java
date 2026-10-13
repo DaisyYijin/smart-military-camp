@@ -34,6 +34,7 @@ public class DashboardController {
         String t0 = today.toString();
         String minus3 = today.minusDays(3).toString();
         String plus10 = today.plusDays(10).toString();
+        String plus3 = today.plusDays(3).toString();
         String minus7 = today.minusDays(7).toString();
         String plus30 = today.plusDays(30).toString();
 
@@ -66,6 +67,49 @@ public class DashboardController {
                 "WHERE l.status = '计划中' AND l.start_date > ? AND l.start_date <= ? ORDER BY l.start_date", t0, plus10)) {
             String d = String.valueOf(r.get("d"));
             list.add(event("info", "计划", r.get("name") + " 的休假计划将于 " + fmtDate(d) + " 开始", d, 2));
+        }
+
+        // 人员休假开始(未来3天内)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT p.name AS name, l.start_date AS s, l.end_date AS e FROM leave_record l " +
+                "JOIN personnel p ON l.personnel_id = p.id " +
+                "WHERE l.start_date > ? AND l.start_date <= ? ORDER BY l.start_date", t0, plus3)) {
+            list.add(event("info", "休假", r.get("name") + " 将于 " + fmtDate(String.valueOf(r.get("s"))) + " 开始休假"
+                    + "(" + daysBetween(String.valueOf(r.get("s")), String.valueOf(r.get("e"))) + "天)",
+                    String.valueOf(r.get("s")), 1));
+        }
+
+        // 生日(未来7天内)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, birthday FROM personnel WHERE birthday LIKE '____-__-__'")) {
+            String d = anniversaryDate(String.valueOf(r.get("birthday")), today, 7);
+            if (d != null) {
+                list.add(event("info", "生日", r.get("name") + " 生日(" + fmtDate(d) + ")", d, 4));
+            }
+        }
+
+        // 入伍/入党纪念日(未来7天内,满整年)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, entry_date FROM personnel WHERE entry_date LIKE '____-__-__'")) {
+            String src = String.valueOf(r.get("entry_date"));
+            String d = anniversaryDate(src, today, 7);
+            if (d != null && anniversaryYears(src, d) >= 1) {
+                list.add(event("info", "纪念日", r.get("name") + " 入伍" + anniversaryYears(src, d) + "周年(" + fmtDate(d) + ")", d, 4));
+            }
+        }
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, party_join_date FROM personnel WHERE party_join_date LIKE '____-__-__'")) {
+            String src = String.valueOf(r.get("party_join_date"));
+            String d = anniversaryDate(src, today, 7);
+            if (d != null && anniversaryYears(src, d) >= 1) {
+                list.add(event("info", "纪念日", r.get("name") + " 入党" + anniversaryYears(src, d) + "周年(" + fmtDate(d) + ")", d, 4));
+            }
+        }
+
+        // 装备维修中
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name FROM equipment WHERE status = '维修' ORDER BY id LIMIT 10")) {
+            list.add(event("warn", "装备", "「" + r.get("name") + "」维修中", t0, 5));
         }
 
         // 车辆保险/年检到期(近7天内已到期 ~ 30天内将到期)
@@ -113,6 +157,41 @@ public class DashboardController {
         m.put("date", date);
         m.put("order", order);
         return m;
+    }
+
+    /** 纪念日/生日判定:源日期(yyyy-MM-dd)的周年日在未来 days天内(含今天) → 返回周年日;否则 null */
+    private static String anniversaryDate(String src, LocalDate today, int days) {
+        try {
+            LocalDate d = LocalDate.parse(src);
+            LocalDate a = LocalDate.of(today.getYear(), d.getMonthValue(), d.getDayOfMonth());
+            if (a.isBefore(today)) {
+                a = LocalDate.of(today.getYear() + 1, d.getMonthValue(), d.getDayOfMonth());
+            }
+            if (a.isAfter(today.plusDays(days))) {
+                return null;
+            }
+            return a.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 周年数(纪念日年份 - 源日期年份) */
+    private static int anniversaryYears(String src, String anniversary) {
+        try {
+            return Integer.parseInt(anniversary.substring(0, 4)) - Integer.parseInt(src.substring(0, 4));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** 两个日期间隔天数(end - start + 1) */
+    private static long daysBetween(String start, String end) {
+        try {
+            return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(start), LocalDate.parse(end)) + 1;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /** 数字显示:整数去掉小数尾巴(17.0 → 17) */

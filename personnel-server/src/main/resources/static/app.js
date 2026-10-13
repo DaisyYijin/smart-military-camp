@@ -4659,7 +4659,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '计划', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '计划', '生日', '纪念日', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {
@@ -4851,7 +4851,7 @@ function dashboardView() {
                 });
               }
             }),
-            h('div', { style: 'font-size:12px;color:#8a97a8;margin:6px 0 8px', text: '库存不足 / 休假归队 / 休假计划 / 车辆到期' })),
+            h('div', { style: 'font-size:12px;color:#8a97a8;margin:6px 0 8px', text: '库存 · 休假 · 计划 · 生日 · 纪念日 · 装备 · 车辆' })),
           eventsBox))));
     lastEvents = events || [];
     renderEvents();
