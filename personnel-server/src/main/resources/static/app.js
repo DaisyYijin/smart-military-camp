@@ -136,7 +136,20 @@ function makeDateField() {
   var renderPanel = null;
   var view = { y: 0, m: 0 };
 
+  /** 月份输入(2026-09):合法返回规范化 YYYY-MM,否则 null */
+  function monthText(t) {
+    var m = /^(\d{4})-(\d{1,2})$/.exec(String(t == null ? '' : t).trim());
+    return m && +m[2] >= 1 && +m[2] <= 12 ? m[1] + '-' + p2(+m[2]) : null;
+  }
+
   function commit(text) {
+    var mo = monthText(text);
+    if (mo) {
+      input.value = mo;
+      input.classList.remove('bad');
+      wrap.dispatchEvent(new CustomEvent('change'));
+      return;
+    }
     var d = parse(text);
     if (d) {
       input.value = fmt(d);
@@ -153,7 +166,8 @@ function makeDateField() {
   Object.defineProperty(wrap, 'value', {
     get: function () {
       var d = parse(input.value);
-      return d ? fmt(d) : '';
+      if (d) { return fmt(d); }
+      return monthText(input.value) || '';
     },
     set: function (v) {
       var d = parse(v);
@@ -3521,8 +3535,8 @@ var fitnessCfg = {
         var l = dictLabels('fitness_grade');
         return l.length ? l : ['优秀', '良好', '及格', '不及格'];
       } },
-    { key: 'startDate', label: '起始日期', placeholder: '如 2026-09 或 2026-09-15' },
-    { key: 'endDate', label: '终止日期', placeholder: '可只填到月,如 2026-09' }
+    { key: 'startDate', label: '起始日期', type: 'date' },
+    { key: 'endDate', label: '终止日期', type: 'date' }
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
