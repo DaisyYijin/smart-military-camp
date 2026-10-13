@@ -3160,7 +3160,7 @@ function openGradeRuleManager() {
   });
 }
 
-/** BMI 标准:按性别×年龄段配置合格区间(档案判定与BMI考核项目共用) */
+/** BMI 标准:按性别×年龄段配置合格区间(表格式编辑,与体能评分标准风格一致) */
 function openBmiStdManager() {
   var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
   ready.then(function (std) {
@@ -3169,13 +3169,13 @@ function openBmiStdManager() {
     });
     var listBox = h('div');
 
-    function inp(val, w) {
-      var i = h('input', { type: 'number', step: '0.1', style: 'width:' + (w || 64) + 'px;height:28px;padding:0 6px;border:1px solid #c5cdd8;border-radius:4px;font-size:12.5px;text-align:center' });
+    function inp(val, ph, step) {
+      var i = h('input', { type: 'number', step: step || '0.1', placeholder: ph || '', style: 'width:100%;height:28px;padding:0 4px;border:1px solid transparent;border-radius:3px;font-size:13px;text-align:center;background:transparent' });
       i.value = val;
       return i;
     }
     function genderSel(g) {
-      var s = h('select', { style: 'height:28px;border:1px solid #c5cdd8;border-radius:4px;font-size:12.5px' });
+      var s = h('select', { style: 'width:100%;height:28px;font-size:13px;padding:0 2px;border:1px solid transparent;border-radius:3px;background:transparent;text-align:center' });
       ['男', '女'].forEach(function (x) { s.appendChild(h('option', { value: x, text: x })); });
       s.value = g === '女' ? '女' : '男';
       return s;
@@ -3184,28 +3184,33 @@ function openBmiStdManager() {
     function renderRows() {
       rows = [];
       listBox.innerHTML = '';
-      var head = h('div', { style: 'display:flex;gap:8px;align-items:center;padding:6px 8px;background:#f0f4fa;border-radius:6px;margin-bottom:6px;font-size:12.5px;color:#445262;font-weight:600' },
-        h('span', { style: 'width:52px;text-align:center', text: '性别' }),
-        h('span', { style: 'width:150px;text-align:center', text: '年龄段(周岁)' }),
-        h('span', { style: 'width:160px;text-align:center', text: 'BMI 合格区间' }),
-        h('span', { style: 'width:44px' }));
-      listBox.appendChild(head);
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.appendChild(h('thead', {}, h('tr', {},
+        h('th', { style: 'width:70px', text: '性别' }),
+        h('th', { style: 'width:90px', text: '年龄起(岁)' }),
+        h('th', { style: 'width:90px', text: '年龄止(岁)' }),
+        h('th', { style: 'width:100px', text: 'BMI 下限' }),
+        h('th', { style: 'width:100px', text: 'BMI 上限' }),
+        h('th', { style: 'width:60px', text: '操作' }))));
+      var tb = h('tbody');
       ranges.forEach(function (r, idx) {
         var g = genderSel(r.gender);
-        var aMin = inp(r.ageMin, 60), aMax = inp(r.ageMax, 60);
-        aMin.step = '1'; aMax.step = '1';
-        var bMin = inp(r.min), bMax = inp(r.max);
-        var row = { g: g, aMin: aMin, aMax: aMax, bMin: bMin, bMax: bMax };
-        rows.push(row);
-        listBox.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:center;padding:4px 8px;border-bottom:1px solid #f0f3f8' },
-          g,
-          h('span', { style: 'display:flex;align-items:center;gap:4px' }, aMin, h('span', { text: '~' }), aMax, h('span', { text: '岁' })),
-          h('span', { style: 'display:flex;align-items:center;gap:4px' }, bMin, h('span', { text: '~' }), bMax),
-          h('button', { class: 'btn-link danger', style: 'font-size:12px', text: '删除', onclick: function () { ranges.splice(idx, 1); renderRows(); } })));
+        var aMin = inp(r.ageMin, '如 0', '1'), aMax = inp(r.ageMax, '如 99', '1');
+        var bMin = inp(r.min, '如 17.5'), bMax = inp(r.max, '如 27.5');
+        rows.push({ g: g, aMin: aMin, aMax: aMax, bMin: bMin, bMax: bMax });
+        tb.appendChild(h('tr', {},
+          h('td', {}, g),
+          h('td', {}, aMin),
+          h('td', {}, aMax),
+          h('td', {}, bMin),
+          h('td', {}, bMax),
+          h('td', {}, h('button', { class: 'btn-link danger', text: '删除', onclick: function () { ranges.splice(idx, 1); renderRows(); } }))));
       });
       if (!ranges.length) {
-        listBox.appendChild(h('div', { class: 'empty-row', text: '暂无标准行,请添加' }));
+        tb.appendChild(h('tr', {}, h('td', { colspan: '6', class: 'empty-row', text: '暂无标准行,点击下方"添加一行"按钮' })));
       }
+      table.appendChild(tb);
+      listBox.appendChild(h('div', { class: 'table-wrap' }, table));
     }
     renderRows();
 
@@ -3213,10 +3218,10 @@ function openBmiStdManager() {
       title: 'BMI 标准(按性别 × 年龄段配置合格区间)',
       body: h('div', {},
         h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:12px;line-height:1.7',
-          text: 'BMI = 体重(kg) ÷ 身高(m)²。判定时取该人性别和实际年龄所在的那一行;年龄段可重叠但取第一行命中。用于:体能档案判定、BMI 考核项目导入评分(合格100分/不合格0分)。' }),
+          text: 'BMI = 体重(kg) ÷ 身高(m)²。判定时按性别和实际年龄命中一行;用于体能档案判定与 BMI 考核导入评分(区间内 100 分及格,区间外 0 分不及格)。' }),
         listBox,
-        h('div', { style: 'display:flex;gap:10px;margin-top:10px' },
-          h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加标准行', onclick: function () {
+        h('div', { style: 'display:flex;gap:10px;margin-top:12px' },
+          h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加一行', onclick: function () {
             ranges.push({ gender: '男', ageMin: 0, ageMax: 99, min: 17.5, max: 27.5 });
             renderRows();
           } }),
@@ -3235,7 +3240,7 @@ function openBmiStdManager() {
               var a1 = parseInt(r.aMin.value, 10), a2 = parseInt(r.aMax.value, 10);
               var b1 = Number(r.bMin.value), b2 = Number(r.bMax.value);
               if (isNaN(a1) || isNaN(a2) || isNaN(b1) || isNaN(b2) || a1 > a2 || b1 >= b2) {
-                toast('第' + (i + 1) + '行数值有误(年龄下限≤上限,BMI下限<上限)', 'err');
+                toast('第' + (i + 1) + '行数值有误(年龄起≤年龄止,BMI下限<上限)', 'err');
                 return;
               }
               out.push({ gender: r.g.value, ageMin: a1, ageMax: a2, min: b1, max: b2 });
