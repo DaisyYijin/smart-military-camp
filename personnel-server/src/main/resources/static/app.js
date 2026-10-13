@@ -964,7 +964,75 @@ function renderPager(state, onChange) {
 
 /* ================= 通用 CRUD 视图 ================= */
 
-/** 通用:身份证号反查人员,自动带出姓名(隐藏 pid 字段) */
+/** 人员选择弹窗:按姓名/身份证/部门搜索后点选,onPick({id,name,idCard,departmentName}) */
+function openPersonPicker(onPick) {
+  var selName = h('input', { type: 'text', placeholder: '姓名' });
+  var selIdCard = h('input', { type: 'text', placeholder: '身份证号' });
+  var selDept = makeDropdown(Ctx.deptFlat.map(function (d) {
+    return { v: String(d.id), l: new Array(d.depth + 1).join('　') + d.name };
+  }), '全部部门');
+  var info = h('div', { class: 'picker-info', text: '' });
+  var resultBox = h('div', { class: 'picker-result' });
+
+  function search() {
+    var q = '/api/personnel?page=1&size=15';
+    if (selName.value.trim()) q += '&name=' + encodeURIComponent(selName.value.trim());
+    if (selIdCard.value.trim()) q += '&idCard=' + encodeURIComponent(selIdCard.value.trim());
+    if (selDept.value) q += '&departmentId=' + encodeURIComponent(selDept.value);
+    resultBox.innerHTML = '<div class="empty-row">搜索中…</div>';
+    info.textContent = '';
+    GET(q).then(function (d) {
+      var list = (d && d.list) || [];
+      info.textContent = d && d.total ? ('共 ' + d.total + ' 人,显示前 ' + list.length + ' 人') : '';
+      if (!list.length) {
+        resultBox.innerHTML = '<div class="empty-row">未找到匹配人员</div>';
+        return;
+      }
+      resultBox.innerHTML = '';
+      list.forEach(function (p) {
+        resultBox.appendChild(h('div', {
+          class: 'picker-row',
+          onclick: function () {
+            m.close();
+            onPick({ id: p.id, name: p.name || '', idCard: p.idCard || '', departmentName: p.departmentName || '' });
+          }
+        },
+          h('b', { text: p.name || '' }),
+          h('span', { text: p.idCard || '' }),
+          h('span', { text: ((p.departmentName || '') + (p.rank ? ' · ' + p.rank : '')).trim() })));
+      });
+    }).catch(function (e) {
+      resultBox.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
+    });
+  }
+
+  [selName, selIdCard].forEach(function (el) {
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+  });
+  var bar = h('div', { class: 'picker-bar' },
+    selName, selIdCard, selDept,
+    h('button', { class: 'btn btn-primary', text: '搜索', onclick: search }));
+
+  var m = openModal({
+    title: '选择人员',
+    body: h('div', { class: 'person-picker' }, bar, info, resultBox),
+    footer: [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })]
+  });
+  search(); // 打开即列出前15人
+}
+
+/** 在姓名只读框旁加"选择"按钮,弹窗选人后回调回填 */
+function attachPersonPick(nameEl, onPick) {
+  if (!nameEl || !nameEl.parentElement) return;
+  var btn = h('button', { type: 'button', class: 'btn btn-ghost pick-btn', text: '选择' });
+  btn.addEventListener('click', function () { openPersonPicker(onPick); });
+  var row = h('div', { class: 'field-row' });
+  nameEl.parentElement.replaceChild(row, nameEl);
+  row.appendChild(nameEl);
+  row.appendChild(btn);
+}
+
+/** 通用:身份证号反查人员,自动带出姓名(隐藏 pid 字段);姓名旁提供弹窗选人 */
 function setupPersonLookup(form, map) {
   var idCardEl = form.inputs[map.idCard];
   var nameEl = form.inputs[map.name];
@@ -995,6 +1063,13 @@ function setupPersonLookup(form, map) {
     }).catch(function () { /* 网络异常保持现状 */ });
   }
   idCardEl.addEventListener('change', lookup);
+  attachPersonPick(nameEl, function (p) {
+    idCardEl.value = p.idCard;
+    nameEl.value = p.name;
+    pidEl.value = String(p.id);
+    idCardEl.classList.remove('bad');
+    idCardEl.title = p.departmentName || '';
+  });
   // 编辑时预填了身份证号 → 自动带出校验
   if (String(idCardEl.value || '').trim()) setTimeout(lookup, 60);
 }
@@ -1051,6 +1126,16 @@ function setupLeaveAutoCalc(form, row) {
   }
   if (idCardEl) {
     idCardEl.addEventListener('change', lookupIdCard);
+    // 姓名旁提供弹窗选人
+    attachPersonPick(nameEl, function (p) {
+      idCardEl.value = p.idCard;
+      if (nameEl) nameEl.value = p.name;
+      if (personEl) personEl.value = String(p.id);
+      idCardEl.classList.remove('bad');
+      idCardEl.title = p.departmentName || '';
+      form.setError('');
+      refreshYear();
+    });
     // 编辑时预填了身份证号 → 自动带出校验
     if (String(idCardEl.value || '').trim()) setTimeout(lookupIdCard, 60);
   }
