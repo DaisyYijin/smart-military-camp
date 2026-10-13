@@ -4851,7 +4851,7 @@ function dashboardView() {
                 });
               }
             }),
-            h('div', { style: 'font-size:12px;color:#8a97a8;margin:6px 0 8px', text: '库存 · 休假 · 计划 · 生日 · 纪念日 · 装备 · 车辆' })),
+            ),
           eventsBox))));
     lastEvents = events || [];
     renderEvents();
