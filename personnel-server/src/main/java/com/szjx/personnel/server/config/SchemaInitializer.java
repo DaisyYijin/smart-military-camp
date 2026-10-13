@@ -49,6 +49,14 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "其他"});
         addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
         addDict("personnel_status", new String[]{"在职", "休假", "培训", "借调", "离职", "其他"});
+        addDict("personnel_category", new String[]{"军官", "士官", "义务兵", "文职人员", "其他"});
+        // 军衔按人员类别挂接(级联下拉)
+        attachDictChildren("personnel_category", "军官", "rank",
+                new String[]{"少尉", "中尉", "上尉", "少校", "中校", "上校", "大校"});
+        attachDictChildren("personnel_category", "士官", "rank",
+                new String[]{"下士", "中士", "二级上士", "一级上士", "三级军士长", "二级军士长", "一级军士长"});
+        attachDictChildren("personnel_category", "义务兵", "rank", new String[]{"列兵", "上等兵"});
+        attachDictChildren("personnel_category", "其他", "rank", new String[]{"无"});
         addDict("rank", new String[]{"列兵", "上等兵", "下士", "中士", "二级上士", "一级上士",
                 "三级军士长", "二级军士长", "一级军士长", "少尉", "中尉", "上尉", "少校", "中校", "上校", "大校", "无"});
         addDict("equipment_category", new String[]{"枪械", "防护", "通信", "侦察", "生活", "其他"});
@@ -112,6 +120,25 @@ public class SchemaInitializer implements CommandLineRunner {
             jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
                             "VALUES(?,?,?,1,'',?)",
                     type, labels[i], i, pid);
+        }
+    }
+
+    /** 同 addDictChildren,且会把已存在但尚未挂接(parent_id=0)的同名项补挂到父项下 */
+    private void attachDictChildren(String parentType, String parentLabel, String type, String[] labels) {
+        addDictChildren(parentType, parentLabel, type, labels);
+        Long pid;
+        try {
+            pid = jdbc.queryForObject("SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=?",
+                    Long.class, parentType, parentLabel);
+        } catch (Exception e) {
+            return;
+        }
+        if (pid == null) {
+            return;
+        }
+        for (String label : labels) {
+            jdbc.update("UPDATE sys_dict SET parent_id=? WHERE dict_type=? AND dict_label=? AND parent_id=0",
+                    pid, type, label);
         }
     }
 
@@ -469,6 +496,9 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         // 字典下级(级联选择:如 车辆品牌→型号),0=顶级
         try { jdbc.execute("ALTER TABLE sys_dict ADD COLUMN parent_id INTEGER DEFAULT 0"); } catch (Exception ignore) {}
+
+        // 人员类别(军衔按类别级联挂接在 initDefaultDict 中执行)
+        try { jdbc.execute("ALTER TABLE personnel ADD COLUMN category TEXT DEFAULT ''"); } catch (Exception ignore) {}
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS equipment (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

@@ -45,7 +45,7 @@ public class PersonnelFullExcel {
 
     /** 人员主表列(与 ExcelUtils.exportXlsx 对应但简化,此处自建) */
     private static final String[] MAIN_HEADERS = {
-        "姓名", "性别", "身份证号", "出生日期", "手机号", "部门", "军衔/职级", "职务/岗位",
+        "姓名", "性别", "身份证号", "出生日期", "手机号", "部门", "人员类别", "军衔/职级", "职务/岗位",
         "状态", "入伍/入职日期", "民族", "籍贯", "血型", "政治面貌",
         "入党/入团日期", "组织关系所在地", "党内职务",
         "提交申请书时间", "积极分子时间", "预备党员时间", "转正时间",
@@ -53,7 +53,7 @@ public class PersonnelFullExcel {
         "学历", "是否独生子女", "身高(cm)", "体重(kg)", "家庭住址"
     };
     private static final String[] MAIN_KEYS = {
-        "name", "gender", "id_card", "birthday", "phone", "department_name", "rank", "post",
+        "name", "gender", "id_card", "birthday", "phone", "department_name", "category", "rank", "post",
         "status", "entry_date", "nation", "native_place", "blood_type", "political_status",
         "party_join_date", "party_org_location", "party_post",
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
@@ -62,7 +62,7 @@ public class PersonnelFullExcel {
     };
 
     private static final String[] MAIN_COLS = {
-        "name", "gender", "id_card", "birthday", "phone", "rank", "post",
+        "name", "gender", "id_card", "birthday", "phone", "category", "rank", "post",
         "status", "entry_date", "nation", "native_place", "blood_type", "political_status",
         "party_join_date", "party_org_location", "party_post",
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
@@ -381,6 +381,7 @@ public class PersonnelFullExcel {
         else if ("id_card".equals(key)) { p.setIdCard(val); }
         else if ("birthday".equals(key)) { p.setBirthday(val); }
         else if ("phone".equals(key)) { p.setPhone(val); }
+        else if ("category".equals(key)) { p.setCategory(val); }
         else if ("rank".equals(key)) { p.setRank(val); }
         else if ("post".equals(key)) { p.setPost(val); }
         else if ("status".equals(key)) { p.setStatus(val); }

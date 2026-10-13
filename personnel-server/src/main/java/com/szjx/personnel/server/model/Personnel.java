@@ -14,6 +14,7 @@ public class Personnel {
     private Long departmentId;    // 部门ID
     private String departmentName;// 部门名称(查询时附带)
     private String rank;          // 军衔/职级
+    private String category;      // 人员类别(军官/士官/义务兵/文职人员)
     private String post;          // 职务/岗位
     private String status;        // 状态:在职/休假/培训/借调/离职/其他
     private String entryDate;     // 入伍/入职日期
@@ -113,6 +114,14 @@ public class Personnel {
 
     public void setDepartmentName(String departmentName) {
         this.departmentName = departmentName;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 
     public String getRank() {
