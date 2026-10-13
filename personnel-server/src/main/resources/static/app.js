@@ -5719,22 +5719,12 @@ function backupView() {
 
         function openReportExport() {
           var mods = { personnel: true, equipment: true, material: true, vehicle: true, leave: true, fitness: true };
-          var deptSel = {};          // 空=默认全选
+          var deptSel = {};
           var allDept = true;
           var modBtns = {};
           var deptBtns = {};
 
-          var modBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
-          [['personnel', '人员及子表'], ['equipment', '装备'], ['material', '物资'], ['vehicle', '车辆'], ['leave', '休假'], ['fitness', '体能']].forEach(function (m) {
-            var b = h('button', { type: 'button', class: 'pick-kind-btn', text: m[1] });
-            b.addEventListener('click', function () {
-              mods[m[0]] = !mods[m[0]];
-              paint();
-            });
-            modBtns[m[0]] = b;
-            modBox.appendChild(b);
-          });
-
+          // ① 单位选择
           var deptBox = h('div', { style: 'display:flex;gap:7px;flex-wrap:wrap;max-height:170px;overflow:auto;padding:2px' });
           (Ctx.deptFlat || []).forEach(function (d) {
             var b = h('button', {
@@ -5743,7 +5733,6 @@ function backupView() {
             });
             b.addEventListener('click', function () {
               if (allDept) {
-                // 从"全选"切到手动:先清空,只点中这个
                 deptSel = {};
                 deptSel[d.id] = true;
                 allDept = false;
@@ -5760,6 +5749,19 @@ function backupView() {
           if (!(Ctx.deptFlat || []).length) {
             deptBox.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '(暂无部门)' }));
           }
+          var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
+
+          // ② 数据模块
+          var modBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+          [['personnel', '人员管理'], ['equipment', '装备管理'], ['material', '物资管理'], ['vehicle', '车辆管理'], ['leave', '休假管理'], ['fitness', '体能考核']].forEach(function (m) {
+            var b = h('button', { type: 'button', class: 'pick-kind-btn', text: m[1] });
+            b.addEventListener('click', function () {
+              mods[m[0]] = !mods[m[0]];
+              paint();
+            });
+            modBtns[m[0]] = b;
+            modBox.appendChild(b);
+          });
 
           function paint() {
             Object.keys(modBtns).forEach(function (k) {
@@ -5774,20 +5776,24 @@ function backupView() {
             countLbl.textContent = allDept ? '已选:全部单位' : ('已选:' + Object.keys(deptSel).length + ' 个单位');
           }
 
-          var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
-
           var body = h('div', {},
-            h('div', { style: 'font-weight:600;margin-bottom:8px', text: '① 数据模块(点亮=导出)' }),
-            modBox,
-            h('div', { style: 'font-weight:600;margin:14px 0 4px;display:flex;align-items:center;gap:10px' },
-              h('span', { text: '② 人员范围(单位)' }),
-              countLbl,
-              h('span', { style: 'flex:1' }),
-              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () { allDept = true; deptSel = {}; paint(); } }),
-              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () { allDept = false; deptSel = {}; paint(); } })),
+            h('div', { style: 'font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:10px' },
+              h('span', { text: '① 选择单位' }), countLbl),
             deptBox,
+            h('div', { style: 'font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:10px' },
+              h('span', { text: '② 数据模块' }),
+              h('span', { style: 'flex:1' }),
+              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全选', onclick: function () {
+                Object.keys(mods).forEach(function (k) { mods[k] = true; });
+                paint();
+              } }),
+              h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '全不选', onclick: function () {
+                Object.keys(mods).forEach(function (k) { mods[k] = false; });
+                paint();
+              } })),
+            modBox,
             h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:10px;line-height:1.7',
-              text: '人员/子表/休假/体能只导所选单位的人员;装备/物资/车辆为全单位数据(不按部门)。人员按身份证合并,不会重复。' }));
+              text: '人员/休假/体能按所选单位导出;装备/物资/车辆为全单位台账。' }));
           paint();
 
           var m = openModal({
@@ -5799,15 +5805,15 @@ function backupView() {
                 onclick: function () {
                   var sel = [];
                   ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness'].forEach(function (k) { if (mods[k]) { sel.push(k); } });
-                  if (!sel.length) { toast('至少选择一个模块', 'err'); return; }
+                  if (!sel.length) { toast('至少选择一个数据模块', 'err'); return; }
                   var needPeople = sel.indexOf('personnel') >= 0 || sel.indexOf('leave') >= 0 || sel.indexOf('fitness') >= 0;
                   var deptIds = Object.keys(deptSel);
-                  if (needPeople && !allDept && !deptIds.length) { toast('请至少选择一个单位(或点全选)', 'err'); return; }
+                  if (needPeople && !allDept && !deptIds.length) { toast('请至少选择一个单位', 'err'); return; }
                   var url = '/api/report/export?scope=' + sel.join(',');
                   if (needPeople && !allDept) { url += '&depts=' + deptIds.join(','); }
                   m.close();
                   var pm = showProgressModal('导出上报包');
-                  pm.setStatus('正在打包(' + sel.length + '个模块' + (needPeople ? (allDept ? ',全部单位' : ',' + deptIds.length + '个单位') : '') + ')…');
+                  pm.setStatus('正在打包…');
                   apiBlobWithProgress(url, function (pct) { pm.setProgress(pct); }).then(function (r) {
                     pm.setProgress(100);
                     pm.setStatus('下载完成');
