@@ -101,6 +101,14 @@ public class StatsService {
                 "WHERE f.test_date LIKE strftime('%Y', 'now', 'localtime') || '%' GROUP BY f.grade ORDER BY count DESC"));
         groups.put("vehicleStatus", group(
                 "SELECT IFNULL(NULLIF(v.status, ''), '未填写') AS name, COUNT(*) AS count FROM vehicle v GROUP BY v.status ORDER BY count DESC"));
+        groups.put("vehicleBrand", group(
+                "SELECT IFNULL(NULLIF(v.brand, ''), '未填写') AS name, COUNT(*) AS count FROM vehicle v GROUP BY v.brand ORDER BY count DESC"));
+        groups.put("materialCategory", group(
+                "SELECT IFNULL(NULLIF(mt.category, ''), '未填写') AS name, COUNT(*) AS count FROM material mt GROUP BY mt.category ORDER BY count DESC"));
+        groups.put("equipmentStatus", group(
+                "SELECT IFNULL(NULLIF(e.status, ''), '未填写') AS name, COUNT(*) AS count FROM equipment e GROUP BY e.status ORDER BY count DESC"));
+        groups.put("equipmentCategory", group(
+                "SELECT IFNULL(NULLIF(e.category, ''), '未填写') AS name, COUNT(*) AS count FROM equipment e GROUP BY e.category ORDER BY count DESC"));
         m.put("groups", groups);
 
         // 入伍趋势:近15年
