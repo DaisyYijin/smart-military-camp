@@ -3426,21 +3426,67 @@ var fitnessCfg = {
     { key: 'personnelName', label: '姓名' },
     { key: 'item', label: '考核项目' },
     { key: 'score', label: '成绩' },
-    { key: 'grade', label: '等级', render: function (r) { return badge(r.grade); } },
-    { key: 'testDate', label: '考核日期' },
-    { key: 'tester', label: '考核人' }
+    { key: 'points', label: '分数', render: function (r) { return r.points != null && r.points !== '' ? r.points : '—'; } },
+    { key: 'grade', label: '评定', render: function (r) { return badge(r.grade); } },
+    { key: 'testDate', label: '考核日期' }
   ],
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
+  // 点击姓名查看"本次考核"全部项目
+  onView: function (rw, act) {
+    var body = h('div');
+    var m = openModal({
+      title: '本次考核 · ' + (rw.personnelName || '') + ' ' + (rw.testDate || ''),
+      body: body,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
+        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })
+      ]
+    });
+    body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+    var q = '/api/fitness?size=100';
+    if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
+    else { q += '&personnelId=' + rw.personnelId; }
+    if (rw.testDate) { q += '&startDate=' + rw.testDate + '&endDate=' + rw.testDate; }
+    GET(q).then(function (d) {
+      var rows = (d && d.list) || [];
+      var total = 0;
+      body.innerHTML = '';
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      var thead = h('thead', {}, h('tr', {},
+        h('th', { text: '考核项目' }), h('th', { text: '成绩' }), h('th', { text: '分数' }),
+        h('th', { text: '评定' }), h('th', { text: '备注' })));
+      var tbody = h('tbody');
+      rows.forEach(function (x) {
+        total += Number(x.points) || 0;
+        tbody.appendChild(h('tr', {},
+          h('td', { text: x.item || '' }),
+          h('td', { text: x.score || '' }),
+          h('td', { text: (x.points !== null && x.points !== undefined && x.points !== '') ? String(x.points) : '—' }),
+          h('td', { html: badge(x.grade) }),
+          h('td', { text: x.remark || '' })));
+      });
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:48vh;overflow:auto' }, table));
+      body.appendChild(h('div', { style: 'margin-top:10px;display:flex;gap:18px;font-size:13px;color:#445262' },
+        h('span', { text: '共 ' + rows.length + ' 个项目' }),
+        h('b', { text: '合计分数:' + (Math.round(total * 10) / 10) + ' 分' }),
+        h('span', { text: '平均:' + (rows.length ? (Math.round(total / rows.length * 10) / 10) : 0) + ' 分' })));
+    }).catch(function (e) {
+      body.innerHTML = '';
+      body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+    });
+  },
   form: [
     { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
     { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
     { key: 'score', label: '成绩', placeholder: '如 12\'30 或 45 次' },
+    { key: 'points', label: '分数', type: 'number', step: '0.5', placeholder: '按体能标准评分' },
     {
-      key: 'grade', label: '评定等级', type: 'select', required: true,
+      key: 'grade', label: '评定', type: 'select', required: true,
       options: function () { var l = dictLabels('fitness_grade'); return l.length ? l : ['优秀', '良好', '及格', '不及格']; }
     },
     { key: 'testDate', label: '考核日期', type: 'date', required: true },
-    { key: 'tester', label: '考核人' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ]
 };

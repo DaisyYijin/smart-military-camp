@@ -32,8 +32,10 @@ public class FitnessDao {
             r.setItem(rs.getString("item"));
             r.setScore(rs.getString("score"));
             r.setGrade(rs.getString("grade"));
+            r.setPoints(rs.getObject("points") == null ? null : rs.getDouble("points"));
             r.setTestDate(rs.getString("test_date"));
             r.setTester(rs.getString("tester"));
+            r.setIdCard(rs.getString("id_card"));
             r.setRemark(rs.getString("remark"));
             r.setCreatedAt(rs.getString("created_at"));
             r.setUpdatedAt(rs.getString("updated_at"));
@@ -42,7 +44,7 @@ public class FitnessDao {
     };
 
     private static final String BASE =
-            "SELECT f.*, IFNULL(p.name,'') AS personnel_name FROM fitness_record f " +
+            "SELECT f.*, IFNULL(p.name,'') AS personnel_name, p.id_card FROM fitness_record f " +
             "LEFT JOIN personnel p ON f.personnel_id = p.id ";
 
     public List<FitnessRecord> query(String keyword, String item, int page, int size) {
@@ -85,20 +87,22 @@ public class FitnessDao {
 
     public long insert(FitnessRecord r) {
         return jdbc.queryForObject(
-                "INSERT INTO fitness_record(personnel_id, item, score, grade, test_date, tester, remark) " +
-                "VALUES(?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO fitness_record(personnel_id, item, score, points, grade, test_date, tester, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 r.getPersonnelId(),
-                nvl(r.getItem()), nvl(r.getScore()), nvl(r.getGrade()),
+                nvl(r.getItem()), nvl(r.getScore()),
+                r.getPoints() == null ? 0 : r.getPoints(), nvl(r.getGrade()),
                 nvl(r.getTestDate()), nvl(r.getTester()), nvl(r.getRemark()));
     }
 
     public void update(FitnessRecord r) {
         jdbc.update(
-                "UPDATE fitness_record SET personnel_id=?, item=?, score=?, grade=?, test_date=?, tester=?, " +
+                "UPDATE fitness_record SET personnel_id=?, item=?, score=?, points=?, grade=?, test_date=?, tester=?, " +
                 "remark=?, updated_at=datetime('now','localtime') WHERE id=?",
                 r.getPersonnelId(),
-                nvl(r.getItem()), nvl(r.getScore()), nvl(r.getGrade()),
+                nvl(r.getItem()), nvl(r.getScore()),
+                r.getPoints() == null ? 0 : r.getPoints(), nvl(r.getGrade()),
                 nvl(r.getTestDate()), nvl(r.getTester()), nvl(r.getRemark()),
                 r.getId());
     }

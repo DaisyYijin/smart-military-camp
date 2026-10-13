@@ -161,9 +161,9 @@ public class ModuleExcelService {
                         new Col("人员姓名", "personnelId", "ref-personnel"),
                         new Col("考核项目", "item", "text"),
                         new Col("成绩", "score", "text"),
+                        new Col("分数", "points", "number"),
                         new Col("评定等级", "grade", "text"),
                         new Col("考核日期", "testDate", "text"),
-                        new Col("考核人", "tester", "text"),
                         new Col("备注", "remark", "text")),
                 ""));
     }

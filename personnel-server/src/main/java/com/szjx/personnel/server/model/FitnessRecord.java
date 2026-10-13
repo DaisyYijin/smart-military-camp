@@ -12,7 +12,9 @@ public class FitnessRecord {
     private String score;           // 成绩
     private String grade;           // 评定等级:优秀/良好/及格/不及格
     private String testDate;        // 考核日期
-    private String tester;          // 考核人
+    private String tester;          // 考核人(已停用)
+    private Double points;          // 分数
+    private String idCard;          // 身份证号(查询时附带)
     private String remark;
     private String birthday; // 从人员表 JOIN 获取,不存库;          // 备注
     private String createdAt;
@@ -72,6 +74,22 @@ public class FitnessRecord {
 
     public void setTestDate(String testDate) {
         this.testDate = testDate;
+    }
+
+    public Double getPoints() {
+        return points;
+    }
+
+    public void setPoints(Double points) {
+        this.points = points;
+    }
+
+    public String getIdCard() {
+        return idCard;
+    }
+
+    public void setIdCard(String idCard) {
+        this.idCard = idCard;
     }
 
     public String getTester() {
