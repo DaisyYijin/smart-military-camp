@@ -82,7 +82,11 @@ textarea { resize: vertical; }
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .sidebar-logo .star { color: #ffd54a; font-size: 26px; line-height: 1; }
-.sidebar-logo .logo-img { width: 40px; height: 40px; }
+.sidebar-logo .logo-img {
+  width: 64px; height: 64px; object-fit: contain;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .25));
+}
+.sidebar.collapsed .sidebar-logo .logo-img { width: 34px; height: 34px; }
 .sidebar-logo .t1 { font-size: 15px; font-weight: 600; color: #fff; }
 .sidebar-logo .t2 { font-size: 11px; color: #8fa6c6; }
 /* 收起时:LOGO 单独靠左显示(与图标列对齐) */
@@ -940,8 +944,7 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 }
 
 /* 系统设置:LOGO 与登录页 */
-.sidebar-logo .logo-img { width: 36px; height: 36px; object-fit: contain; border-radius: 6px; flex: none; }
-.login-logo-img { width: 64px; height: 64px; object-fit: contain; margin-bottom: 12px; }
+.login-logo-img { width: 96px; height: 96px; object-fit: contain; margin-bottom: 14px; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .18)); }
 .login-subtitle { color: #8a97a8; font-size: 13px; margin-top: 6px; }
 .theme-sw { transition: transform .15s, border-color .15s; }
 .theme-sw:hover { transform: scale(1.12); }
