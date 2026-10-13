@@ -3241,7 +3241,7 @@ function openBmiStdManager() {
       var hr = h('tr', {}, h('th', { style: 'min-width:74px', html: '体重(kg)<br>身高(m)' }));
       data.ages.forEach(function (a) {
         var cell = h('th');
-        var i = h('input', { value: a, title: '年龄区间(如 0-24 或 25-29)', style: 'width:78px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.22);color:#fff;font-weight:600;text-align:center;border-radius:4px;padding:3px 2px' });
+        var i = h('input', { value: a, title: '年龄区间(如 0-24 或 25-29)', style: 'width:78px;border:1px solid #b9c6d6;background:#e8eef7;color:#16437e;font-weight:700;text-align:center;border-radius:4px;padding:3px 2px' });
         i.addEventListener('input', function () {
           var idx = data.ages.indexOf(a);
           if (idx >= 0) { data.ages[idx] = i.value; }
