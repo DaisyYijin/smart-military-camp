@@ -378,6 +378,14 @@ table.grid td.empty-row { text-align: center; }
 }
 .dash-event .dt { flex: none; font-size: 12px; color: #8a97a8; margin-top: 2px; }
 .ev-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+/* 事件列表固定高度:切筛选时面板高度恒定,列表超出内部滚动 */
+.ev-list {
+  height: calc(100vh - 330px);
+  min-height: 300px;
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
 .ev-chip {
   height: 24px; padding: 0 11px; border: 1px solid #dbe4ee; border-radius: 12px;
   background: #fff; color: #445262; font-size: 12px; cursor: pointer;

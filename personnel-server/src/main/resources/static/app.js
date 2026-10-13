@@ -4927,13 +4927,16 @@ function dashboardView() {
       }));
     });
     eventsBox.appendChild(chipBar);
+    // 固定高度内部滚动:切换筛选时面板尺寸不变,不闪动
+    var listBox = h('div', { class: 'ev-list' });
+    eventsBox.appendChild(listBox);
     var list = evFilter === '全部' ? lastEvents : lastEvents.filter(function (ev) { return (ev.tag || '') === evFilter; });
     if (!list.length) {
-      eventsBox.appendChild(h('div', { class: 'empty-row', text: lastEvents.length ? '该类别暂无事件' : '近期没有需要关注的事件' }));
+      listBox.appendChild(h('div', { class: 'empty-row', text: lastEvents.length ? '该类别暂无事件' : '近期没有需要关注的事件' }));
       return;
     }
     list.forEach(function (ev) {
-      eventsBox.appendChild(h('div', { class: 'dash-event ' + (ev.type || 'info'), title: ev.text },
+      listBox.appendChild(h('div', { class: 'dash-event ' + (ev.type || 'info'), title: ev.text },
         h('span', { class: 'tag', text: ev.tag || '动态' }),
         h('span', { class: 'txt', text: ev.text || '' }),
         h('span', { class: 'dt', text: (ev.date || '').slice(5) })));
