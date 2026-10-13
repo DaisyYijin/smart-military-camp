@@ -3641,14 +3641,14 @@ function openFitnessStdManager() {
     var head = '<thead><tr><th style="width:80px;text-align:center">分数\\年龄</th>';
     ageGroups.forEach(function (g) {
       head += '<th class="mx-age-head" data-col="' + esc(g) + '" style="text-align:center;white-space:nowrap">' +
-        '<input type="text" value="' + esc(g) + '" title="点击编辑年龄区间" style="width:64px;text-align:center;font-weight:700;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:4px;padding:2px 3px" />' +
+        '<input type="text" value="' + esc(g) + '" title="点击编辑年龄区间" style="width:64px;height:24px;text-align:center;font-weight:700;font-size:12px;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" />' +
         '<button type="button" class="btn-link danger mx-age-del" data-col="' + esc(g) + '" title="删除该列" style="margin-left:3px;font-size:11px;vertical-align:middle">&times;</button></th>';
     });
     head += '</tr></thead>';
     var bodyHtml = '';
     scores.forEach(function (sc) {
       bodyHtml += '<tr><th style="text-align:center" class="mx-score-head" data-score="' + sc + '">' +
-        '<input type="text" value="' + sc + '" title="点击编辑分数" style="width:46px;text-align:center;font-weight:700;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:4px;padding:2px 3px" /></th>';
+        '<input type="text" value="' + sc + '" title="点击编辑分数" style="width:46px;height:24px;text-align:center;font-weight:700;font-size:12px;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" /></th>';
       ageGroups.forEach(function (g) {
         bodyHtml += '<td><input type="text" class="mx-input" data-col="' + esc(g) + '" data-score="' + sc +
           '" style="width:100%;height:28px;font-size:13px;padding:0 4px;text-align:center;border:1px solid transparent;border-radius:3px;background:transparent" /></td>';
