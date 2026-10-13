@@ -5687,6 +5687,148 @@ function backupView() {
         root.className = '';
         root.innerHTML = '';
 
+        /* ---- 数据上报(下级→上级) ---- */
+        root.appendChild(h('div', { class: 'panel', style: 'margin-bottom:16px' },
+          h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: '数据上报(下级单位 ↔ 上级单位)' }),
+          h('div', { style: 'padding:16px 20px;display:flex;gap:14px;flex-wrap:wrap;align-items:center' },
+            h('button', {
+              class: 'btn btn-primary', text: '⬆ 导出上报数据包',
+              title: '导出本单位全部数据(人员/子表/休假/体能)为上报包,发送给上级单位',
+              onclick: function () {
+                var pm = showProgressModal('导出上报包');
+                pm.setStatus('正在打包…');
+                apiBlobWithProgress('/api/report/export', function (pct) { pm.setProgress(pct); }).then(function (r) {
+                  pm.setProgress(100);
+                  pm.setStatus('下载完成');
+                  downloadBlob(r.blob, r.filename);
+                  setTimeout(function () { pm.close(); }, 500);
+                }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+              }
+            }),
+            h('button', {
+              class: 'btn btn-ghost', text: '⬇ 接收下级数据包',
+              title: '导入下级单位的上报包:自动检索/新建对应部门,按身份证合并人员',
+              onclick: openReportReceive
+            }),
+            h('span', { style: 'color:#8a97a8;font-size:12px', text: '下级单位把"系统设置→网站名称"设为本单位名(如:XX班);上级接收时按该名称匹配/新建部门' }))));
+
+        var reportFile = null;
+        function openReportReceive() {
+          var input = h('input', { type: 'file', accept: '.json', style: 'display:none' });
+          input.addEventListener('change', function () {
+            var f = input.files[0];
+            input.value = '';
+            if (!f) { return; }
+            reportCheck(f);
+          });
+          document.body.appendChild(input);
+          input.click();
+          setTimeout(function () { input.remove(); }, 60000);
+        }
+
+        function reportCheck(f) {
+          var pm = showProgressModal('解析上报包');
+          pm.setStatus('正在解析 ' + f.name + '…');
+          var fd = new FormData();
+          fd.append('file', f);
+          postFormWithProgress('/api/report/check', fd, function () { }).then(function (d) {
+            pm.close();
+            reportFile = f;
+            openReportConfirm(d, f);
+          }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+        }
+
+        function openReportConfirm(d, f) {
+          var body = h('div');
+          var matched = d.matchedDepts || [];
+          var useDeptId = matched.length ? String(matched[0].id) : '';
+          var createNew = !matched.length;
+
+          body.appendChild(h('div', { style: 'background:#eef4ff;border-radius:8px;padding:12px 16px;margin-bottom:14px;line-height:1.9;font-size:13.5px' },
+            h('div', { html: '上报单位:<b>' + esc(d.unit) + '</b>(' + esc(d.exportedAt || '') + ')' }),
+            h('div', { html: '人员 <b>' + d.personnelCount + '</b> 人(新 ' + d.newCount + ' / 本单位已存在 ' + d.existCount + '),子表 ' + d.subCount + ' 条,休假 ' + d.leaveCount + ' 条,体能 ' + d.fitnessCount + ' 条' })));
+
+          var deptArea = h('div');
+          function renderDeptChoice() {
+            deptArea.innerHTML = '';
+            if (matched.length) {
+              deptArea.appendChild(h('div', { style: 'font-weight:600;margin-bottom:8px', text: '已检索到同名单位,数据并入:' }));
+              matched.forEach(function (m) {
+                var id = String(m.id);
+                deptArea.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer' },
+                  (function () {
+                    var rb = h('input', { type: 'radio', name: 'rpt-dept' });
+                    rb.checked = useDeptId === id;
+                    rb.addEventListener('change', function () { useDeptId = id; createNew = false; });
+                    return rb;
+                  })(),
+                  h('span', { text: m.name + '(ID ' + m.id + ')' })));
+              });
+              deptArea.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;margin-top:8px;cursor:pointer' },
+                (function () {
+                  var rb = h('input', { type: 'radio', name: 'rpt-dept' });
+                  rb.checked = createNew;
+                  rb.addEventListener('change', function () { createNew = true; useDeptId = ''; renderDeptChoice(); });
+                  return rb;
+                })(),
+                h('span', { text: '都不对,新建部门「' + d.unit + '」' })));
+              if (createNew) { deptArea.appendChild(parentPicker()); }
+            } else {
+              deptArea.appendChild(h('div', { style: 'font-weight:600;margin-bottom:8px', html: '本单位没有名为「<b>' + esc(d.unit) + '</b>」的部门,将<b>新建</b>该部门:' }));
+              deptArea.appendChild(parentPicker());
+            }
+          }
+          var parentSel;
+          function parentPicker() {
+            var wrap = h('div', { style: 'margin:8px 0 0 26px' });
+            parentSel = h('select', { style: 'height:32px;border:1px solid #c5cdd8;border-radius:4px;padding:0 8px;max-width:260px' });
+            (Ctx.deptFlat || []).forEach(function (x) {
+              var o = h('option', { value: String(x.id), text: new Array(x.depth + 1).join('　') + x.name });
+              parentSel.appendChild(o);
+            });
+            var top = h('option', { value: '0', text: '(作为顶级部门)' });
+            parentSel.insertBefore(top, parentSel.firstChild);
+            parentSel.value = '0';
+            wrap.appendChild(h('span', { style: 'font-size:13px;color:#66788c;margin-right:6px', text: '上级:' }));
+            wrap.appendChild(parentSel);
+            return wrap;
+          }
+          renderDeptChoice();
+
+          body.appendChild(deptArea);
+          body.appendChild(h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:12px;line-height:1.8',
+            text: '合并规则:按身份证去重,新人员进入所选部门;已存在人员只更新基本信息(不改动其现有单位);子表(任职/家庭等)以包为准替换;休假/体能自动跳过重复记录。' }));
+
+          var m = openModal({
+            title: '接收下级数据 - ' + d.unit, body: body, wide: true,
+            footer: [
+              h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+              h('button', {
+                class: 'btn btn-primary', text: '确认导入',
+                onclick: function () {
+                  var fd = new FormData();
+                  fd.append('file', f);
+                  if (createNew) {
+                    fd.append('createNew', 'true');
+                    fd.append('parentId', parentSel ? parentSel.value : '0');
+                  } else {
+                    if (!useDeptId) { toast('请选择接收部门', 'err'); return; }
+                    fd.append('deptId', useDeptId);
+                  }
+                  var pm = showProgressModal('导入上报包');
+                  pm.setStatus('正在合并数据…');
+                  postFormWithProgress('/api/report/import', fd, function () { }).then(function (r) {
+                    pm.close();
+                    m.close();
+                    toast('导入完成:新增 ' + r.added + ' 人,更新 ' + r.updated + ' 人' + (r.created ? ',新建部门「' + r.deptName + '」' : ''), 'ok');
+                    refreshDepts();
+                  }).catch(function (e) { pm.close(); toast(e.message, 'err'); });
+                }
+              })
+            ]
+          });
+        }
+
         /* ---- 自动备份设置 ---- */
         var enabledBox = h('input', { type: 'checkbox' });
         enabledBox.checked = !!settings.enabled;
