@@ -116,7 +116,7 @@ public class FitnessStdExcelController {
                 // 表头:0=分数,1..n-1=年龄段,末尾可能是单位列(跳过)
                 List<String> ages = new ArrayList<String>();
                 for (int c = 1; c < hr.getLastCellNum(); c++) {
-                    String h = fmt.formatCellValue(hr.getCell(c)).trim();
+                    String h = cellText(hr.getCell(c));
                     if (h.isEmpty()) { continue; }
                     if (h.startsWith("单位")) { break; }
                     ages.add(h);
@@ -127,7 +127,7 @@ public class FitnessStdExcelController {
                 for (int r = 1; r <= sh.getLastRowNum(); r++) {
                     Row row = sh.getRow(r);
                     if (row == null) { continue; }
-                    String scoreStr = fmt.formatCellValue(row.getCell(0)).trim();
+                    String scoreStr = cellText(row.getCell(0));
                     if (scoreStr.isEmpty()) { continue; }
                     int score;
                     try {
@@ -138,7 +138,7 @@ public class FitnessStdExcelController {
                         continue;
                     }
                     for (int ai = 0; ai < ages.size(); ai++) {
-                        String v = fmt.formatCellValue(row.getCell(ai + 1)).trim();
+                        String v = cellText(row.getCell(ai + 1));
                         if (v.isEmpty()) { continue; }
                         double value;
                         try {
@@ -247,6 +247,24 @@ public class FitnessStdExcelController {
     /** 体重标准导入:男标准/女标准两个 Sheet;首列身高,其后=年龄段列,单元格=下限~上限 */
     @PostMapping("/weight/import")
     public ApiResponse weightImport(@RequestParam("file") MultipartFile file) throws Exception {
+        try {
+            return weightImportInner(file);
+        } catch (IllegalArgumentException e) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            String st = sw.toString();
+            String key = st.indexOf("FitnessStd") >= 0 ? st.substring(st.indexOf("FitnessStd")) : st;
+            return ApiResponse.error(e.getMessage() + " || " + key.substring(0, Math.min(key.length(), 600)));
+        } catch (Exception e) {
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            String st = sw.toString();
+            String key = st.indexOf("FitnessStd") >= 0 ? st.substring(st.indexOf("FitnessStd")) : st;
+            return ApiResponse.error("导入异常:" + e.getMessage() + " || " + key.substring(0, Math.min(key.length(), 600)));
+        }
+    }
+
+    private ApiResponse weightImportInner(@RequestParam("file") MultipartFile file) throws Exception {
         Workbook wb = WorkbookFactory.create(file.getInputStream());
         try {
             DataFormatter fmt = new DataFormatter();
@@ -263,7 +281,7 @@ public class FitnessStdExcelController {
                 if (hr == null) { continue; }
                 List<String> ages = new ArrayList<String>();
                 for (int c = 1; c < hr.getLastCellNum(); c++) {
-                    String h = fmt.formatCellValue(hr.getCell(c)).trim();
+                    String h = cellText(hr.getCell(c));
                     if (!h.isEmpty()) { ages.add(h); }
                 }
                 if (ages.isEmpty()) { continue; }
@@ -271,7 +289,7 @@ public class FitnessStdExcelController {
                 for (int r = 1; r <= sh.getLastRowNum(); r++) {
                     Row row = sh.getRow(r);
                     if (row == null) { continue; }
-                    String hStr = fmt.formatCellValue(row.getCell(0)).trim();
+                    String hStr = cellText(row.getCell(0));
                     if (hStr.isEmpty()) { continue; }
                     double h;
                     try {
@@ -282,7 +300,7 @@ public class FitnessStdExcelController {
                     if (h < 1.0 || h > 2.5) { continue; }
                     List<Object> w = new ArrayList<Object>();
                     for (int c = 1; c <= ages.size(); c++) {
-                        String cell = fmt.formatCellValue(row.getCell(c)).trim();
+                        String cell = cellText(row.getCell(c));
                         java.util.regex.Matcher m = java.util.regex.Pattern
                                 .compile("([0-9]+(?:[.][0-9]+)?)\\s*[~～-]\\s*([0-9]+(?:[.][0-9]+)?)").matcher(cell);
                         if (m.find()) {
@@ -339,7 +357,7 @@ public class FitnessStdExcelController {
         if (sh != null && sh.getRow(0) != null) {
             List<String> ages = new ArrayList<String>();
             for (int c = 1; c < sh.getRow(0).getLastCellNum(); c++) {
-                String h = fmt.formatCellValue(sh.getRow(0).getCell(c)).trim();
+                String h = cellText(sh.getRow(0).getCell(c));
                 if (!h.isEmpty()) { ages.add(h); }
             }
             if (!ages.isEmpty()) { return ages; }
@@ -349,6 +367,25 @@ public class FitnessStdExcelController {
     }
 
     /* ================= 公共 ================= */
+
+    /** 按单元格类型直接取文本(数值/字符串/公式结果), 避开 DataFormatter 的格式解析 */
+    private static String cellText(Cell c) {
+        if (c == null) { return ""; }
+        switch (c.getCellType()) {
+            case STRING: return c.getStringCellValue().trim();
+            case NUMERIC:
+                double d = c.getNumericCellValue();
+                if (d == Math.floor(d) && !Double.isInfinite(d)) {
+                    return String.valueOf((long) d);
+                }
+                return String.valueOf(d);
+            case BOOLEAN: return String.valueOf(c.getBooleanCellValue());
+            case FORMULA:
+                try { return String.valueOf(c.getNumericCellValue()); }
+                catch (Exception e2) { return c.getStringCellValue().trim(); }
+            default: return "";
+        }
+    }
 
     private static String sheetName(String item) {
         // Excel sheet 名最长 31 字符,且不能含 : \ / ? * [ ]
