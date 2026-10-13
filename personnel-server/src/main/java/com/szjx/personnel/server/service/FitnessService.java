@@ -98,6 +98,9 @@ public class FitnessService {
                                 String personnelName, String idCard,
                                 String item, String grade, String startDate, String endDate,
                                 Long departmentId, String minScore, String maxScore) {
+        // 支持只填到月(2026-09):起始补-01,终止补-31(字符串比较安全)
+        if (startDate != null && startDate.trim().length() == 7) { startDate = startDate.trim() + "-01"; }
+        if (endDate != null && endDate.trim().length() == 7) { endDate = endDate.trim() + "-31"; }
         if (personnelName != null && !personnelName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
         }
@@ -209,13 +212,17 @@ public class FitnessService {
                 args.add(g);
             }
         }
-        if (startDate != null && !startDate.trim().isEmpty()) {
+        String sd = startDate;
+        String ed = endDate;
+        if (sd != null && sd.trim().length() == 7) { sd = sd.trim() + "-01"; }
+        if (ed != null && ed.trim().length() == 7) { ed = ed.trim() + "-31"; }
+        if (sd != null && !sd.trim().isEmpty()) {
             sql.append(" AND f.test_date >= ?");
-            args.add(startDate.trim());
+            args.add(sd.trim());
         }
-        if (endDate != null && !endDate.trim().isEmpty()) {
+        if (ed != null && !ed.trim().isEmpty()) {
             sql.append(" AND f.test_date <= ?");
-            args.add(endDate.trim());
+            args.add(ed.trim());
         }
         if (departmentId != null && departmentId > 0) {
             sql.append(" AND p.department_id = ?");

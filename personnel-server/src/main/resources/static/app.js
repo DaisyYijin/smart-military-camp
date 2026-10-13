@@ -3517,9 +3517,12 @@ var fitnessCfg = {
     { key: 'item', label: '项目', type: 'select', options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } }
   ],
   moreFilters: [
-    { key: 'grade', label: '等级', type: 'select', options: ['90分以上', '80-89分', '70-79分', '60-69分', '60分以下', '不及格'] },
-    { key: 'startDate', label: '起日期', type: 'date' },
-    { key: 'endDate', label: '止日期', type: 'date' }
+    { key: 'grade', label: '评定', type: 'select', options: function () {
+        var l = dictLabels('fitness_grade');
+        return l.length ? l : ['优秀', '良好', '及格', '不及格'];
+      } },
+    { key: 'startDate', label: '起始日期', placeholder: '如 2026-09 或 2026-09-15' },
+    { key: 'endDate', label: '终止日期', placeholder: '可只填到月,如 2026-09' }
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
