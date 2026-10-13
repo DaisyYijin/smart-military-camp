@@ -4653,7 +4653,7 @@ function drawDonut(items, drill) {
     var pct = Math.round(x.count / total * 100);
     legend.appendChild(h('div', { class: 'row' },
       h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
-      h('span', { style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
+      h('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
       h('b', { style: 'color:#1d2c40', text: String(x.count) }),
       h('span', { style: 'color:#8a97a8;width:40px;text-align:right;flex:none', text: pct + '%' })));
   });
@@ -4798,7 +4798,7 @@ function drawRose(items, drill) {
   data.forEach(function (x, i) {
     legend.appendChild(h('div', { class: 'row' },
       h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
-      h('span', { style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
+      h('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
       h('b', { style: 'color:#1d2c40', text: String(x.count) })));
   });
   return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);

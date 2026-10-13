@@ -399,12 +399,15 @@ table.grid td.empty-row { text-align: center; }
   padding-left: 8px; border-left: 3px solid #2f6fd6;
 }
 .dash-pick-cat:first-child { margin-top: 0; }
-.donut-box { display: flex; align-items: center; gap: 18px; }
-.donut-legend { flex: 1; min-width: 0; }
+.donut-box { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+/* 图例基准宽170px:窄卡放不下时整体换到图形下方,行内不再溢出 */
+.donut-legend { flex: 1 1 170px; min-width: 0; }
 .donut-legend .row {
   display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: #445262; margin-bottom: 7px;
 }
+.donut-legend .row b { flex: none; }
+.donut-legend .row > span:last-child { flex: none; }
 .dash-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .dash-pick-btn {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
