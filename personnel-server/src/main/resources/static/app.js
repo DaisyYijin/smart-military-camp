@@ -3556,8 +3556,9 @@ function openFitnessStdManager() {
               item: name, unit: unit,
               ageGroups: defaultAges, scores: defaultScores
             }).then(function () {
-              items.push(name);
+              if (items.indexOf(name) < 0) { items.push(name); }
               currentItem = name;
+              renderLeft();
               loadMatrix(name);
               reloadFitnessMatrix();
               toast('项目「' + name + '」已创建(已保存,关闭不丢失)');
