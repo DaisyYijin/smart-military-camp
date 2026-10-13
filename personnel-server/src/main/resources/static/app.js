@@ -3000,9 +3000,13 @@ function weightVerdict(weightKg, heightCm, gender, age) {
   (std.ages || []).forEach(function (a, i) {
     if (col >= 0) { return; }
     var nums = (a.match(/\d+/g) || []).map(Number);
-    if (a.indexOf('以下') >= 0) { if (age == null || age <= (nums[0] || 24)) { col = i; } }
-    else if (a.indexOf('以上') >= 0) { if (age == null || age >= (nums[0] || 60)) { col = i; } }
-    else if (nums.length >= 2) { if (age == null || (age >= nums[0] && age <= nums[1])) { col = i; } }
+    if (a.indexOf('以下') >= 0 || a.indexOf('≤') >= 0 || a.indexOf('<=') >= 0) {
+      if (age == null || age <= (nums.length ? nums[0] : 24)) { col = i; }
+    } else if (a.indexOf('以上') >= 0 || a.indexOf('≥') >= 0 || a.indexOf('>=') >= 0) {
+      if (age == null || age >= (nums.length ? nums[0] : 60)) { col = i; }
+    } else if (nums.length >= 2) {
+      if (age == null || (age >= nums[0] && age <= nums[1])) { col = i; }
+    }
   });
   var pair = (row.w && col >= 0) ? row.w[col] : null;
   if (!pair) { return [false, '无标准', '#8a97a8', null]; }

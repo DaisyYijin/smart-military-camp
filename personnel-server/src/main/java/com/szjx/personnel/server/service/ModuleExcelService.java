@@ -656,10 +656,10 @@ public class ModuleExcelService {
         java.util.regex.Matcher mm = java.util.regex.Pattern.compile("[0-9]+").matcher(label);
         List<Integer> nums = new ArrayList<Integer>();
         while (mm.find()) { nums.add(Integer.parseInt(mm.group())); }
-        if (label.contains("以下")) {
+        if (label.contains("以下") || label.contains("≤") || label.contains("<=")) {
             return nums.isEmpty() || age <= nums.get(0);
         }
-        if (label.contains("以上")) {
+        if (label.contains("以上") || label.contains("≥") || label.contains(">=")) {
             return nums.isEmpty() || age >= nums.get(0);
         }
         if (nums.size() >= 2) {
