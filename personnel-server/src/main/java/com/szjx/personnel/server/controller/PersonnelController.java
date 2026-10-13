@@ -60,6 +60,8 @@ public class PersonnelController {
                              @RequestParam(required = false) String politicalStatus,
                              @RequestParam(required = false) String category,
                              @RequestParam(required = false) String rank,
+                             @RequestParam(required = false) String post,
+                             @RequestParam(required = false) String nativePlace,
                              @RequestParam(required = false) String education,
                              @RequestParam(required = false) String maritalStatus,
                              @RequestParam(required = false) String nation,
@@ -75,8 +77,8 @@ public class PersonnelController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd, page, size);
-        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd, page, size);
+        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
         return ApiResponse.ok(new PageResult<Personnel>(total, list));
     }
 

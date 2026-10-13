@@ -36,12 +36,12 @@ public class PersonnelService {
         this.jdbc = jdbc;
     }
 
-    public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd, int page, int size) {
-        return personnelDao.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd, page, size);
+    public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd, int page, int size) {
+        return personnelDao.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd, page, size);
     }
 
-    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
-        return personnelDao.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
+        return personnelDao.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
     }
 
     public Personnel findById(Long id) {

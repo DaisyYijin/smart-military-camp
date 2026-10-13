@@ -1413,6 +1413,28 @@ function crudView(cfg) {
         })));
       filterPanel.appendChild(inner);
 
+      // 级联筛选(如 人员类别→军衔):父项选定后,子项选项过滤为其下级
+      (cfg.filters || []).concat(cfg.moreFilters || []).forEach(function (f) {
+        if (!f.depends) return;
+        var childEl = filterPanel.querySelector('[data-fkey="' + f.key + '"]');
+        var parentEl = filterPanel.querySelector('[data-fkey="' + f.depends.field + '"]');
+        if (!childEl || !parentEl || !childEl.setOptions) return;
+        var fullOpts = function () { return (typeof f.options === 'function' ? f.options() : f.options) || []; };
+        parentEl.addEventListener('change', function () {
+          var pv = String(parentEl.value || '');
+          if (!pv) { childEl.setOptions(fullOpts()); return; }
+          var parentItem = null;
+          dictItems(f.depends.parentDict || f.depends.dict).forEach(function (d) {
+            if (d.dictLabel === pv) parentItem = d;
+          });
+          childEl.setOptions(parentItem
+            ? dictItems(f.depends.dict).filter(function (d) {
+                return d.parentId && String(d.parentId) === String(parentItem.id) && d.enabled !== false;
+              }).map(function (d) { return d.dictLabel; })
+            : []);
+        });
+      });
+
       // 垂直标签按钮(固定在右侧边缘居中);先清理旧按钮避免累积
       $all('.filter-tab-btn', document).forEach(function (b) { b.remove(); });
       filterBtn = h('div', {
@@ -2882,12 +2904,15 @@ var personnelCfg = {
     { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'category', label: '人员类别', type: 'select', options: function () { return dictLabels('personnel_category'); } },
-    { key: 'rank', label: '军衔', type: 'select', options: function () { return dictLabels('rank'); } },
+    { key: 'rank', label: '军衔', type: 'select', options: function () { return dictLabels('rank'); },
+      depends: { field: 'category', dict: 'rank', parentDict: 'personnel_category' } },
     { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
     { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
     { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
+    { key: 'post', label: '职务/岗位' },
+    { key: 'nativePlace', label: '籍贯' },
     { key: 'entryDateStart', label: '入伍起', type: 'date' },
     { key: 'entryDateEnd', label: '入伍止', type: 'date' }
   ],
