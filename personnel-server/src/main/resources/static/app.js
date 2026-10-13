@@ -2972,7 +2972,7 @@ function normWeightStd(v) {
 }
 function loadBmiStd() {
   return GET('/api/setting/bmi_standard').then(function (r) {
-    BMI_STD = normBmiStd(r);
+    BMI_STD = normWeightStd(r);
     return BMI_STD;
   }).catch(function () { BMI_STD = defaultBmiStd(); return BMI_STD; });
 }
@@ -3209,7 +3209,8 @@ function openBmiStdManager() {
     var gridBox = h('div');
 
     function renderGrid() {
-      var side = data[cur.gender];
+      try {
+      var side = data[cur.gender === '女' ? 'female' : 'male'];
       gridBox.innerHTML = '';
       var table = h('table', { class: 'grid', style: 'width:100%;white-space:nowrap' });
       var hr = h('tr', {}, h('th', { style: 'min-width:74px', html: '体重(kg)<br>身高(m)' }));
@@ -3294,6 +3295,9 @@ function openBmiStdManager() {
           });
           renderGrid();
         } })));
+      } catch (e) {
+        gridBox.innerHTML = '<div style="color:#d9463e;padding:10px">渲染失败:' + e.message + '</div>';
+      }
     }
 
     var body = h('div', {},
