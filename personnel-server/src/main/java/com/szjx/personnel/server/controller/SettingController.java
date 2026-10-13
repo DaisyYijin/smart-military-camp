@@ -19,7 +19,13 @@ import java.util.Map;
 public class SettingController {
 
     private static final java.util.Set<String> ALLOWED = new java.util.HashSet<String>(
-            java.util.Arrays.asList("fitness_grade_rule"));
+            java.util.Arrays.asList("fitness_grade_rule",
+                    "siteName", "siteTitle", "siteSubtitle", "siteLogo", "siteFavicon",
+                    "themeColor", "pageSize", "backupKeep"));
+
+    /** 免登录读取的界面配置(登录页也要显示标题/LOGO) */
+    public static final String[] PUBLIC_KEYS = {"siteName", "siteTitle", "siteSubtitle",
+            "siteLogo", "siteFavicon", "themeColor"};
 
     private final JdbcTemplate jdbc;
 
@@ -32,15 +38,48 @@ public class SettingController {
         if (!ALLOWED.contains(key)) {
             throw new IllegalArgumentException("不支持的设置项");
         }
-        String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey=?", String.class, key);
+        String v;
         try {
-            com.fasterxml.jackson.databind.JsonNode node =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(v == null ? "[]" : v);
-            return ApiResponse.ok(node);
+            v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey=?", String.class, key);
         } catch (Exception e) {
-            return ApiResponse.ok(new com.fasterxml.jackson.databind.node.ArrayNode(
-                    com.fasterxml.jackson.databind.node.JsonNodeFactory.instance));
+            v = null;
         }
+        if ("fitness_grade_rule".equals(key)) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(v == null ? "[]" : v);
+                return ApiResponse.ok(node);
+            } catch (Exception e) {
+                return ApiResponse.ok(new com.fasterxml.jackson.databind.node.ArrayNode(
+                        com.fasterxml.jackson.databind.node.JsonNodeFactory.instance));
+            }
+        }
+        if (v != null && v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")) {
+            v = v.substring(1, v.length() - 1);
+        }
+        return ApiResponse.ok(v == null ? "" : v);
+    }
+
+    /** 免登录:站点外观(标题/LOGO/主题色),登录页未登录时也要用 */
+    @GetMapping("/public")
+    public ApiResponse publicBranding() {
+        java.util.Map<String, String> m = new java.util.LinkedHashMap<String, String>();
+        for (String k : PUBLIC_KEYS) {
+            try {
+                String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey=?", String.class, k);
+                if (v != null) {
+                    // 存的是 JSON 字符串("值"),去掉首尾引号
+                    v = v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")
+                            ? v.substring(1, v.length() - 1) : v;
+                    if (!v.isEmpty()) {
+                        m.put(k, v);
+                    }
+                }
+            } catch (Exception ignore) {
+                // 无值跳过
+            }
+        }
+        return ApiResponse.ok(m);
     }
 
     @PutMapping("/{key}")

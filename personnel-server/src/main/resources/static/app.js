@@ -541,6 +541,48 @@ function iconSvg(key) {
     + (ICON_PATHS[key] || '') + '</svg>';
 }
 
+/* ================= 站点外观/主题(系统设置) ================= */
+var SITE = { name: '数智军营', title: '数智军营人员管理系统', subtitle: '人员管理系统', logo: '', favicon: '', theme: '#2f6fd6', pageSize: 20 };
+
+/** 当前主题色(读 CSS 变量,图表绘制用) */
+function PRI() {
+  var v = getComputedStyle(document.documentElement).getPropertyValue('--pri').trim();
+  return v || '#2f6fd6';
+}
+/** 由主色派生深色(标题/选中态) */
+function shade(c, f) {
+  var m = /^#([0-9a-f]{6})$/i.exec((c || '').trim());
+  if (!m) { return '#16437e'; }
+  var n = parseInt(m[1], 16);
+  var r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+/** 应用外观: 主题色/标签标题/favicon */
+function applyBranding() {
+  document.documentElement.style.setProperty('--pri', SITE.theme);
+  document.documentElement.style.setProperty('--pri-dark', shade(SITE.theme, 0.62));
+  document.title = SITE.title || SITE.name || '人员管理系统';
+  var fav = document.querySelector('link[rel="icon"]') || document.createElement('link');
+  fav.setAttribute('rel', 'icon');
+  fav.href = SITE.favicon || 'data:image/svg+xml,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="' + SITE.theme + '"/><text x="12" y="17" font-size="13" text-anchor="middle" fill="#fff">⭐</text></svg>');
+  if (!fav.parentNode) { document.head.appendChild(fav); }
+}
+/** 启动时拉取站点设置(免登录,失败用默认) */
+function loadSiteSettings() {
+  return fetch('/api/setting/public').then(function (r) { return r.json(); }).then(function (j) {
+    var d = (j && j.data) || {};
+    if (d.siteName) { SITE.name = d.siteName; }
+    if (d.siteTitle) { SITE.title = d.siteTitle; }
+    if (d.siteSubtitle !== undefined && d.siteSubtitle !== '') { SITE.subtitle = d.siteSubtitle; }
+    if (d.siteLogo) { SITE.logo = d.siteLogo; }
+    if (d.siteFavicon) { SITE.favicon = d.siteFavicon; }
+    if (d.themeColor && /^#[0-9a-f]{6}$/i.test(d.themeColor)) { SITE.theme = d.themeColor; }
+    applyBranding();
+    return d;
+  }).catch(function () { applyBranding(); });
+}
+
 /* ================= API 层 ================= */
 
 var TOKEN = localStorage.getItem('tk') || '';
@@ -1246,7 +1288,7 @@ function setupLeaveAutoCalc(form, row) {
 }
 
 function crudView(cfg) {
-  var state = { page: 1, size: 20, total: 0, rows: [], filters: {}, loading: false, selected: {} };
+  var state = { page: 1, size: (SITE.pageSize || 20), total: 0, rows: [], filters: {}, loading: false, selected: {} };
 
   function syncHeaderCheck() {
     var head = $('.cb-all', root);
@@ -2629,7 +2671,7 @@ function openPersonProfile(rw, act) {
   function setRange(n, btn) {
     range.months = n;
     chips.forEach(function (c) { c.style.background = ''; c.style.color = ''; c.style.borderColor = ''; });
-    if (btn) { btn.style.background = '#2f6fd6'; btn.style.color = '#fff'; btn.style.borderColor = '#2f6fd6'; }
+    if (btn) { btn.style.background = 'var(--pri)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--pri)'; }
     renderCharts();
   }
 
@@ -2689,7 +2731,7 @@ function openPersonProfile(rw, act) {
     bar.appendChild(h('span', { style: 'font-size:12px;color:#8a97a8', text: '个月' }));
     bar.appendChild(h('button', {
       type: 'button', text: '查看',
-      style: 'height:26px;padding:0 12px;border:1px solid #2f6fd6;border-radius:4px;background:#2f6fd6;color:#fff;font-size:12px;cursor:pointer',
+      style: 'height:26px;padding:0 12px;border:1px solid var(--pri);border-radius:4px;background:var(--pri);color:#fff;font-size:12px;cursor:pointer',
       onclick: function () {
         var n = parseInt(custom.value, 10);
         if (!n || n < 1) { n = 1; }
@@ -2793,7 +2835,7 @@ function buildBodyFigure(hcm, wkg) {
       s.push('<text x="32" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="#8a97a8">' + cm + '</text>');
     }
   }
-  s.push('<line x1="40" y1="' + topY + '" x2="' + (cx - headR).toFixed(1) + '" y2="' + topY + '" stroke="#2f6fd6" stroke-dasharray="4 3" stroke-width="1"/>');
+  s.push('<line x1="40" y1="' + topY + '" x2="' + (cx - headR).toFixed(1) + '" y2="' + topY + '" stroke="'+PRI()+'" stroke-dasharray="4 3" stroke-width="1"/>');
   // 地面影子
   s.push('<ellipse cx="' + cx + '" cy="' + (groundY + 5) + '" rx="' + (figH * 0.155).toFixed(1) + '" ry="7" fill="#1d2c40" opacity="0.10"/>');
   // 腿 + 靴
@@ -3859,86 +3901,6 @@ var leaveCfg = {
   }
 };
 
-/** 休假计划联动:开始/结束日期变化 → 自动算天数,年度为空时按开始日期带出 */
-function setupLeavePlanCalc(form) {
-  var startEl = form.inputs['startDate'];
-  var endEl = form.inputs['endDate'];
-  var daysEl = form.inputs['days'];
-  var yearEl = form.inputs['year'];
-  if (!startEl || !endEl) { return; }
-  function calc() {
-    var s = String(startEl.value || '').trim();
-    var e = String(endEl.value || '').trim();
-    if (s && e) {
-      var t1 = new Date(s + 'T00:00:00');
-      var t2 = new Date(e + 'T00:00:00');
-      if (!isNaN(t1) && !isNaN(t2) && t2 >= t1) {
-        if (daysEl) { daysEl.value = String(Math.round((t2 - t1) / 86400000) + 1); }
-        if (yearEl && !String(yearEl.value || '').trim()) { yearEl.value = s.slice(0, 4); }
-        endEl.classList.remove('bad');
-      } else {
-        if (daysEl) { daysEl.value = ''; }
-        if (!isNaN(t1) && !isNaN(t2)) { endEl.classList.add('bad'); }
-      }
-    } else if (daysEl) {
-      daysEl.value = '';
-    }
-  }
-  startEl.addEventListener('change', calc);
-  endEl.addEventListener('change', calc);
-  calc();
-}
-
-var leavePlanCfg = {
-  key: 'leavePlan', title: '休假计划', icon: 'schedule', endpoint: '/api/leave-plan',
-  clickKey: 'personnelName', addLabel: '新增休假计划',
-  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
-  formSetup: function (form, row) {
-    setupLeavePlanCalc(form);
-    // 新增时状态默认"计划中"(编辑已有状态则不动)
-    var st = form.inputs['status'];
-    if (st && !String(st.value || '').trim()) { st.value = '计划中'; }
-  },
-  filters: [
-    { key: 'personnelName', label: '姓名' },
-    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('leave_plan_status'); } }
-  ],
-  moreFilters: [
-    { key: 'idCard', label: '身份证号' },
-    { key: 'year', label: '年度', placeholder: '如 2026' }
-  ],
-  columns: [
-    { key: 'personnelName', label: '姓名' },
-    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
-    { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
-    { key: 'startDate', label: '计划开始' },
-    { key: 'endDate', label: '计划结束' },
-    { key: 'days', label: '天数', render: function (r) { return Number(r.days) > 0 ? Number(r.days) + ' 天' : '—'; } },
-    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
-    { key: 'remark', label: '备注' }
-  ],
-  rowTitle: function (r) { return r.personnelName; },
-  delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假计划吗?'; },
-  form: [
-    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
-    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
-    { key: 'personnelId', type: 'hidden', required: true },
-    { key: 'year', label: '年度', type: 'number', required: true, min: '1990', max: '2100', step: '1', placeholder: '如 2026' },
-    { key: 'startDate', label: '计划开始日期', type: 'date', required: true },
-    { key: 'endDate', label: '计划结束日期', type: 'date', required: true },
-    { key: 'days', label: '天数', readonly: true, placeholder: '按日期自动计算' },
-    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('leave_plan_status'); } },
-    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ],
-  beforeSave: function (data) {
-    // idCard/personnelName/days 仅用于表单展示,天数由服务端按日期重算
-    delete data.idCard;
-    delete data.personnelName;
-    delete data.days;
-    return data;
-  }
-};
-
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
   clickKey: 'personnelName', addLabel: '新增考核记录',
@@ -4681,7 +4643,7 @@ function drawColumns(items, unit, drill) {
     var y = yAt(x.count);
     var hgt = (H - padB) - y;
     var val = drill ? drill.valOf(String(x.name)) : null;
-    svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="#2f6fd6" opacity="0.88"' +
+    svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="' + PRI() + '" opacity="0.88"' +
       (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
     svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#445262" pointer-events="none">' + x.count + '</text>');
@@ -4708,11 +4670,11 @@ function drawLine(items, unit, drill) {
     svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5"/>');
     svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="#8a97a8">' + Math.round(max * f) + '</text>');
   });
-  svg.push('<polygon points="' + padL + ',' + (H - padB) + ' ' + pts.join(' ') + ' ' + (W - padR) + ',' + (H - padB) + '" fill="#2f6fd6" opacity="0.10"/>');
-  svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="#2f6fd6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>');
+  svg.push('<polygon points="' + padL + ',' + (H - padB) + ' ' + pts.join(' ') + ' ' + (W - padR) + ',' + (H - padB) + '" fill="' + PRI() + '" opacity="0.10"/>');
+  svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + PRI() + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>');
   items.forEach(function (x, i) {
     var val = drill ? drill.valOf(String(x.name)) : null;
-    svg.push('<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(x.count).toFixed(1) + '" r="4.5" fill="#2f6fd6" stroke="#fff" stroke-width="1.5"' +
+    svg.push('<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(x.count).toFixed(1) + '" r="4.5" fill="' + PRI() + '" stroke="#fff" stroke-width="1.5"' +
       (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></circle>');
     svg.push('<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
@@ -5239,7 +5201,196 @@ function logView() {
   return { render: render };
 }
 
-/* ================= 备份恢复视图 ================= */
+/* ================= 系统设置视图 ================= */
+
+function settingsView() {
+  var root = h('div');
+  var vals = {
+    siteName: SITE.name === '数智军营' ? '' : SITE.name,
+    siteTitle: SITE.title === '数智军营人员管理系统' ? '' : SITE.title,
+    siteSubtitle: (SITE.subtitle === '人员管理系统' || !SITE.subtitle) ? '' : SITE.subtitle,
+    siteLogo: SITE.logo || '', siteFavicon: SITE.favicon || '',
+    themeColor: SITE.theme || '#2f6fd6', pageSize: String(SITE.pageSize || 20), backupKeep: '14'
+  };
+
+  function section(title) {
+    var box = h('div', { class: 'panel', style: 'margin-bottom:16px' });
+    box.appendChild(h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: title }));
+    var body = h('div', { style: 'padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px' });
+    box.appendChild(body);
+    root.appendChild(box);
+    return body;
+  }
+  function field(label, el, hint) {
+    return h('div', { class: 'form-item', style: 'margin:0' },
+      h('label', { text: label, style: 'display:block;font-size:13px;color:#66788c;margin-bottom:6px' }),
+      el,
+      hint ? h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:4px', text: hint }) : null);
+  }
+  function txt(key, ph) {
+    var i = h('input', { type: 'text', placeholder: ph || '', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
+    i.value = vals[key];
+    i.addEventListener('input', function () { vals[key] = i.value; });
+    return i;
+  }
+
+  /* ---- 基础信息 ---- */
+  var basic = section('基础信息');
+  basic.appendChild(field('网站名称(侧栏主标题)', txt('siteName', '默认:数智军营')));
+  basic.appendChild(field('系统标题(浏览器标签页)', txt('siteTitle', '默认:数智军营人员管理系统')));
+  basic.appendChild(field('网站副标题(侧栏副标题)', txt('siteSubtitle', '默认:人员管理系统')));
+  basic.appendChild(h('div'));
+
+  var logoPrev = h('div', { style: 'display:flex;align-items:center;gap:12px' });
+  var logoImg = h('img', { src: vals.siteLogo, style: 'max-height:44px;max-width:150px;display:' + (vals.siteLogo ? 'block' : 'none') + ';border-radius:6px;border:1px solid #edf1f6' });
+  var logoFile = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  logoFile.addEventListener('change', function () {
+    readImage(logoFile.files[0], function (b64) {
+      vals.siteLogo = b64;
+      logoImg.src = b64;
+      logoImg.style.display = 'block';
+    });
+    logoFile.value = '';
+  });
+  logoPrev.appendChild(logoImg);
+  logoPrev.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '上传LOGO', onclick: function () { logoFile.click(); } }));
+  logoPrev.appendChild(h('button', { class: 'btn-link danger', text: '清除', onclick: function () {
+    vals.siteLogo = '';
+    logoImg.style.display = 'none';
+  } }));
+  logoPrev.appendChild(logoFile);
+  basic.appendChild(field('LOGO(侧栏/登录页)', logoPrev, '建议 PNG 透明底,不超过 300KB'));
+
+  var favPrev = h('div', { style: 'display:flex;align-items:center;gap:12px' });
+  var favImg = h('img', { src: vals.siteFavicon, style: 'width:32px;height:32px;border-radius:4px;display:' + (vals.siteFavicon ? 'block' : 'none') });
+  var favFile = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  favFile.addEventListener('change', function () {
+    readImage(favFile.files[0], function (b64) {
+      vals.siteFavicon = b64;
+      favImg.src = b64;
+      favImg.style.display = 'block';
+    });
+    favFile.value = '';
+  });
+  favPrev.appendChild(favImg);
+  favPrev.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '上传图标', onclick: function () { favFile.click(); } }));
+  favPrev.appendChild(h('button', { class: 'btn-link danger', text: '清除', onclick: function () {
+    vals.siteFavicon = '';
+    favImg.style.display = 'none';
+  } }));
+  favPrev.appendChild(favFile);
+  basic.appendChild(field('网站图标(favicon)', favPrev, '建议 32x32 或 64x64,浏览器标签页小图标'));
+
+  /* ---- 主题色 ---- */
+  var themeSec = section('主题色');
+  var presets = ['#2f6fd6', '#4a7c59', '#1f3a5f', '#8a4a2f', '#7048b7', '#b03a3a', '#0d8484', '#5a5f6b'];
+  var swatches = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' });
+  presets.forEach(function (c) {
+    var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? '#1d2c40' : 'transparent'), title: c });
+    sw.addEventListener('click', function () {
+      vals.themeColor = c;
+      document.documentElement.style.setProperty('--pri', c);
+      document.documentElement.style.setProperty('--pri-dark', shade(c, 0.62));
+      Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
+      sw.style.borderColor = '#1d2c40';
+    });
+    swatches.appendChild(sw);
+  });
+  var customColor = h('input', { type: 'color', value: vals.themeColor, style: 'width:44px;height:34px;border:none;background:none;cursor:pointer' });
+  customColor.addEventListener('input', function () {
+    vals.themeColor = customColor.value;
+    document.documentElement.style.setProperty('--pri', customColor.value);
+    document.documentElement.style.setProperty('--pri-dark', shade(customColor.value, 0.62));
+    Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
+  });
+  swatches.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '自定义:' }));
+  swatches.appendChild(customColor);
+  themeSec.appendChild(h('div', { style: 'grid-column:1/-1' }, swatches,
+    h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:8px', text: '点击即时预览;保存后对所有人生效,图表主色随主题变化' })));
+
+  /* ---- 显示与维护 ---- */
+  var disp = section('显示与维护');
+  var pageSizeSel = h('select', { style: 'width:100%;height:34px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
+  ['10', '20', '50', '100'].forEach(function (n) {
+    pageSizeSel.appendChild(h('option', { value: n, text: n + ' 条/页' }));
+  });
+  pageSizeSel.value = vals.pageSize;
+  pageSizeSel.addEventListener('change', function () { vals.pageSize = pageSizeSel.value; });
+  disp.appendChild(field('列表每页条数', pageSizeSel, '保存后刷新页面生效'));
+  var keepInput = h('input', { type: 'number', min: '7', max: '60', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
+  keepInput.value = vals.backupKeep;
+  keepInput.addEventListener('input', function () { vals.backupKeep = keepInput.value; });
+  disp.appendChild(field('自动备份保留份数', keepInput, '每天 03:00 自动备份,超出自动轮转删除(7~60)'));
+  GET('/api/setting/backupKeep').then(function (v) {
+    if (v) { keepInput.value = v; vals.backupKeep = v; }
+  }).catch(function () { });
+
+  /* ---- 操作条 ---- */
+  var bar = h('div', { class: 'panel', style: 'padding:14px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap' });
+  bar.appendChild(h('button', {
+    class: 'btn btn-primary', text: '保存全部设置',
+    onclick: function () {
+      var keys = ['siteName', 'siteTitle', 'siteSubtitle', 'siteLogo', 'siteFavicon', 'themeColor', 'pageSize', 'backupKeep'];
+      var chain = Promise.resolve();
+      keys.forEach(function (k) {
+        chain = chain.then(function () { return PUT('/api/setting/' + k, vals[k] || ''); });
+      });
+      chain.then(function () {
+        SITE.name = vals.siteName || '数智军营';
+        SITE.title = vals.siteTitle || '数智军营人员管理系统';
+        SITE.subtitle = vals.siteSubtitle || '人员管理系统';
+        SITE.logo = vals.siteLogo;
+        SITE.favicon = vals.siteFavicon;
+        SITE.theme = vals.themeColor;
+        SITE.pageSize = parseInt(vals.pageSize, 10) || 20;
+        applyBranding();
+        var t1 = document.querySelector('.sidebar-logo .t1');
+        var t2 = document.querySelector('.sidebar-logo .t2');
+        if (t1) { t1.textContent = SITE.name; }
+        if (t2) { t2.textContent = SITE.subtitle; }
+        var hasImg = !!document.querySelector('.sidebar-logo img.logo-img');
+        if ((SITE.logo && !hasImg) || (!SITE.logo && hasImg)) { location.reload(); return; }
+        if (SITE.logo) { document.querySelector('.sidebar-logo img.logo-img').src = SITE.logo; }
+        var star = document.querySelector('.sidebar-logo .star');
+        if (SITE.logo && star) { location.reload(); }
+        toast('设置已保存');
+      }).catch(function (e) { toast(e.message, 'err'); });
+    }
+  }));
+  bar.appendChild(h('button', {
+    class: 'btn btn-ghost', text: '恢复默认外观',
+    onclick: function () {
+      confirmBox('确定恢复默认外观?标题/LOGO/图标/主题色将清空为默认值。', true).then(function (yes) {
+        if (!yes) { return; }
+        var keys = ['siteName', 'siteTitle', 'siteSubtitle', 'siteLogo', 'siteFavicon', 'themeColor'];
+        var chain = Promise.resolve();
+        keys.forEach(function (k) { chain = chain.then(function () { return PUT('/api/setting/' + k, ''); }); });
+        chain.then(function () { location.reload(); });
+      });
+    }
+  }));
+  bar.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '设置保存在服务器,对所有使用本系统的人生效' }));
+  root.appendChild(bar);
+
+  function render(container) {
+    container.appendChild(root);
+  }
+  return { render: render };
+}
+
+/** 图片文件 → base64(限 300KB) */
+function readImage(file, cb) {
+  if (!file) { return; }
+  if (file.size > 300 * 1024) {
+    toast('图片过大(超过300KB),请压缩后再上传', 'err');
+    return;
+  }
+  var fr = new FileReader();
+  fr.onload = function () { cb(fr.result); };
+  fr.readAsDataURL(file);
+}
+
+
 
 function fmtSize(bytes) {
   if (bytes == null) return '';
@@ -5499,8 +5650,11 @@ function renderLogin(msg) {
 
   app.appendChild(h('div', { class: 'login-wrap' },
     h('div', { class: 'login-card' },
-      h('div', { class: 'login-emblem', text: '★' }),
-      h('div', { class: 'login-title', text: '数智军营人员管理系统' }),
+      SITE.logo
+        ? h('img', { class: 'login-logo-img', src: SITE.logo, alt: 'LOGO' })
+        : h('div', { class: 'login-emblem', text: '★' }),
+      h('div', { class: 'login-title', text: SITE.title || '数智军营人员管理系统' }),
+      SITE.subtitle && SITE.subtitle !== '人员管理系统' ? h('div', { class: 'login-subtitle', text: SITE.subtitle }) : null,
       h('div', { class: 'field' }, h('label', { text: '账号' }), userInput),
       h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
       errBox,
@@ -5539,7 +5693,7 @@ function openChangePassword() {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, fitnessCfg];
+var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, fitnessCfg];
 
 function renderShell() {
   if (!TOKEN) {
@@ -5572,6 +5726,7 @@ function renderShell() {
     var comp;
     if (view === 'department') { titleEl.textContent = '部门管理'; comp = departmentView(); }
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
+    else if (view === 'settings') { titleEl.textContent = '系统设置'; comp = settingsView(); }
     else if (view === 'stats') { titleEl.textContent = '仪表盘'; comp = dashboardView(); }
     else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
     else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
@@ -5599,6 +5754,7 @@ function renderShell() {
   MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   addMenu('department', 'building', '部门管理');
   addMenu('dict', 'book', '数据字典');
+  addMenu('settings', 'shield', '系统设置');
   addMenu('backup', 'database', '备份恢复');
   addMenu('log', 'fileText', '操作日志');
 
@@ -5626,10 +5782,12 @@ function renderShell() {
 
   var sideEl = h('div', { class: 'sidebar' },
     h('div', { class: 'sidebar-logo' },
-      h('span', { class: 'star', text: '★' }),
+      SITE.logo
+        ? h('img', { class: 'logo-img', src: SITE.logo, alt: 'LOGO' })
+        : h('span', { class: 'star', text: '★' }),
       h('div', {},
-        h('div', { class: 't1', text: '数智军营' }),
-        h('div', { class: 't2', text: '人员管理系统' }))),
+        h('div', { class: 't1', text: SITE.name || '数智军营' }),
+        h('div', { class: 't2', text: SITE.subtitle || '人员管理系统' }))),
     menu,
     h('div', { class: 'sidebar-toggle' }, toggleBtn));
 
@@ -5674,7 +5832,10 @@ function renderShell() {
 /* ================= 启动 ================= */
 
 (function boot() {
-  if (!TOKEN) { renderLogin(); return; }
+  // 站点外观(标题/LOGO/主题色)免登录可用,登录页也要显示
+  var siteReady = loadSiteSettings();
+  if (!TOKEN) { siteReady.then(function () { renderLogin(); }); return; }
+  Promise.all([siteReady]).then(function () {
   refreshAll().then(function () {
     if (TOKEN) {
       renderShell();             // 缓存刷新期间令牌失效则不进主界面(已在登录页)
@@ -5683,5 +5844,6 @@ function renderShell() {
     if (!TOKEN) return;          // 401 已跳转登录
     toast(e.message, 'err');
     renderShell();
+  });
   });
 })();

@@ -55,7 +55,7 @@ public class BackupService {
         MODULE_TABLES.put("equipment", new String[]{"equipment"});
         MODULE_TABLES.put("material", new String[]{"material"});
         MODULE_TABLES.put("vehicle", new String[]{"vehicle"});
-        MODULE_TABLES.put("leave", new String[]{"leave_record", "leave_plan"});
+        MODULE_TABLES.put("leave", new String[]{"leave_record"});
         MODULE_TABLES.put("fitness", new String[]{"fitness_record", "fitness_matrix", "fitness_standard"});
     }
 

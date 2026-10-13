@@ -63,22 +63,4 @@ public class DashboardHelperTest {
         assertEquals("bad", DashboardController.fmtDate("bad"));
     }
 
-    @Test
-    public void leavePlanNormDates() {
-        Map<String, Object> r = new HashMap<String, Object>();
-        r.put("startDate", "2026-07");
-        r.put("endDate", "2026-07-15");
-        LeavePlanController.normDates(r);
-        assertEquals("2026-07-01", r.get("startDate"));
-        assertEquals("2026-07-15", r.get("endDate"));
-    }
-
-    @Test
-    public void leavePlanStrLng() {
-        assertEquals("", LeavePlanController.str(null));
-        assertEquals("x", LeavePlanController.str(" x "));
-        assertEquals(Long.valueOf(0), LeavePlanController.lng(null));
-        assertEquals(Long.valueOf(0), LeavePlanController.lng("abc"));
-        assertEquals(Long.valueOf(203), LeavePlanController.lng("203"));
-    }
 }

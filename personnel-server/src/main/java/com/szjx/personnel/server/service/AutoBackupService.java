@@ -26,15 +26,33 @@ import java.util.concurrent.TimeUnit;
 public class AutoBackupService {
 
     private static final Logger log = LoggerFactory.getLogger(AutoBackupService.class);
-    private static final int KEEP = 14;
+    private static final int KEEP_DEFAULT = 14;
+
+    /** 每次运行时读取系统设置 backupKeep(7~60,默认14) */
+    private int keepNow() {
+        try {
+            String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='backupKeep'", String.class);
+            if (v != null) {
+                v = v.replace("\"", "");
+                int n = Integer.parseInt(v.trim());
+                return Math.max(7, Math.min(60, n));
+            }
+        } catch (Exception ignore) {
+            // 默认
+        }
+        return KEEP_DEFAULT;
+    }
 
     private final BackupService backupService;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final com.szjx.personnel.server.service.LogService logService;
     private ScheduledExecutorService timer;
 
-    public AutoBackupService(BackupService backupService, LogService logService) {
+    public AutoBackupService(BackupService backupService, LogService logService,
+                             org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.backupService = backupService;
         this.logService = logService;
+        this.jdbc = jdbc;
     }
 
     @PostConstruct
@@ -64,7 +82,7 @@ public class AutoBackupService {
                 runBackup("每日定时");
             }
         }, delayMs, TimeUnit.HOURS.toMillis(24), TimeUnit.MILLISECONDS);
-        log.info("自动备份已启用:每天 03:00,保留最近 {} 份", KEEP);
+        log.info("自动备份已启用:每天 03:00,保留份数可配置(默认 {})", KEEP_DEFAULT);
     }
 
     @PreDestroy
@@ -106,7 +124,8 @@ public class AutoBackupService {
                 autos[n++] = f;
             }
         }
-        if (n <= KEEP) {
+        int keep = keepNow();
+        if (n <= keep) {
             return;
         }
         File[] all = Arrays.copyOf(autos, n);
@@ -116,7 +135,7 @@ public class AutoBackupService {
                 return b.getName().compareTo(a.getName());   // 新的在前
             }
         });
-        for (int i = KEEP; i < all.length; i++) {
+        for (int i = keep; i < all.length; i++) {
             if (all[i].delete()) {
                 log.info("自动备份轮转:删除 {}", all[i].getName());
             }
