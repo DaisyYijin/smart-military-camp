@@ -3873,10 +3873,28 @@ function loadHolidayMap() {
   return GET('/api/leave/holidays').then(function (list) {
     HOLIDAY_MAP = {};
     (list || []).forEach(function (x) {
-      if (x.holiday_date) { HOLIDAY_MAP[x.holiday_date] = x.holiday_name || ''; }
+      var d = x.holiday_date || x.holidayDate;
+      var n = x.holiday_name || x.holidayName || '';
+      if (d) { HOLIDAY_MAP[d] = n; }
     });
   }).catch(function () { });
 }
+/** 日期区间内命中某节日的天数(加假天数为空时自动推算) */
+function holidayDaysInRange(start, end, name) {
+  if (!start || !end) { return 0; }
+  var s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00');
+  if (isNaN(s) || isNaN(e) || e < s) { return 0; }
+  var n = 0, guard = 0;
+  while (s <= e && guard < 120) {
+    var key = s.getFullYear() + '-' + ('0' + (s.getMonth() + 1)).slice(-2) + '-' + ('0' + s.getDate()).slice(-2);
+    var fest = HOLIDAY_MAP[key];
+    if (fest && (!name || fest === name || name.indexOf(fest) >= 0 || fest.indexOf(name) >= 0)) { n++; }
+    s.setDate(s.getDate() + 1);
+    guard++;
+  }
+  return n;
+}
+
 /** 日期单元格渲染:命中节日 → 同色小方块+悬停节日名 */
 function holiDateCell(date) {
   if (!date) { return ''; }
@@ -3902,6 +3920,8 @@ function openLeaveHistory(rw, act) {
   var q = '/api/leave?size=500';
   if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
   else { q += '&personnelName=' + encodeURIComponent(rw.personnelName || ''); }
+  var ready = Object.keys(HOLIDAY_MAP).length ? Promise.resolve() : loadHolidayMap();
+  ready.then(function () {
   GET(q).then(function (d) {
     var rows = (d && d.list) || [];
     body.innerHTML = '';
@@ -3943,9 +3963,14 @@ function openLeaveHistory(rw, act) {
           h('td', { html: holiDateCell(x.endDate) }),
           h('td', { text: String(Number(x.days) || 0) }),
           h('td', { text: Number(x.travelDays) > 0 ? String(x.travelDays) : '—' }),
-          h('td', { html: x.holidayName
-              ? '<span class="holi-chip" style="background:' + holidayColor(x.holidayName) + '">' + esc(x.holidayName) + (Number(x.holidayDays) > 0 ? ' ' + x.holidayDays + '天' : '') + '</span>'
-              : (Number(x.holidayDays) > 0 ? String(x.holidayDays) + '天' : '—') }),
+          h('td', { html: (function () {
+              var d = Number(x.holidayDays);
+              if (x.holidayName) {
+                if (!(d > 0)) { d = holidayDaysInRange(x.startDate, x.endDate, x.holidayName); }
+                return '<span class="holi-chip" style="background:' + holidayColor(x.holidayName) + '">' + esc(x.holidayName) + (d > 0 ? ' ' + d + '天' : '') + '</span>';
+              }
+              return d > 0 ? d + '天' : '—';
+            })() }),
           h('td', { html: '<b>' + (Math.round(sum * 10) / 10) + '</b>' }),
           h('td', { text: x.reason || '', style: 'max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' })));
       });
@@ -3955,6 +3980,7 @@ function openLeaveHistory(rw, act) {
   }).catch(function (e) {
     body.innerHTML = '';
     body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+  });
   });
 }
 
@@ -3984,6 +4010,7 @@ var leaveCfg = {
     { key: 'holidayDays', label: '节假日', render: function (r) {
         var d = Number(r.holidayDays);
         if (r.holidayName) {
+          if (!(d > 0)) { d = holidayDaysInRange(r.startDate, r.endDate, r.holidayName); }
           return '<span class="holi-chip" style="background:' + holidayColor(r.holidayName) + '">' + esc(r.holidayName) + (d > 0 ? ' ' + d + '天' : '') + '</span>';
         }
         return d > 0 ? d + '天' : '—';
