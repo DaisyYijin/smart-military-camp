@@ -4527,23 +4527,28 @@ function dictView() {
 
 var DASH_COLORS = ['#2f6fd6', '#2ea44f', '#e8960e', '#9333ea', '#d9463e', '#0d9488', '#b26a00', '#66788c'];
 
-/** 仪表盘图表目录:cat=所属模块 kind=bar(横条)/donut(环图)/columns(年度柱图) size=默认尺寸 */
+/** 仪表盘图表目录:cat=所属模块 kind=图表类型 size=默认尺寸 drill=点击下钻({api,param,fixedVal}) */
 var DASH_WIDGETS = {
-  dept:             { cat: '人员管理', label: '各部门人数',     kind: 'bar',     group: 'department', unit: '人', size: 'm' },
-  status:           { cat: '人员管理', label: '人员状态分布',   kind: 'donut',   group: 'status', size: 'm' },
-  gender:           { cat: '人员管理', label: '性别分布',       kind: 'donut',   group: 'gender', size: 's' },
-  category:         { cat: '人员管理', label: '人员类别分布',   kind: 'donut',   group: 'category', size: 'm' },
-  rank:             { cat: '人员管理', label: '军衔分布',       kind: 'bar',     group: 'rank', unit: '人', size: 'm' },
-  education:        { cat: '人员管理', label: '学历分布',       kind: 'donut',   group: 'education', size: 'm' },
-  political:        { cat: '人员管理', label: '政治面貌分布',   kind: 'donut',   group: 'politicalStatus', size: 'm' },
-  entryTrend:       { cat: '人员管理', label: '近15年入伍趋势', kind: 'columns', unit: '人', size: 'l' },
-  equipmentCat:     { cat: '装备管理', label: '装备类别分布',   kind: 'bar',     group: 'equipmentCategory', unit: '件', size: 'm' },
-  equipmentStatus:  { cat: '装备管理', label: '装备状态分布',   kind: 'donut',   group: 'equipmentStatus', size: 'm' },
-  materialCat:      { cat: '物资管理', label: '物资分类分布',   kind: 'donut',   group: 'materialCategory', size: 'm' },
-  vehicleStatus:    { cat: '车辆管理', label: '车辆状态分布',   kind: 'donut',   group: 'vehicleStatus', size: 's' },
-  vehicleBrand:     { cat: '车辆管理', label: '车辆品牌分布',   kind: 'bar',     group: 'vehicleBrand', unit: '辆', size: 'm' },
-  leaveType:        { cat: '休假管理', label: '今年休假类型',   kind: 'bar',     group: 'leaveType', unit: '次', size: 'm' },
-  fitnessGrade:     { cat: '体能考核', label: '今年体能评定',   kind: 'donut',   group: 'fitnessGrade', size: 'm' }
+  dept:             { cat: '人员管理', label: '各部门人数',       kind: 'bar',     group: 'department', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'departmentId' } },
+  deptTree:         { cat: '人员管理', label: '各部门人数(树状图)', kind: 'treemap', group: 'department', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'departmentId' } },
+  status:           { cat: '人员管理', label: '人员状态分布',     kind: 'donut',   group: 'status', size: 'm', drill: { api: '/api/personnel', param: 'status' } },
+  statusRose:       { cat: '人员管理', label: '人员状态(玫瑰图)', kind: 'rose',    group: 'status', size: 'm', drill: { api: '/api/personnel', param: 'status' } },
+  gender:           { cat: '人员管理', label: '性别分布',         kind: 'donut',   group: 'gender', size: 's', drill: { api: '/api/personnel', param: 'gender' } },
+  category:         { cat: '人员管理', label: '人员类别分布',     kind: 'donut',   group: 'category', size: 'm', drill: { api: '/api/personnel', param: 'category' } },
+  rank:             { cat: '人员管理', label: '军衔分布',         kind: 'bar',     group: 'rank', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'rank' } },
+  rankTree:         { cat: '人员管理', label: '军衔分布(树状图)', kind: 'treemap', group: 'rank', unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'rank' } },
+  education:        { cat: '人员管理', label: '学历分布',         kind: 'donut',   group: 'education', size: 'm', drill: { api: '/api/personnel', param: 'education' } },
+  political:        { cat: '人员管理', label: '政治面貌分布',     kind: 'donut',   group: 'politicalStatus', size: 'm', drill: { api: '/api/personnel', param: 'politicalStatus' } },
+  onDutyGauge:      { cat: '人员管理', label: '人员在位率(仪表)', kind: 'gauge',   size: 's', drill: { api: '/api/personnel', param: 'status', fixedVal: '在职' } },
+  entryTrend:       { cat: '人员管理', label: '近15年入伍趋势',   kind: 'columns', unit: '人', size: 'l', drill: { api: '/api/personnel', param: 'entryYear' } },
+  entryLine:        { cat: '人员管理', label: '入伍趋势(折线)',   kind: 'line',    unit: '人', size: 'm', drill: { api: '/api/personnel', param: 'entryYear' } },
+  equipmentCat:     { cat: '装备管理', label: '装备类别分布',     kind: 'bar',     group: 'equipmentCategory', unit: '件', size: 'm', drill: { api: '/api/equipment', param: 'category' } },
+  equipmentStatus:  { cat: '装备管理', label: '装备状态分布',     kind: 'donut',   group: 'equipmentStatus', size: 'm', drill: { api: '/api/equipment', param: 'status' } },
+  materialCat:      { cat: '物资管理', label: '物资分类分布',     kind: 'donut',   group: 'materialCategory', size: 'm', drill: { api: '/api/material', param: 'category' } },
+  vehicleStatus:    { cat: '车辆管理', label: '车辆状态分布',     kind: 'donut',   group: 'vehicleStatus', size: 's', drill: { api: '/api/vehicle', param: 'status' } },
+  vehicleBrand:     { cat: '车辆管理', label: '车辆品牌分布',     kind: 'bar',     group: 'vehicleBrand', unit: '辆', size: 'm', drill: { api: '/api/vehicle', param: 'brand' } },
+  leaveType:        { cat: '休假管理', label: '今年休假类型',     kind: 'bar',     group: 'leaveType', unit: '次', size: 'm', drill: { api: '/api/leave', param: 'leaveType' } },
+  fitnessGrade:     { cat: '体能考核', label: '今年体能评定',     kind: 'donut',   group: 'fitnessGrade', size: 'm', drill: { api: '/api/fitness', param: 'grade' } }
 };
 /** 默认布局:[{id,size}] */
 var DASH_DEFAULT = [
@@ -4563,14 +4568,22 @@ function dashMigrate(saved) {
   return out;
 }
 
-function dashBarList(list, unit, colorClass) {
+function dashBarList(list, unit, colorClass, drill) {
   if (!list.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
   var max = 1;
   list.forEach(function (x) { if (x.count > max) { max = x.count; } });
   var box = h('div');
   list.forEach(function (x) {
     var pct = Math.max(2, Math.round(x.count / max * 100));
-    box.appendChild(h('div', { class: 'bar-row ' + (colorClass || '') },
+    var val = drill ? drill.valOf(x.name) : null;
+    var attrs = { class: 'bar-row ' + (colorClass || '') + (val != null ? ' drillable' : '') };
+    if (val != null) {
+      attrs['data-api'] = drill.api;
+      attrs['data-param'] = drill.param;
+      attrs['data-val'] = String(val);
+      attrs['data-title'] = drill.title + ' - ' + x.name;
+    }
+    box.appendChild(h('div', attrs,
       h('span', { class: 'bn', title: x.name, text: x.name }),
       h('span', { class: 'bt' }, h('span', { class: 'bf', style: 'width:' + pct + '%' })),
       h('span', { class: 'bv', text: x.count + ' ' + (unit || '') })));
@@ -4578,8 +4591,8 @@ function dashBarList(list, unit, colorClass) {
   return box;
 }
 
-/** 环形图:SVG 分段圆环 + 中心总数 + 右侧图例 */
-function drawDonut(items) {
+/** 环形图:SVG 分段圆环 + 中心总数 + 右侧图例;分段可点击下钻 */
+function drawDonut(items, drill) {
   var data = (items || []).filter(function (x) { return x.count > 0; });
   var total = 0;
   data.forEach(function (x) { total += x.count; });
@@ -4589,9 +4602,12 @@ function drawDonut(items) {
   data.forEach(function (x, i) {
     var len = x.count / total * C;
     var color = DASH_COLORS[i % DASH_COLORS.length];
+    var val = drill ? drill.valOf(x.name) : null;
     svg.push('<circle cx="75" cy="75" r="' + R + '" fill="none" stroke="' + color + '" stroke-width="' + SW +
       '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) +
-      '" transform="rotate(' + deg.toFixed(2) + ' 75 75)"><title>' + esc(x.name) + ': ' + x.count + '</title></circle>');
+      '" transform="rotate(' + deg.toFixed(2) + ' 75 75)"' +
+      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      '><title>' + esc(x.name) + ': ' + x.count + (val != null ? '(点击查看)' : '') + '</title></circle>');
     deg += x.count / total * 360;
   });
   svg.push('<text x="75" y="71" text-anchor="middle" font-size="21" font-weight="700" fill="#1d2c40">' + total + '</text>');
@@ -4609,8 +4625,8 @@ function drawDonut(items) {
   return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
 }
 
-/** 年度柱状图:近15年入伍趋势等 */
-function drawColumns(items, unit) {
+/** 年度柱状图:近15年入伍趋势等;柱体可点击下钻该年份 */
+function drawColumns(items, unit, drill) {
   if (!items || !items.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
   var W = 480, H = 220, padL = 34, padR = 10, padT = 20, padB = 28;
   var max = 1;
@@ -4629,12 +4645,217 @@ function drawColumns(items, unit) {
     var cx = padL + step * (i + 0.5);
     var y = yAt(x.count);
     var hgt = (H - padB) - y;
-    svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="#2f6fd6" opacity="0.88"><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + '</title></rect>');
-    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#445262">' + x.count + '</text>');
-    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8">' + esc(String(x.name).slice(2)) + '</text>');
+    var val = drill ? drill.valOf(String(x.name)) : null;
+    svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="#2f6fd6" opacity="0.88"' +
+      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#445262" pointer-events="none">' + x.count + '</text>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
   });
   svg.push('</svg>');
   return h('div', { html: svg.join('') });
+}
+
+/** 折线图:趋势;圆点可点击下钻该年份 */
+function drawLine(items, unit, drill) {
+  if (!items || !items.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var W = 480, H = 210, padL = 34, padR = 14, padT = 16, padB = 26;
+  var max = 1;
+  items.forEach(function (x) { if (x.count > max) { max = x.count; } });
+  var n = items.length;
+  function xAt(i) { return n === 1 ? (padL + (W - padL - padR) / 2) : padL + (W - padL - padR) * i / (n - 1); }
+  function yAt(v) { return padT + (H - padT - padB) * (1 - v / max); }
+  var pts = [];
+  items.forEach(function (x, i) { pts.push(xAt(i).toFixed(1) + ',' + yAt(x.count).toFixed(1)); });
+  var svg = ['<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">'];
+  [0, 0.5, 1].forEach(function (f) {
+    var y = yAt(max * f).toFixed(1);
+    svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5"/>');
+    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="#8a97a8">' + Math.round(max * f) + '</text>');
+  });
+  svg.push('<polygon points="' + padL + ',' + (H - padB) + ' ' + pts.join(' ') + ' ' + (W - padR) + ',' + (H - padB) + '" fill="#2f6fd6" opacity="0.10"/>');
+  svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="#2f6fd6" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>');
+  items.forEach(function (x, i) {
+    var val = drill ? drill.valOf(String(x.name)) : null;
+    svg.push('<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(x.count).toFixed(1) + '" r="4.5" fill="#2f6fd6" stroke="#fff" stroke-width="1.5"' +
+      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></circle>');
+    svg.push('<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
+  });
+  svg.push('</svg>');
+  return h('div', { html: svg.join('') });
+}
+
+/** 树状图(矩形树图):面积∝数量,色块可点击下钻 */
+function treemapLayout(items, W, H) {
+  var arr = items.filter(function (x) { return x.count > 0; })
+    .sort(function (a, b) { return b.count - a.count; })
+    .map(function (x, i) { return { name: x.name, count: x.count, i: i }; });
+  var out = [];
+  function place(list, x, y, w, h) {
+    if (!list.length) { return; }
+    if (list.length === 1) { out.push({ c: list[0], x: x, y: y, w: w, h: h }); return; }
+    var total = 0;
+    list.forEach(function (c) { total += c.count; });
+    var acc = list[0].count, k = 1;
+    while (k < list.length - 1 && acc + list[k].count <= total / 2) { acc += list[k].count; k++; }
+    var fa = acc / total;
+    var a = list.slice(0, k), b = list.slice(k);
+    if (w >= h) { place(a, x, y, w * fa, h); place(b, x + w * fa, y, w * (1 - fa), h); }
+    else { place(a, x, y, w, h * fa); place(b, x, y + h * fa, w, h * (1 - fa)); }
+  }
+  place(arr, 0, 0, W, H);
+  return out;
+}
+
+function drawTreemap(items, unit, drill) {
+  var data = (items || []).filter(function (x) { return x.count > 0; });
+  if (!data.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var W = 520, H = 270;
+  var cells = treemapLayout(data, W, H);
+  var svg = ['<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">'];
+  cells.forEach(function (cell) {
+    var color = DASH_COLORS[cell.c.i % DASH_COLORS.length];
+    var x = cell.x + 1, y = cell.y + 1, w = Math.max(cell.w - 2, 2), hgt = Math.max(cell.h - 2, 2);
+    var val = drill ? drill.valOf(cell.c.name) : null;
+    svg.push('<g class="tm-cell' + (val != null ? ' seg' : '') + '"' +
+      (val != null ? ' data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + cell.c.name) + '"' : '') + '>');
+    svg.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hgt.toFixed(1) + '" rx="4" fill="' + color + '"><title>' + esc(cell.c.name) + ': ' + cell.c.count + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
+    var nameMax = Math.floor(w / 13);
+    if (w >= 60 && hgt >= 36) {
+      svg.push('<text x="' + (x + 8) + '" y="' + (y + 18) + '" font-size="11.5" fill="#fff" font-weight="600">' + esc(cell.c.name.length > nameMax ? cell.c.name.slice(0, nameMax) + '…' : cell.c.name) + '</text>');
+      svg.push('<text x="' + (x + 8) + '" y="' + (y + 38) + '" font-size="14" fill="#fff" font-weight="700">' + cell.c.count + '</text>');
+    } else if (w >= 36 && hgt >= 20) {
+      svg.push('<text x="' + (x + 5) + '" y="' + (y + hgt / 2 + 5).toFixed(1) + '" font-size="12.5" fill="#fff" font-weight="700">' + cell.c.count + '</text>');
+    }
+    svg.push('</g>');
+  });
+  svg.push('</svg>');
+  return h('div', { html: svg.join('') });
+}
+
+/** 玫瑰图(南丁格尔):角度均分、半径∝数量;扇叶可点击下钻 */
+function drawRose(items, drill) {
+  var data = (items || []).filter(function (x) { return x.count > 0; });
+  var total = 0, max = 1;
+  data.forEach(function (x) { total += x.count; if (x.count > max) { max = x.count; } });
+  if (!total) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var R = 80, cx = 95, cy = 95;
+  var step = 360 / data.length;
+  var svg = ['<svg viewBox="0 0 190 190" style="width:190px;height:190px;flex:none">'];
+  data.forEach(function (x, i) {
+    var a1 = (-90 + i * step + 1.5) * Math.PI / 180;
+    var a2 = (-90 + (i + 1) * step - 1.5) * Math.PI / 180;
+    var r = R * (0.3 + 0.7 * x.count / max);
+    var x1 = (cx + r * Math.cos(a1)).toFixed(1), y1 = (cy + r * Math.sin(a1)).toFixed(1);
+    var x2 = (cx + r * Math.cos(a2)).toFixed(1), y2 = (cy + r * Math.sin(a2)).toFixed(1);
+    var color = DASH_COLORS[i % DASH_COLORS.length];
+    var val = drill ? drill.valOf(x.name) : null;
+    svg.push('<path d="M ' + cx + ' ' + cy + ' L ' + x1 + ' ' + y1 + ' A ' + r.toFixed(1) + ' ' + r.toFixed(1) + ' 0 0 1 ' + x2 + ' ' + y2 + ' Z" fill="' + color + '" stroke="#fff" stroke-width="1.5"' +
+      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      '><title>' + esc(x.name) + ': ' + x.count + '(' + Math.round(x.count / total * 100) + '%)' + (val != null ? '(点击查看)' : '') + '</title></path>');
+  });
+  svg.push('<circle cx="' + cx + '" cy="' + cy + '" r="22" fill="#fff"/>');
+  svg.push('<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="17" font-weight="700" fill="#1d2c40">' + total + '</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="10" fill="#8a97a8">总计</text>');
+  svg.push('</svg>');
+  var legend = h('div', { class: 'donut-legend' });
+  data.forEach(function (x, i) {
+    legend.appendChild(h('div', { class: 'row' },
+      h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
+      h('span', { style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
+      h('b', { style: 'color:#1d2c40', text: String(x.count) })));
+  });
+  return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
+}
+
+/** 仪表图:人员在位率等;圆环可点击下钻 */
+function drawGauge(d, drill) {
+  var total = d.total || 0;
+  var onDuty = d.onDuty || 0;
+  var pct = total ? Math.round(onDuty / total * 100) : 0;
+  var cx = 120, cy = 118, R = 86, SW = 20;
+  function polar(aDeg, r) {
+    var a = aDeg * Math.PI / 180;
+    return (cx + r * Math.cos(a)).toFixed(1) + ' ' + (cy + r * Math.sin(a)).toFixed(1);
+  }
+  var start = 150, sweep = 240;
+  function arc(a1, a2) {
+    var large = (a2 - a1) > 180 ? 1 : 0;
+    return 'M ' + polar(a1, R) + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + polar(a2, R);
+  }
+  var color = pct >= 95 ? '#2ea44f' : pct >= 80 ? '#2f6fd6' : '#e8960e';
+  var val = drill ? drill.valOf('在职') : null;
+  var svg = ['<svg viewBox="0 0 240 160" style="width:100%;max-width:280px;display:block;margin:0 auto">'];
+  svg.push('<path d="' + arc(start, start + sweep) + '" fill="none" stroke="#edf1f6" stroke-width="' + SW + '" stroke-linecap="round"/>');
+  if (pct > 0) {
+    svg.push('<path d="' + arc(start, start + sweep * pct / 100) + '" fill="none" stroke="' + color + '" stroke-width="' + SW + '" stroke-linecap="round"' +
+      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title) + '"' : '') +
+      '><title>在职 ' + onDuty + ' / 共 ' + total + '(' + pct + '%)' + (val != null ? '(点击查看在职名单)' : '') + '</title></path>');
+  }
+  svg.push('<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="30" font-weight="700" fill="#1d2c40">' + pct + '%</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11.5" fill="#8a97a8">在职 ' + onDuty + ' / 共 ' + total + '</text>');
+  svg.push('</svg>');
+  return h('div', { html: svg.join('') });
+}
+
+/** 下钻明细弹窗:按 data-api/param/val 调对应模块接口列明细 */
+var DRILL_COLS = {
+  '/api/personnel': [['name', '姓名'], ['gender', '性别'], ['rank', '军衔'], ['post', '职务'], ['status', '状态'], ['departmentName', '单位']],
+  '/api/vehicle': [['plateNo', '车牌号'], ['brand', '品牌'], ['model', '型号'], ['status', '状态']],
+  '/api/material': [['name', '名称'], ['category', '分类'], ['quantity', '数量'], ['minQuantity', '预警下限'], ['location', '存放位置']],
+  '/api/equipment': [['name', '名称'], ['category', '类别'], ['status', '状态'], ['keeperName', '保管人']],
+  '/api/leave': [['personnelName', '姓名'], ['leaveType', '类型'], ['startDate', '开始日期'], ['endDate', '结束日期'], ['days', '天数']],
+  '/api/fitness': [['personnelName', '姓名'], ['item', '项目'], ['score', '成绩'], ['points', '分数'], ['grade', '评定'], ['testDate', '考核日期']]
+};
+
+function openDrillModal(title, api, param, val) {
+  var params = {};
+  if (param === 'entryYear') {
+    params.entryDateStart = val + '-01-01';
+    params.entryDateEnd = val + '-12-31';
+  } else {
+    params[param] = val;
+  }
+  var qs = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  var cols = DRILL_COLS[api] || [['name', '名称']];
+  var body = h('div');
+  var m = openModal({
+    title: (title || '明细') + ' · 详情',
+    body: body, wide: true,
+    footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+  });
+  body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+  GET(api + '?' + qs + '&size=500').then(function (d) {
+    var rows = (d && d.list) || [];
+    body.innerHTML = '';
+    var table = h('table', { class: 'grid', style: 'width:100%' });
+    var thead = h('tr', {});
+    cols.forEach(function (c) { thead.appendChild(h('th', { text: c[1] })); });
+    table.appendChild(h('thead', {}, thead));
+    var tbody = h('tbody');
+    rows.forEach(function (r) {
+      var tr = h('tr', {});
+      cols.forEach(function (c) {
+        var v = r[c[0]];
+        if (c[0] === 'status' || c[0] === 'grade') {
+          tr.appendChild(h('td', { html: badge(v) }));
+        } else {
+          tr.appendChild(h('td', { text: (v === null || v === undefined || v === '') ? '—' : String(v) }));
+        }
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:56vh;overflow:auto' }, table));
+    body.appendChild(h('div', { style: 'margin-top:10px;font-size:13px;color:#66788c', text: '共 ' + rows.length + ' 条' }));
+    if (!rows.length) {
+      body.appendChild(h('div', { class: 'empty-row', text: '没有符合条件的记录' }));
+    }
+  }).catch(function (e) {
+    body.innerHTML = '';
+    body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+  });
 }
 
 function dashboardView() {
@@ -4685,12 +4906,43 @@ function dashboardView() {
   /* ---------- 图表卡片(尺寸可切 + 可拖动排序) ---------- */
   function makeCard(w) {
     var def = DASH_WIDGETS[w.id];
+    // 下钻配置:valOf 把图表项名转成接口参数值(部门按名称查id,其余原样)
+    var drill = null;
+    if (def.drill) {
+      var fixed = def.drill.fixedVal;
+      drill = {
+        api: def.drill.api,
+        param: def.drill.param,
+        title: def.label,
+        valOf: fixed != null
+          ? function () { return fixed; }
+          : (def.drill.param === 'departmentId'
+              ? function (name) {
+                  if (name === '未分配') { return null; }
+                  for (var i = 0; i < Ctx.deptFlat.length; i++) {
+                    if (Ctx.deptFlat[i].name === name) { return String(Ctx.deptFlat[i].id); }
+                  }
+                  return null;
+                }
+              : function (name) { return name === '未填写' || name === '未分配' ? null : name; })
+      };
+    }
     var body;
     if (def.kind === 'columns') {
-      body = drawColumns(lastData.entryTrend, def.unit);
+      body = drawColumns(lastData.entryTrend, def.unit, drill);
+    } else if (def.kind === 'line') {
+      body = drawLine(lastData.entryTrend, def.unit, drill);
+    } else if (def.kind === 'gauge') {
+      body = drawGauge(lastData, drill);
     } else {
       var items = (lastData.groups && lastData.groups[def.group]) || [];
-      body = def.kind === 'donut' ? drawDonut(items) : dashBarList(items, def.unit);
+      if (def.kind === 'treemap') {
+        body = drawTreemap(items, def.unit, drill);
+      } else if (def.kind === 'rose') {
+        body = drawRose(items, drill);
+      } else {
+        body = def.kind === 'donut' ? drawDonut(items, drill) : dashBarList(items, def.unit, '', drill);
+      }
     }
     var sizeBtns = h('span', { class: 'size-opts', title: '切换显示尺寸' });
     ['s', 'm', 'l'].forEach(function (sz) {
@@ -4760,6 +5012,13 @@ function dashboardView() {
     widgets.forEach(function (w) { chartsGrid.appendChild(makeCard(w)); });
   }
   chartsGrid.addEventListener('dragover', function (e) { e.preventDefault(); });
+  // 点击图表区域(条形/环段/树块/扇叶/柱体/圆点/仪表弧) → 下钻明细
+  chartsGrid.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-api]') : null;
+    if (!el) { return; }
+    openDrillModal(el.getAttribute('data-title'), el.getAttribute('data-api'),
+      el.getAttribute('data-param'), el.getAttribute('data-val'));
+  });
 
   /* ---------- 添加图表(按模块分类) ---------- */
   function openPicker() {
@@ -4782,7 +5041,7 @@ function dashboardView() {
           class: 'dash-pick-btn' + (added ? ' disabled' : ''),
           disabled: added,
           html: (added ? '<span class="ok">✓ 已添加</span>' : '<span class="ok">＋ 添加</span>') + '<b>' + esc(def.label) + '</b>'
-            + '<span class="kind">' + ({ bar: '条形图', donut: '环形图', columns: '柱状图' })[def.kind] + '</span>',
+            + '<span class="kind">' + ({ bar: '条形图', donut: '环形图', columns: '柱状图', treemap: '树状图', rose: '玫瑰图', gauge: '仪表图', line: '折线图' })[def.kind] + '</span>',
           onclick: function () {
             if (added) { return; }
             widgets.push({ id: wid, size: def.size || 'm' });
