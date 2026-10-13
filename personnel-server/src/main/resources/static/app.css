@@ -73,7 +73,7 @@ textarea { resize: vertical; }
    左侧 64px 始终被自身深色背景覆盖,不会露底闪烁,也不逐帧重排主区 */
 .sidebar {
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 30;
-  width: 208px; background: #132d52;
+  width: 208px; background: var(--pri-deep, #132d52);
   color: #cdd9ea; display: flex; flex-direction: column;
 }
 .sidebar-logo {
@@ -93,6 +93,9 @@ textarea { resize: vertical; }
 /* 收起时:LOGO 单独靠左显示(与图标列对齐) */
 .sidebar.collapsed .sidebar-logo { flex-direction: row; align-items: center; padding: 14px 0 14px 23px; }
 .menu { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
+/* 菜单可滚动但隐藏滚动条(窗口矮时不出现灰条) */
+.menu { scrollbar-width: none; -ms-overflow-style: none; }
+.menu::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .menu-item {
   display: flex; align-items: center; gap: 10px; padding: 11px 20px;
   cursor: pointer; border-left: 3px solid transparent; color: #b9c8dd;
@@ -100,7 +103,7 @@ textarea { resize: vertical; }
 .menu-item:hover { background: rgba(255,255,255,.06); color: #fff; }
 .menu-item:focus, .menu-item:active { outline: none; }
 .menu-item.active {
-  background: rgba(47,111,214,.28); border-left-color: #5b9bff; color: #fff; font-weight: 600;
+  background: var(--pri-a28, rgba(47,111,214,.28)); border-left-color: var(--pri-light, #5b9bff); color: #fff; font-weight: 600;
 }
 .menu-item .ic { width: 18px; text-align: center; }
 
@@ -532,7 +535,7 @@ table.grid td.empty-row { text-align: center; }
 }
 .sidebar.collapsed .menu-item.active {
   border-left: none;
-  background: rgba(47,111,214,.35);
+  background: var(--pri-a35, rgba(47,111,214,.35));
 }
 /* 不画 active 指示条:收起态背景色已区分,额外竖条观感像误出的蓝框 */
 .sidebar.collapsed .menu-item.active::before { content: none; }

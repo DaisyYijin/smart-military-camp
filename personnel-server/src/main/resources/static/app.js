@@ -554,13 +554,24 @@ function shade(c, f) {
   var m = /^#([0-9a-f]{6})$/i.exec((c || '').trim());
   if (!m) { return '#16437e'; }
   var n = parseInt(m[1], 16);
-  var r = Math.round(((n >> 16) & 255) * f), g = Math.round(((n >> 8) & 255) * f), b = Math.round((n & 255) * f);
+  var c = function (x) { return Math.max(0, Math.min(255, Math.round(x))); };
+  var r = c(((n >> 16) & 255) * f), g = c(((n >> 8) & 255) * f), b = c((n & 255) * f);
   return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 /** 应用外观: 主题色/标签标题/favicon */
+/** 一次性应用全部主题派生色(启动/选色共用) */
+function applyThemeVars(c) {
+  var t = /^#[0-9a-f]{6}$/i.test(c) ? c : '#2f6fd6';
+  document.documentElement.style.setProperty('--pri', t);
+  document.documentElement.style.setProperty('--pri-dark', shade(t, 0.62));
+  document.documentElement.style.setProperty('--pri-deep', shade(t, 0.40));   // 侧栏底色
+  document.documentElement.style.setProperty('--pri-light', shade(t, 1.45));  // 亮描边
+  document.documentElement.style.setProperty('--pri-a28', t + '47');          // 28%透明
+  document.documentElement.style.setProperty('--pri-a35', t + '59');          // 35%透明
+}
+
 function applyBranding() {
-  document.documentElement.style.setProperty('--pri', SITE.theme);
-  document.documentElement.style.setProperty('--pri-dark', shade(SITE.theme, 0.62));
+  applyThemeVars(SITE.theme);
   document.title = SITE.title || SITE.name || '人员管理系统';
   var fav = document.querySelector('link[rel="icon"]') || document.createElement('link');
   fav.setAttribute('rel', 'icon');
@@ -5296,8 +5307,7 @@ function settingsView() {
     var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? '#1d2c40' : 'transparent'), title: c });
     sw.addEventListener('click', function () {
       vals.themeColor = c;
-      document.documentElement.style.setProperty('--pri', c);
-      document.documentElement.style.setProperty('--pri-dark', shade(c, 0.62));
+      applyThemeVars(c);
       Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
       sw.style.borderColor = '#1d2c40';
       saveThemeNow(c);
@@ -5308,8 +5318,7 @@ function settingsView() {
   var colorSaveTimer = null;
   customColor.addEventListener('input', function () {
     vals.themeColor = customColor.value;
-    document.documentElement.style.setProperty('--pri', customColor.value);
-    document.documentElement.style.setProperty('--pri-dark', shade(customColor.value, 0.62));
+    applyThemeVars(customColor.value);
     Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
     clearTimeout(colorSaveTimer);
     colorSaveTimer = setTimeout(function () { saveThemeNow(customColor.value); }, 600);
