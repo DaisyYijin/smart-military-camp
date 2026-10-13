@@ -3204,8 +3204,8 @@ function importStdExcel(kind, done) {
   setTimeout(function () { input.remove(); }, 60000);
 }
 
-/** 体重标准(原BMI):按性别 × 身高行 × 年龄列的合格体重区间矩阵 */
-function openBmiStdManager() {
+/** 体型标准:按性别 × 身高行 × 年龄列的合格体重区间矩阵 */
+function openBodyStdManager() {
   var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
   ready.then(function (std) {
     var AGE_DEFAULTS = ['0-24', '25-29', '30-39', '40-49', '50-59', '60-99'];
@@ -3291,7 +3291,7 @@ function openBmiStdManager() {
         tb.appendChild(tr);
       });
       table.appendChild(tb);
-      gridBox.appendChild(h('div', { class: 'table-wrap', style: 'max-height:46vh' }, table));
+      gridBox.appendChild(h('div', { class: 'table-wrap', style: 'max-height:62vh' }, table));
       gridBox.appendChild(h('div', { style: 'display:flex;gap:10px;margin-top:10px;flex-wrap:wrap' },
         h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加身高行', onclick: function () {
           var last = side.rows.length ? side.rows[side.rows.length - 1].h : 1.4;
@@ -3336,7 +3336,7 @@ function openBmiStdManager() {
         } }),
         h('button', { class: 'btn btn-ghost btn-sm', text: '导入Excel', onclick: function () {
           importStdExcel('weight', function (r) {
-            loadBmiStd().then(function () { m.close(); openBmiStdManager(); });
+            loadBmiStd().then(function () { m.close(); openBodyStdManager(); });
           });
         } })),
       h('div', { style: 'display:flex;gap:8px;margin-bottom:10px;align-items:center' },
@@ -3373,7 +3373,7 @@ function openBmiStdManager() {
 
     var m;
     var m = openModal({
-      title: '体重标准(身高 × 年龄段 合格区间矩阵)', body: body, wide: true,
+      title: '体型标准(身高 × 年龄段 体重合格区间矩阵)', body: body, wide: true,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', {
@@ -3408,7 +3408,7 @@ function openFitnessStdManager() {
   var topbar = h('div', { style: 'height:48px;flex:none;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px' },
     h('div', { style: 'display:flex;align-items:center;gap:14px' },
       h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
-      h('button', { class: 'btn btn-ghost btn-sm', text: 'BMI标准', title: '设置体重合格标准(身高×年龄)', onclick: openBmiStdManager }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: '体型标准', title: '设置身高体重体型合格标准', onclick: openBodyStdManager }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '下载模板', title: '下载评分标准Excel模板(每项目一个Sheet)', onclick: function () {
         var pm = showProgressModal('下载模板');
         apiBlobWithProgress('/api/fitness-std/matrix/template', function (p) { pm.setProgress(p); }).then(function (r) {

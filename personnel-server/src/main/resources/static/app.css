@@ -973,3 +973,5 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .login-remember .hint { color: #a6b1bf; font-size: 12px; }
 
 .login-form { display: block; }
+
+.dialog.xxwide { width: 1240px; }
