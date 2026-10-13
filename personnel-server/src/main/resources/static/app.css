@@ -1008,7 +1008,8 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .cal-year-cell:hover { background: #d4e3f7; color: #16437e; }
 .cal-year-cell.sel { background: #16437e; color: #ffffff; font-weight: 700; }
 .cal-year-cell.sel:hover { background: #16437e; }
-.cal-year-cell.today { color: #d9463e; font-weight: 600; }
+.cal-year-cell.sel.today { color: #ffffff; }
+.cal-year-cell.today:not(.sel) { color: #d9463e; font-weight: 600; }
 .cal-year-cell.today:hover { color: #d9463e; background: #fdf0ef; }
 .cal-panel .cal-grid { grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 2px; }
 .cal-title:hover { color: var(--pri, #2f6fd6); }
