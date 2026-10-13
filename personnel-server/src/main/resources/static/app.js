@@ -2668,7 +2668,7 @@ function openPersonProfile(rw, act) {
   var pq = rw.idCard
     ? GET('/api/personnel?idCard=' + encodeURIComponent(rw.idCard)).then(function (d) { return (d && d.list && d.list.length) ? d.list[0] : null; })
     : GET('/api/personnel/' + rw.personnelId);
-  Promise.all([pq, GET(fq), GRADE_RULE ? Promise.resolve(null) : loadGradeRule()]).then(function (res) {
+  Promise.all([pq, GET(fq), GRADE_RULE ? Promise.resolve(null) : loadGradeRule(), BMI_STD ? Promise.resolve(null) : loadBmiStd()]).then(function (res) {
     var p = res[0] || {};
     var rows = (res[1] && res[1].list) || [];
     body.innerHTML = '';
@@ -2717,7 +2717,7 @@ function openPersonProfile(rw, act) {
       cell('军衔', p.rank), cell('职务', p.post), cell('所属单位', p.departmentName));
     body.appendChild(h('div', { style: 'display:flex;gap:18px;align-items:stretch' },
       h('div', { style: 'flex:none;width:300px;border:1px solid #edf1f6;border-radius:10px;padding:12px 10px;display:flex;justify-content:center' },
-        buildBodyFigure(p.height, p.weight)),
+        buildBodyFigure(p.height, p.weight, p.gender)),
       info));
 
     // 按项目分组(带分数的参与走势)
@@ -2814,7 +2814,7 @@ function openPersonProfile(rw, act) {
 }
 
 /** 伪3D人体模型:身高定高度、BMI定体宽,渐变模拟立体感;无数据给占位提示 */
-function buildBodyFigure(hcm, wkg) {
+function buildBodyFigure(hcm, wkg, gender) {
   var hc = Number(hcm), wc = Number(wkg);
   var has = hc > 80 && hc < 230 && wc > 25 && wc < 200;
   var box = h('div', { style: 'display:flex;flex-direction:column;align-items:center;width:100%' });
@@ -2881,11 +2881,16 @@ function buildBodyFigure(hcm, wkg) {
   s.push('<path d="M ' + (cx - headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' A ' + headR.toFixed(1) + ' ' + headR.toFixed(1) + ' 0 0 1 ' + (cx + headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' Z" fill="#3a332b"/>');
   s.push('</svg>');
   var bmiV = Math.round(bmi * 10) / 10;
-  var bl = bmi < 18.5 ? ['偏瘦', '#2f6fd6'] : bmi < 24 ? ['正常', '#2ea44f'] : bmi < 28 ? ['超重', '#e8743b'] : ['肥胖', '#d9463e'];
+  // 军事标准判定(按性别,可在体能标准-BMI标准中配置区间)
+  var v = bmiVerdict(bmi, gender);
+  var std = (BMI_STD || defaultBmiStd());
+  var r = gender === '女' ? std.female : std.male;
   box.appendChild(h('div', { style: 'width:100%', html: s.join('') }));
   box.appendChild(h('div', { style: 'margin-top:8px;font-size:13px;color:#445262;text-align:center' },
     h('span', { text: '身高 ' + (+hc) + ' cm · 体重 ' + (+wc) + ' kg · BMI ' + bmiV + ' ' }),
-    h('b', { style: 'color:' + bl[1], text: bl[0] })));
+    h('b', { style: 'color:' + v[2], text: v[1] })));
+  box.appendChild(h('div', { style: 'margin-top:3px;font-size:11.5px;color:#8a97a8;text-align:center',
+    text: '军标区间(' + (gender === '女' ? '女' : '男') + '):' + r[0] + ' ~ ' + r[1] }));
   return box;
 }
 
@@ -2939,6 +2944,26 @@ function buildTrendChart(series, opts) {
       h('span', { text: s.name + '(' + s.data.length + '次)' })));
   });
   return h('div', {}, chartBox, legend);
+}
+
+var BMI_STD = null;   // {male:[min,max], female:[min,max]}
+function defaultBmiStd() {
+  return { male: [17.5, 27.5], female: [17, 24.5] };
+}
+function loadBmiStd() {
+  return GET('/api/setting/bmi_standard').then(function (r) {
+    BMI_STD = (r && r.male && r.female) ? r : defaultBmiStd();
+    return BMI_STD;
+  }).catch(function () { BMI_STD = defaultBmiStd(); return BMI_STD; });
+}
+/** BMI 按性别军标判定: [合格?, 标签, 颜色] */
+function bmiVerdict(bmi, gender) {
+  var std = BMI_STD || defaultBmiStd();
+  var r = gender === '女' ? std.female : std.male;
+  var inRange = bmi >= r[0] && bmi <= r[1];
+  if (inRange) { return [true, '合格', '#2ea44f']; }
+  if (bmi < r[0]) { return [false, '偏瘦不合格', '#2f6fd6']; }
+  return [false, '超重不合格', '#d9463e'];
 }
 
 var GRADE_RULE = null;
@@ -3107,6 +3132,59 @@ function openGradeRuleManager() {
   });
 }
 
+/** BMI 标准:男女合格区间配置(身高体重指数,档案判定与BMI考核项目共用) */
+function openBmiStdManager() {
+  var ready = BMI_STD ? Promise.resolve(BMI_STD) : loadBmiStd();
+  ready.then(function (std) {
+    function num(v) {
+      var n = Number(v);
+      return isNaN(n) ? '' : n;
+    }
+    var mMin = h('input', { type: 'number', step: '0.1', style: 'width:110px;height:32px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
+    var mMax = h('input', { type: 'number', step: '0.1', style: 'width:110px;height:32px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
+    var fMin = h('input', { type: 'number', step: '0.1', style: 'width:110px;height:32px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
+    var fMax = h('input', { type: 'number', step: '0.1', style: 'width:110px;height:32px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
+    mMin.value = num(std.male[0]); mMax.value = num(std.male[1]);
+    fMin.value = num(std.female[0]); fMax.value = num(std.female[1]);
+    function row(label, a, b) {
+      return h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:14px' },
+        h('span', { style: 'width:60px;font-size:14px;color:#1d2c40;font-weight:600', text: label }),
+        a, h('span', { text: '~' }), b, h('span', { style: 'color:#8a97a8;font-size:12px', text: '(含边界)' }));
+    }
+    var m = openModal({
+      title: 'BMI 标准(身高体重指数合格区间)',
+      body: h('div', {},
+        h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:14px;line-height:1.7',
+          text: 'BMI = 体重(kg) ÷ 身高(m)²。用于:体能档案人体模型判定、BMI考核项目导入评分(合格100分/不合格0分)。' }),
+        row('男军人', mMin, mMax),
+        row('女军人', fMin, fMax),
+        h('button', {
+          class: 'btn btn-ghost btn-sm', text: '恢复默认(男17.5~27.5 / 女17~24.5)',
+          onclick: function () { mMin.value = 17.5; mMax.value = 27.5; fMin.value = 17; fMax.value = 24.5; }
+        })),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            var val = function (el) { return Number(el.value); };
+            var mm = [val(mMin), val(mMax)], ff = [val(fMin), val(fMax)];
+            if ([mm[0], mm[1], ff[0], ff[1]].some(function (x) { return isNaN(x) || x <= 0; }) || mm[0] >= mm[1] || ff[0] >= ff[1]) {
+              toast('请填写正确的区间(最小值需小于最大值)', 'err');
+              return;
+            }
+            PUT('/api/setting/bmi_standard', { male: mm, female: ff }).then(function () {
+              BMI_STD = { male: mm, female: ff };
+              m.close();
+              toast('BMI标准已保存');
+            }).catch(function (e) { toast(e.message, 'err'); });
+          }
+        })
+      ]
+    });
+  });
+}
+
 function openFitnessStdManager() {
   var items = [];
   var currentItem = null;
@@ -3117,7 +3195,10 @@ function openFitnessStdManager() {
   // 全屏容器
   var overlay = h('div', { style: 'position:fixed;inset:0;background:#eef2f7;z-index:90;display:flex;flex-direction:column' });
   var topbar = h('div', { style: 'height:48px;flex:none;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px' },
-    h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
+    h('div', { style: 'display:flex;align-items:center;gap:14px' },
+      h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: 'BMI标准', title: '设置男女身高体重指数合格区间', onclick: openBmiStdManager })),
+    h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: ' ' }),
     h('button', { class: 'btn btn-primary', text: '✕ 关闭', onclick: function () { overlay.remove(); reloadFitnessMatrix(); } }));
   var mainArea = h('div', { style: 'flex:1;display:flex;overflow:hidden' });
 

@@ -21,7 +21,7 @@ public class SettingController {
     private static final java.util.Set<String> ALLOWED = new java.util.HashSet<String>(
             java.util.Arrays.asList("fitness_grade_rule",
                     "siteName", "siteTitle", "siteSubtitle", "siteLogo", "siteFavicon",
-                    "themeColor", "pageSize", "backupKeep"));
+                    "themeColor", "pageSize", "backupKeep", "bmi_standard"));
 
     /** 免登录读取的界面配置(登录页也要显示标题/LOGO) */
     public static final String[] PUBLIC_KEYS = {"siteName", "siteTitle", "siteSubtitle",
@@ -44,7 +44,7 @@ public class SettingController {
         } catch (Exception e) {
             v = null;
         }
-        if ("fitness_grade_rule".equals(key)) {
+        if ("fitness_grade_rule".equals(key) || "bmi_standard".equals(key)) {
             try {
                 com.fasterxml.jackson.databind.JsonNode node =
                         new com.fasterxml.jackson.databind.ObjectMapper().readTree(v == null ? "[]" : v);

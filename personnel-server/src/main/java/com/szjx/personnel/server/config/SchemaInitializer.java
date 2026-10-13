@@ -46,7 +46,7 @@ public class SchemaInitializer implements CommandLineRunner {
     private void initDefaultDict() {
         addDict("leave_type", new String[]{"事假", "病假", "年假", "探亲假", "婚假", "产假", "陪产假", "其他"});
         addDict("holiday_type", new String[]{"元旦", "春节", "清明节", "劳动节", "端午节", "中秋节", "国庆节", "其他"});
-        addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "其他"});
+        addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "BMI", "其他"});
         addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
         addDict("personnel_status", new String[]{"在职", "休假", "培训", "借调", "离职", "其他"});
         addDict("personnel_category", new String[]{"军官", "士官", "义务兵", "文职人员", "其他"});

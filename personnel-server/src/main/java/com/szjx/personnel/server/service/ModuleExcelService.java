@@ -553,6 +553,24 @@ public class ModuleExcelService {
         if (item.isEmpty()) {
             return "考核项目为空";
         }
+        // BMI:按性别合格区间评分(身高体重指数),不走评分矩阵
+        if ("BMI".equals(item)) {
+            Double bmi = null;
+            java.util.regex.Matcher bm = java.util.regex.Pattern.compile("([0-9]+(?:[.][0-9]+)?)").matcher(str(vals.get("score")));
+            if (bm.find()) { bmi = Double.parseDouble(bm.group(1)); }
+            if (bmi == null || bmi < 8 || bmi > 60) {
+                return "BMI成绩应为8~60之间的数值(身高体重指数)";
+            }
+            String gender = "";
+            List<Map<String, Object>> g = jdbc.queryForList("SELECT gender FROM personnel WHERE id=?", pid);
+            if (!g.isEmpty() && g.get(0).get("gender") != null) { gender = String.valueOf(g.get(0).get("gender")); }
+            double[] range = bmiRange("女".equals(gender));
+            boolean pass = bmi >= range[0] && bmi <= range[1];
+            vals.put("personnelId", pid);
+            vals.put("points", pass ? 100.0 : 0.0);
+            vals.put("grade", pass ? "及格" : "不及格");
+            return null;
+        }
         java.util.Set<String> items = new java.util.HashSet<String>();
         for (Map<String, Object> r : jdbc.queryForList("SELECT DISTINCT item FROM fitness_matrix")) {
             items.add(String.valueOf(r.get("item")));
@@ -572,6 +590,25 @@ public class ModuleExcelService {
         vals.put("grade", gradeForPoints(pts));
         // idCard/personName 保留在 vals(必填检查用),入库时由 UPSERT_SKIP 排除
         return null;
+    }
+
+    /** BMI 合格区间(可配置:sys_setting.bmi_standard {"male":[min,max],"female":[min,max]}) */
+    private double[] bmiRange(boolean female) {
+        double[] def = female ? new double[]{17.0, 24.5} : new double[]{17.5, 27.5};
+        try {
+            String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='bmi_standard'", String.class);
+            if (v != null) {
+                com.fasterxml.jackson.databind.JsonNode node =
+                        new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
+                com.fasterxml.jackson.databind.JsonNode arr = node.get(female ? "female" : "male");
+                if (arr != null && arr.isArray() && arr.size() == 2) {
+                    return new double[]{arr.get(0).asDouble(), arr.get(1).asDouble()};
+                }
+            }
+        } catch (Exception ignore) {
+            // 用默认
+        }
+        return def;
     }
 
     private String birthdayOf(Long pid) {
