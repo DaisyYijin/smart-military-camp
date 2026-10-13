@@ -205,7 +205,7 @@ public class PersonnelFullExcel {
             for (Map<String, Object> d : jdbc.queryForList("SELECT id, name FROM department")) {
                 deptMap.put(String.valueOf(d.get("name")).trim(), ((Number) d.get("id")).longValue());
             }
-            int pAdded = 0, pUpdated = 0, pFailed = 0;
+            int pAdded = 0, pUpdated = 0, pFailed = 0, cardWarn = 0;
             for (int r = 1; r <= mainSheet.getLastRowNum(); r++) {
                 Row row = mainSheet.getRow(r);
                 if (row == null) { continue; }
@@ -221,6 +221,9 @@ public class PersonnelFullExcel {
                     String name = vals.get("name");
                     if (name == null || name.trim().isEmpty()) { continue; }
                     String card = vals.get("id_card") == null ? "" : vals.get("id_card").trim().toUpperCase();
+                    if (!card.isEmpty() && card.length() != 18) {
+                        cardWarn++;   // 证件位数异常不拦截,导入完成后提示
+                    }
                     Long deptId = null;
                     String deptName = vals.get("department_name");
                     if (deptName != null && !deptName.trim().isEmpty()) {
@@ -281,6 +284,9 @@ public class PersonnelFullExcel {
                     pFailed++;
                     if (errors.size() < 10) { errors.add("\u4eba\u5458Sheet \u7b2c" + (r + 1) + "\u884c: " + simplifyError(e.getMessage())); }
                 }
+            }
+            if (cardWarn > 0) {
+                result.put("cardWarn", cardWarn);
             }
             result.put("added", pAdded);
             result.put("updated", pUpdated);

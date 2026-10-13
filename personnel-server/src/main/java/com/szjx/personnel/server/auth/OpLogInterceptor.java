@@ -34,6 +34,9 @@ public class OpLogInterceptor implements HandlerInterceptor {
         MODULE_NAMES.put("material", "物资管理");
         MODULE_NAMES.put("vehicle", "车辆管理");
         MODULE_NAMES.put("leave", "休假管理");
+        MODULE_NAMES.put("leave-plan", "休假计划");
+        MODULE_NAMES.put("setting", "系统设置");
+        MODULE_NAMES.put("dashboard", "仪表盘");
         MODULE_NAMES.put("fitness", "体能考核");
         MODULE_NAMES.put("backup", "备份恢复");
         MODULE_NAMES.put("auth", "账号认证");

@@ -51,12 +51,12 @@ public class BackupService {
     static {
         MODULE_TABLES.put("personnel", new String[]{"personnel", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info"});
         MODULE_TABLES.put("department", new String[]{"department"});
-        MODULE_TABLES.put("dict", new String[]{"sys_dict"});
+        MODULE_TABLES.put("dict", new String[]{"sys_dict", "sys_setting", "holiday_calendar"});
         MODULE_TABLES.put("equipment", new String[]{"equipment"});
         MODULE_TABLES.put("material", new String[]{"material"});
         MODULE_TABLES.put("vehicle", new String[]{"vehicle"});
-        MODULE_TABLES.put("leave", new String[]{"leave_record"});
-        MODULE_TABLES.put("fitness", new String[]{"fitness_record"});
+        MODULE_TABLES.put("leave", new String[]{"leave_record", "leave_plan"});
+        MODULE_TABLES.put("fitness", new String[]{"fitness_record", "fitness_matrix", "fitness_standard"});
     }
 
     private final JdbcTemplate jdbc;

@@ -79,10 +79,17 @@ public class LeavePlanController {
         if (err != null) {
             return ApiResponse.error(err);
         }
-        jdbc.update("INSERT INTO leave_plan(personnel_id, year, start_date, end_date, days, status, remark) VALUES(?,?,?,?,?,?,?)",
+        Long id = jdbc.queryForObject(
+                "INSERT INTO leave_plan(personnel_id, year, start_date, end_date, days, status, remark) " +
+                "VALUES(?,?,?,?,?,?,?) RETURNING id",
+                Long.class,
                 lng(r.get("personnelId")), str(r.get("year")), str(r.get("startDate")), str(r.get("endDate")),
                 calcDays(r), statusOf(r), str(r.get("remark")));
-        return ApiResponse.ok();
+        List<Map<String, Object>> one = jdbc.queryForList(
+                "SELECT l.id, l.personnel_id AS personnelId, p.name AS personnelName, p.id_card AS idCard, " +
+                "l.year, l.start_date AS startDate, l.end_date AS endDate, CAST(l.days AS REAL) AS days, " +
+                "l.status, l.remark FROM leave_plan l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE l.id = ?", id);
+        return ApiResponse.ok(one.isEmpty() ? null : one.get(0));
     }
 
     @PutMapping("/{id}")
@@ -109,7 +116,7 @@ public class LeavePlanController {
     }
 
     /** 日期规范:输入到月(yyyy-MM)的按当月 1 号处理 */
-    private static void normDates(Map<String, Object> r) {
+    static void normDates(Map<String, Object> r) {
         String[] keys = {"startDate", "endDate"};
         for (String k : keys) {
             String v = str(r.get(k));
@@ -152,11 +159,11 @@ public class LeavePlanController {
         return s.isEmpty() ? "计划中" : s;
     }
 
-    private static String str(Object v) {
+    static String str(Object v) {
         return v == null ? "" : String.valueOf(v).trim();
     }
 
-    private static Long lng(Object v) {
+    static Long lng(Object v) {
         if (v == null || String.valueOf(v).trim().isEmpty()) {
             return 0L;
         }

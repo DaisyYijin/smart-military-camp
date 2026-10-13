@@ -1654,6 +1654,7 @@ function crudView(cfg) {
             }
           }
           if (parts.length) { msg += '(' + parts.join(',') + ')'; }
+          if (r.cardWarn > 0) { msg += ';注意:' + r.cardWarn + ' 条身份证号不是18位,请核对'; }
         } else {
           msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
           if (r.dictAdded > 0) {

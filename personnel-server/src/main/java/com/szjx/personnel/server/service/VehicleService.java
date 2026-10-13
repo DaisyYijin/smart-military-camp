@@ -58,5 +58,14 @@ public class VehicleService {
                 && personnelDao.findById(v.getDriverId()) == null) {
             throw new IllegalArgumentException("所选驾驶员不存在");
         }
+        if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getPurchaseDate())) {
+            throw new IllegalArgumentException("购置日期格式应为 yyyy-MM-dd");
+        }
+        if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getInsuranceExpiry())) {
+            throw new IllegalArgumentException("保险到期日格式应为 yyyy-MM-dd");
+        }
+        if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getInspectionExpiry())) {
+            throw new IllegalArgumentException("年检到期日格式应为 yyyy-MM-dd");
+        }
     }
 }

@@ -160,7 +160,7 @@ public class DashboardController {
     }
 
     /** 纪念日/生日判定:源日期(yyyy-MM-dd)的周年日在未来 days天内(含今天) → 返回周年日;否则 null */
-    private static String anniversaryDate(String src, LocalDate today, int days) {
+    static String anniversaryDate(String src, LocalDate today, int days) {
         try {
             LocalDate d = LocalDate.parse(src);
             LocalDate a = LocalDate.of(today.getYear(), d.getMonthValue(), d.getDayOfMonth());
@@ -177,7 +177,7 @@ public class DashboardController {
     }
 
     /** 周年数(纪念日年份 - 源日期年份) */
-    private static int anniversaryYears(String src, String anniversary) {
+    static int anniversaryYears(String src, String anniversary) {
         try {
             return Integer.parseInt(anniversary.substring(0, 4)) - Integer.parseInt(src.substring(0, 4));
         } catch (Exception e) {
@@ -186,7 +186,7 @@ public class DashboardController {
     }
 
     /** 两个日期间隔天数(end - start + 1) */
-    private static long daysBetween(String start, String end) {
+    static long daysBetween(String start, String end) {
         try {
             return java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(start), LocalDate.parse(end)) + 1;
         } catch (Exception e) {
@@ -195,7 +195,7 @@ public class DashboardController {
     }
 
     /** 数字显示:整数去掉小数尾巴(17.0 → 17) */
-    private static String numStr(Object v) {
+    static String numStr(Object v) {
         if (v instanceof Number) {
             double d = ((Number) v).doubleValue();
             if (d == Math.floor(d)) {
@@ -207,7 +207,7 @@ public class DashboardController {
     }
 
     /** yyyy-MM-dd → M月d日 */
-    private static String fmtDate(String d) {
+    static String fmtDate(String d) {
         try {
             LocalDate x = LocalDate.parse(d);
             return x.getMonthValue() + "月" + x.getDayOfMonth() + "日";

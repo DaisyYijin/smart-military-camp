@@ -119,6 +119,9 @@ public class DictService {
         if (dictDao.exists(d.getDictType(), d.getDictLabel())) {
             throw new IllegalArgumentException("该类型下已存在相同的选项");
         }
+        if (d.getEnabled() == null) {
+            d.setEnabled(true);   // API 未传时默认启用
+        }
         long id = dictDao.insert(d);
         return dictDao.findById(id);
     }
@@ -131,6 +134,9 @@ public class DictService {
         }
         if (!StringUtils.hasText(d.getDictLabel())) {
             throw new IllegalArgumentException("字典项内容不能为空");
+        }
+        if (d.getEnabled() == null) {
+            d.setEnabled(old.getEnabled());   // 未传时保持原状态
         }
         String type = StringUtils.hasText(d.getDictType()) ? d.getDictType() : old.getDictType();
         String oldLabel = old.getDictLabel();
