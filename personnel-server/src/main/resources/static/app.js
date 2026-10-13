@@ -4431,26 +4431,34 @@ var fitnessCfg = {
   // 点击姓名或身份证号 → 体能档案大窗口(3D人体+基本信息+走势)
   onView: function (rw, act) { openPersonProfile(rw, act); },
   form: [
+    { key: 'testDate', label: '考核日期', type: 'date', required: true },
     { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名/年龄' },
     { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
-    { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
+    { key: 'age', label: '年龄', readonly: true, placeholder: '按考核日期计算' },
     { key: 'personnelId', type: 'hidden', required: true },
     { key: 'item', label: '考核项目', type: 'select', required: true, options: function () { return Object.keys(FITNESS_MATRIX_CACHE); } },
     { key: 'score', label: '成绩', placeholder: "如 12'30 或 45 次", hint: '输入后自动算分数和评定' },
     { key: 'points', label: '分数', readonly: true, placeholder: '自动计算' },
     { key: 'grade', label: '评定', readonly: true, placeholder: '自动计算' },
-    { key: 'testDate', label: '考核日期', type: 'date', required: true },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
   formSetup: function (form, row) {
+    var dateEl = form.inputs['testDate'];
     var idEl = form.inputs['idCard'];
     var ageEl = form.inputs['age'];
     function calcAge(bd) {
       var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(bd || '');
       if (!m) { return ''; }
-      var t = new Date();
-      var age = t.getFullYear() - (+m[1]) - ((t.getMonth() + 1 < +m[2] || (t.getMonth() + 1 === +m[2] && t.getDate() < +m[3])) ? 1 : 0);
+      var ref = dateEl && dateEl.value ? dateEl.value : '';
+      var ty, tm, td;
+      if (ref.length >= 10) {
+        ty = +ref.slice(0, 4); tm = +ref.slice(5, 7); td = +ref.slice(8, 10);
+      } else {
+        var now = new Date();
+        ty = now.getFullYear(); tm = now.getMonth() + 1; td = now.getDate();
+      }
+      var age = ty - (+m[1]) - ((tm < +m[2] || (tm === +m[2] && td < +m[3])) ? 1 : 0);
       return (age >= 0 && age < 130) ? age : '';
     }
     function lookup() {
@@ -4511,6 +4519,14 @@ var fitnessCfg = {
     });
     if (itemEl && itemEl.addEventListener) { itemEl.addEventListener('change', calc); }
     if (ageEl && ageEl.addEventListener) { ageEl.addEventListener('change', function () { clearTimeout(ageEl._ct); ageEl._ct = setTimeout(calc, 200); }); }
+    // 考核日期变化 → 重算年龄 → 重算分数
+    if (dateEl && dateEl.addEventListener) { dateEl.addEventListener('change', function () {
+      clearTimeout(dateEl._lt);
+      dateEl._lt = setTimeout(function () {
+        var card = String(idEl.value || '').trim();
+        if (card) { lookup(); }
+      }, 200);
+    }); }
     if (row && row.score) { setTimeout(calc, 100); }
   },
   beforeSave: function (data) {
