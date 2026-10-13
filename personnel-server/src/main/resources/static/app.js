@@ -5786,9 +5786,14 @@ function renderShell() {
 
   var toggleIcon = h('span', { class: 'ic' });
   var toggleTxt = h('span', { class: 'txt', text: '收起菜单' });
+  var manualExpand = false;   // 窄窗口下用户手动展开后,自动收起让位
   var toggleBtn = h('div', {
     class: 'menu-item toggle', 'data-tip': '展开菜单',
-    onclick: function () { setCollapsed(!sideEl.classList.contains('collapsed')); }
+    onclick: function () {
+      if (!sideEl.classList.contains('collapsed') === false) { /* noop */ }
+      setCollapsed(!sideEl.classList.contains('collapsed'));
+      if (!sideEl.classList.contains('collapsed')) { manualExpand = true; }
+    }
   }, toggleIcon, toggleTxt);
 
   var sideEl = h('div', { class: 'sidebar' },
@@ -5809,8 +5814,11 @@ function renderShell() {
   window.addEventListener('resize', function () {
     var w = window.innerWidth;
     var collapsed = sideEl.classList.contains('collapsed');
-    if (w < 900 && !collapsed) { setCollapsed(true); }
-    else if (w >= 960 && collapsed) { setCollapsed(false); }
+    if (w < 900 && !collapsed && !manualExpand) { setCollapsed(true); }
+    else if (w >= 960) {
+      if (collapsed) { setCollapsed(false); }
+      manualExpand = false;   // 回到宽屏,恢复自动接管
+    }
   });
 
   function setCollapsed(collapsed) {
