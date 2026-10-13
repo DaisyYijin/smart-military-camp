@@ -21,26 +21,26 @@ public class PersonnelFullExcel {
     /** 每个 Sheet 的定义:名称、表名、列头(中文)、列 key(snake) */
     private static final String[][] SHEETS = {
         {"任职经历", "position_history",
-            "身份证号,开始日期,结束日期,任职地点,担任职务,备注",
-            "idcard,start_date,end_date,place,post,remark"},
+            "身份证号,姓名,开始日期,结束日期,任职地点,担任职务,备注",
+            "idcard,__name,start_date,end_date,place,post,remark"},
         {"奖惩情况", "reward_punish",
-            "身份证号,类型,日期,事由,内容,备注",
-            "idcard,kind,occur_date,reason,content,remark"},
+            "身份证号,姓名,类型,日期,事由,内容,备注",
+            "idcard,__name,kind,occur_date,reason,content,remark"},
         {"家庭成员", "family_member",
-            "身份证号,关系,姓名,成员身份证号,性别,出生日期,政治面貌,工作单位及职务,联系电话,备注",
-            "idcard,relationship,name,id_card,gender,birth_date,political_status,work_info,phone,remark"},
+            "身份证号,姓名,关系,成员姓名,成员身份证号,性别,出生日期,政治面貌,工作单位及职务,联系电话,备注",
+            "idcard,__name,relationship,name,id_card,gender,birth_date,political_status,work_info,phone,remark"},
         {"驾驶证", "driver_license",
-            "身份证号,类型,证号,准驾车型,初领日期,有效期至,发证机关,状态,年审日期,备注",
-            "idcard,license_type,license_no,vehicle_class,issue_date,expiry_date,issuing_auth,license_status,review_date,remark"},
+            "身份证号,姓名,类型,证号,准驾车型,初领日期,有效期至,发证机关,状态,年审日期,备注",
+            "idcard,__name,license_type,license_no,vehicle_class,issue_date,expiry_date,issuing_auth,license_status,review_date,remark"},
         {"个人卡号", "personal_card",
-            "身份证号,卡类型,卡号,开户行,开户支行,开户日期,卡状态,备注",
-            "idcard,card_type,card_no,bank_name,branch_name,open_date,card_status,remark"},
+            "身份证号,姓名,卡类型,卡号,开户行,开户支行,开户日期,卡状态,备注",
+            "idcard,__name,card_type,card_no,bank_name,branch_name,open_date,card_status,remark"},
         {"私家车", "private_vehicle",
-            "身份证号,车牌号,品牌型号,颜色,购置日期,价格(万),保险到期,状态,登记在谁名下,备注",
-            "idcard,plate_no,brand,color,purchase_date,price,insurance_date,vehicle_status,owner_name,remark"},
+            "身份证号,姓名,车牌号,品牌型号,颜色,购置日期,价格(万),保险到期,状态,登记在谁名下,备注",
+            "idcard,__name,plate_no,brand,color,purchase_date,price,insurance_date,vehicle_status,owner_name,remark"},
         {"住房情况", "housing_info",
-            "身份证号,类型,地址,面积,性质,房产证,贷款,购置时间,产权人,备注",
-            "idcard,housing_type,address,area,house_nature,has_cert,loan_status,purchase_date,owner_name,remark"},
+            "身份证号,姓名,类型,地址,面积,性质,房产证,贷款,购置时间,产权人,备注",
+            "idcard,__name,housing_type,address,area,house_nature,has_cert,loan_status,purchase_date,owner_name,remark"},
     };
 
     /** 人员主表列(与 ExcelUtils.exportXlsx 对应但简化,此处自建) */
@@ -92,6 +92,7 @@ public class PersonnelFullExcel {
                 "LEFT JOIN department d ON p.department_id=d.id WHERE p.id IN (" + ph + ") ORDER BY p.id",
                 ids.toArray());
         Map<Long, String> idCardMap = new HashMap<Long, String>();
+        Map<Long, String> nameMap = new HashMap<Long, String>();
         int r = 1;
         for (Map<String, Object> p : people) {
             Row row = main.createRow(r++);
@@ -99,8 +100,11 @@ public class PersonnelFullExcel {
                 Object v = p.get(MAIN_KEYS[c]);
                 row.createCell(c).setCellValue(v == null ? "" : String.valueOf(v));
             }
-            idCardMap.put(((Number) p.get("id")).longValue(),
+            Long pidKey = ((Number) p.get("id")).longValue();
+            idCardMap.put(pidKey,
                     String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")));
+            nameMap.put(pidKey,
+                    String.valueOf(p.get("name") == null ? "" : p.get("name")));
         }
         // 列宽
         for (int i = 0; i < MAIN_HEADERS.length; i++) {
@@ -126,7 +130,8 @@ public class PersonnelFullExcel {
                 for (Map<String, Object> sub : subs) {
                     Row sr = sheet.createRow(row++);
                     sr.createCell(0).setCellValue(e.getValue()); // 身份证号
-                    for (int c = 1; c < keys.length; c++) {
+                    sr.createCell(1).setCellValue(nameMap.get(e.getKey()) == null ? "" : nameMap.get(e.getKey())); // 姓名
+                    for (int c = 2; c < keys.length; c++) {
                         Object v = sub.get(keys[c]);
                         sr.createCell(c).setCellValue(v == null ? "" : String.valueOf(v));
                     }
@@ -298,13 +303,23 @@ public class PersonnelFullExcel {
                 if (sheet == null || sheet.getRow(0) == null) { continue; }
                 String sheetName = def[0];
                 String table = def[1];
+                String[] headers = def[2].split(",");
                 String[] keys = def[3].split(",");
+                // 按列头名定位(兼容历史无姓名列的旧文件)
+                java.util.Map<String, Integer> hIdx = new HashMap<String, Integer>();
+                Row hr = sheet.getRow(0);
+                for (int h = 0; h < hr.getLastCellNum(); h++) {
+                    String hv = getCell(hr, h, fmt).trim();
+                    if (!hv.isEmpty()) { hIdx.put(hv, h); }
+                }
+                Integer cardCol = hIdx.get("身份证号");
+                if (cardCol == null) { cardCol = 0; }
                 int count = 0;
                 for (int r = 1; r <= sheet.getLastRowNum(); r++) {
                     Row row = sheet.getRow(r);
                     if (row == null) { continue; }
                     try {
-                        String card = getCell(row, 0, fmt);
+                        String card = getCell(row, cardCol, fmt);
                         if (card.isEmpty()) { continue; }
                         Long pid = cardMap.get(card.toUpperCase());
                         if (pid == null) {
@@ -320,7 +335,9 @@ public class PersonnelFullExcel {
                         args.add(pid);
                         boolean hasData = false;
                         for (int c = 1; c < keys.length; c++) {
-                            String v = getCell(row, c, fmt);
+                            if (keys[c].startsWith("__")) { continue; }   // 姓名列仅导出展示,不入库
+                            Integer colAt = hIdx.get(headers[c]);
+                            String v = colAt == null ? "" : getCell(row, colAt, fmt);
                             if (!v.isEmpty()) { hasData = true; }
                             cols.append(",").append(keys[c]);
                             marks.append(",?");

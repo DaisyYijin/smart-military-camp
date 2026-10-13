@@ -61,6 +61,51 @@ public class DashboardController {
             }
         }
 
+        // 人员休假开始(未来3天内)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT p.name AS name, l.start_date AS s, l.end_date AS e FROM leave_record l " +
+                "JOIN personnel p ON l.personnel_id = p.id " +
+                "WHERE l.start_date > ? AND l.start_date <= ? ORDER BY l.start_date", t0, plus3)) {
+            list.add(event("info", "休假", r.get("name") + " 将于 " + fmtDate(String.valueOf(r.get("s"))) + " 开始休假"
+                    + "(" + daysBetween(String.valueOf(r.get("s")), String.valueOf(r.get("e"))) + "天)",
+                    String.valueOf(r.get("s")), 1));
+        }
+
+        // 生日(本月剩余天内的 + 未来7天,至少7天自动跨月)
+        int daysToMonthEnd = today.lengthOfMonth() - today.getDayOfMonth();
+        int birthDays = Math.max(daysToMonthEnd, 7);
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, birthday FROM personnel WHERE birthday LIKE '____-__-__'")) {
+            String d = anniversaryDate(String.valueOf(r.get("birthday")), today, birthDays);
+            if (d != null) {
+                list.add(event("info", "生日", r.get("name") + " 生日(" + fmtDate(d) + ")", d, 4));
+            }
+        }
+
+        // 入伍周年纪念日(未来7天内,满整年;不含入党纪念日)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, entry_date FROM personnel WHERE entry_date LIKE '____-__-__'")) {
+            String src = String.valueOf(r.get("entry_date"));
+            String d = anniversaryDate(src, today, 7);
+            if (d != null && anniversaryYears(src, d) >= 1) {
+                list.add(event("info", "纪念日", r.get("name") + " 入伍" + anniversaryYears(src, d) + "周年(" + fmtDate(d) + ")", d, 4));
+            }
+        }
+
+        // 预备党员即将转正(转正日期未来30天内)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name, party_full_date FROM personnel WHERE party_full_date LIKE '____-__-__' " +
+                "AND party_full_date > ? AND party_full_date <= ? ORDER BY party_full_date", t0, plus30)) {
+            String d = String.valueOf(r.get("party_full_date"));
+            list.add(event("info", "党务", r.get("name") + " 预备党员将于 " + fmtDate(d) + " 转正", d, 4));
+        }
+
+        // 装备维修中
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT name FROM equipment WHERE status = '维修' ORDER BY id LIMIT 10")) {
+            list.add(event("warn", "装备", "「" + r.get("name") + "」维修中", t0, 5));
+        }
+
         // 车辆保险/年检到期(近7天内已到期 ~ 30天内将到期)
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT plate_no, insurance_expiry FROM vehicle WHERE insurance_expiry >= ? AND insurance_expiry <= ?",
