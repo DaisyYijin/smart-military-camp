@@ -214,6 +214,10 @@ public class PersonnelFullExcel {
                     for (Map.Entry<Integer, String> e : colMap.entrySet()) {
                         vals.put(e.getValue(), getCell(row, e.getKey(), fmt));
                     }
+                    // 字典字段自动登记新值(民族/军衔/类别等不在字典中时收编)
+                    for (String dk : DICT_FIELDS.keySet()) {
+                        ensureDictValue(dk, vals.get(dk));
+                    }
                     String name = vals.get("name");
                     if (name == null || name.trim().isEmpty()) { continue; }
                     String card = vals.get("id_card") == null ? "" : vals.get("id_card").trim().toUpperCase();
@@ -372,7 +376,31 @@ public class PersonnelFullExcel {
         return list;
     }
 
+    /** 人员字典字段:key → 字典类型(导入时自动登记新值) */
+    private static final java.util.Map<String, String> DICT_FIELDS = new java.util.HashMap<String, String>();
+    static {
+        DICT_FIELDS.put("category", "personnel_category");
+        DICT_FIELDS.put("rank", "rank");
+        DICT_FIELDS.put("status", "personnel_status");
+        DICT_FIELDS.put("education", "education");
+        DICT_FIELDS.put("marital_status", "marital_status");
+        DICT_FIELDS.put("nation", "nation");
+        DICT_FIELDS.put("blood_type", "blood_type");
+        DICT_FIELDS.put("political_status", "political_status");
+        DICT_FIELDS.put("follow_army_status", "follow_army_status");
+    }
+
+    private void ensureDictValue(String key, String val) {
+        String t = DICT_FIELDS.get(key);
+        if (t == null || val == null || val.trim().isEmpty()) {
+            return;
+        }
+        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                "VALUES(?,?,90,1,'',0)", t, val.trim());
+    }
+
     private void setField(com.szjx.personnel.server.model.Personnel p, String key, String val) {
+        ensureDictValue(key, val);
         if (val == null || val.isEmpty()) {
             return;
         }
