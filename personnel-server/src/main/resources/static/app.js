@@ -3624,16 +3624,6 @@ function openFitnessStdManager() {
         }),
         h('span', { text: hintText })));
 
-      // 在表头加单位后缀
-      var ageHeads = $all('.mx-age-head', right);
-      ageHeads.forEach(function (th) {
-        var orig = th.textContent.trim();
-        var suffix = isTimeType ? '(秒)' : '(次)';
-        if (orig.indexOf('(') < 0) {
-          th.textContent = orig + suffix;
-        }
-      });
-
       // 空单元格加 placeholder
       $all('.mx-input', right).forEach(function (inp) {
         inp.placeholder = isTimeType ? '秒' : '次';
