@@ -378,12 +378,8 @@ table.grid td.empty-row { text-align: center; }
 }
 .dash-event .dt { flex: none; font-size: 12px; color: #8a97a8; margin-top: 2px; }
 .ev-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-/* 事件列表:宽度固定,高度随内容自适应;仅设上限,事件过多时内部滚动 */
-.ev-list {
-  max-height: calc(100vh - 260px);
-  overflow-y: auto;
-  padding-right: 2px;
-}
+/* 事件列表:宽度固定,高度完全随内容撑开,不做内部滚动 */
+.ev-list { padding-right: 2px; }
 .ev-chip {
   height: 24px; padding: 0 11px; border: 1px solid #dbe4ee; border-radius: 12px;
   background: #fff; color: #445262; font-size: 12px; cursor: pointer;
