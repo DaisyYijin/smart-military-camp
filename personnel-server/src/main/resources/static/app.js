@@ -1625,6 +1625,9 @@ function crudView(cfg) {
           if (parts.length) { msg += '(' + parts.join(',') + ')'; }
         } else {
           msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
+          if (r.dictAdded > 0) {
+            msg += ',自动新增字典项 ' + r.dictAdded + ' 个';
+          }
           if (r.errors && r.errors.length) {
             msg += ';失败明细:' + r.errors.join('、');
           }

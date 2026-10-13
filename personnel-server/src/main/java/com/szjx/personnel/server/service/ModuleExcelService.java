@@ -67,6 +67,36 @@ public class ModuleExcelService {
 
     private static final Map<String, ModuleDef> MODULES = new LinkedHashMap<String, ModuleDef>();
 
+    /** 字典列映射:模块 → (列key → 字典类型)。导入时遇到字典没有的值自动登记进字典 */
+    private static final Map<String, Map<String, String>> DICT_COLS = new java.util.HashMap<String, Map<String, String>>();
+    static {
+        Map<String, String> m = new java.util.HashMap<String, String>();
+        m.put("brand", "vehicle_brand"); m.put("type", "vehicle_type");
+        m.put("status", "vehicle_status"); m.put("fuelType", "vehicle_fuel");
+        DICT_COLS.put("vehicle", m);
+        m = new java.util.HashMap<String, String>();
+        m.put("category", "material_category"); m.put("location", "material_location");
+        DICT_COLS.put("material", m);
+        m = new java.util.HashMap<String, String>();
+        m.put("category", "equipment_category"); m.put("status", "equipment_status");
+        DICT_COLS.put("equipment", m);
+        m = new java.util.HashMap<String, String>();
+        m.put("leaveType", "leave_type"); m.put("holidayName", "holiday_type");
+        DICT_COLS.put("leave", m);
+        m = new java.util.HashMap<String, String>();
+        m.put("item", "fitness_item"); m.put("grade", "fitness_grade");
+        DICT_COLS.put("fitness", m);
+    }
+
+    /** 值不在字典中时自动登记,返回是否新增 */
+    private boolean ensureDict(String dictType, String val) {
+        if (val == null || val.trim().isEmpty()) {
+            return false;
+        }
+        return jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                "VALUES(?,?,90,1,'',0)", dictType, val.trim()) > 0;
+    }
+
     static {
         MODULES.put("equipment", new ModuleDef("equipment", "装备", "equipment", "装备",
                 Arrays.asList(
@@ -326,6 +356,7 @@ public class ModuleExcelService {
     public Map<String, Object> importExcel(String moduleKey, InputStream in) {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         int added = 0, updated = 0, failed = 0;
+        int dictAdded = 0;
         List<String> errors = new ArrayList<String>();
         try {
             if ("personnel".equals(moduleKey)) {
@@ -422,6 +453,10 @@ public class ModuleExcelService {
                             vals.put(col.key, raw.isEmpty() ? null : (int) Double.parseDouble(raw));
                         } else {
                             vals.put(col.key, raw);
+                            Map<String, String> dm = DICT_COLS.get(moduleKey);
+                            if (dm != null && dm.containsKey(col.key) && ensureDict(dm.get(col.key), raw)) {
+                                dictAdded++;
+                            }
                         }
                     }
                     if (!rowOk) {
@@ -449,6 +484,7 @@ public class ModuleExcelService {
             throw new IllegalArgumentException("文件解析失败:" + e.getMessage()
                     + "(请使用系统导出的 .xlsx 模板)");
         }
+        result.put("dictAdded", dictAdded);
         result.put("added", added);
         result.put("updated", updated);
         result.put("failed", failed);
