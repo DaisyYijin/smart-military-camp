@@ -4523,40 +4523,250 @@ function dictView() {
 
 /* ================= 统计视图 ================= */
 
-function statsView() {
-  var root = h('div', { class: 'loading-inline', text: '加载中…' });
+/* ================= 仪表盘 ================= */
 
-  function barList(list, colorClass) {
-    if (!list.length) return '<div class="empty-row">暂无数据</div>';
-    var max = 1;
-    list.forEach(function (x) { if (x.count > max) max = x.count; });
-    return list.map(function (x) {
-      var pct = Math.max(2, Math.round(x.count / max * 100));
-      return '<div class="bar-row ' + colorClass + '"><span class="bn" title="' + esc(x.name) + '">' + esc(x.name) +
-        '</span><span class="bt"><span class="bf" style="width:' + pct + '%"></span></span>' +
-        '<span class="bv">' + x.count + ' 人</span></div>';
-    }).join('');
+var DASH_COLORS = ['#2f6fd6', '#2ea44f', '#e8960e', '#9333ea', '#d9463e', '#0d9488', '#b26a00', '#66788c'];
+
+/** 仪表盘图表目录:kind=bar(横条)/donut(环图)/columns(年度柱图) */
+var DASH_WIDGETS = {
+  dept:          { label: '各部门人数',     kind: 'bar',     group: 'department', unit: '人' },
+  status:        { label: '人员状态分布',   kind: 'donut',   group: 'status' },
+  gender:        { label: '性别分布',       kind: 'donut',   group: 'gender' },
+  category:      { label: '人员类别分布',   kind: 'donut',   group: 'category' },
+  rank:          { label: '军衔分布',       kind: 'bar',     group: 'rank', unit: '人' },
+  education:     { label: '学历分布',       kind: 'donut',   group: 'education' },
+  political:     { label: '政治面貌分布',   kind: 'donut',   group: 'politicalStatus' },
+  leaveType:     { label: '今年休假类型',   kind: 'bar',     group: 'leaveType', unit: '次' },
+  fitnessGrade:  { label: '今年体能评定',   kind: 'donut',   group: 'fitnessGrade' },
+  vehicleStatus: { label: '车辆状态分布',   kind: 'donut',   group: 'vehicleStatus' },
+  entryTrend:    { label: '近15年入伍趋势', kind: 'columns', unit: '人' }
+};
+var DASH_DEFAULT = ['dept', 'status', 'entryTrend', 'leaveType'];
+
+function dashBarList(list, unit, colorClass) {
+  if (!list.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var max = 1;
+  list.forEach(function (x) { if (x.count > max) { max = x.count; } });
+  var box = h('div');
+  list.forEach(function (x) {
+    var pct = Math.max(2, Math.round(x.count / max * 100));
+    box.appendChild(h('div', { class: 'bar-row ' + (colorClass || '') },
+      h('span', { class: 'bn', title: x.name, text: x.name }),
+      h('span', { class: 'bt' }, h('span', { class: 'bf', style: 'width:' + pct + '%' })),
+      h('span', { class: 'bv', text: x.count + ' ' + (unit || '') })));
+  });
+  return box;
+}
+
+/** 环形图:SVG 分段圆环 + 中心总数 + 右侧图例 */
+function drawDonut(items) {
+  var data = (items || []).filter(function (x) { return x.count > 0; });
+  var total = 0;
+  data.forEach(function (x) { total += x.count; });
+  if (!total) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var R = 56, SW = 26, C = 2 * Math.PI * R, deg = 0;
+  var svg = ['<svg viewBox="0 0 150 150" style="width:150px;height:150px;flex:none">'];
+  data.forEach(function (x, i) {
+    var len = x.count / total * C;
+    var color = DASH_COLORS[i % DASH_COLORS.length];
+    svg.push('<circle cx="75" cy="75" r="' + R + '" fill="none" stroke="' + color + '" stroke-width="' + SW +
+      '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) +
+      '" transform="rotate(' + deg.toFixed(2) + ' 75 75)"><title>' + esc(x.name) + ': ' + x.count + '</title></circle>');
+    deg += x.count / total * 360;
+  });
+  svg.push('<text x="75" y="71" text-anchor="middle" font-size="21" font-weight="700" fill="#1d2c40">' + total + '</text>');
+  svg.push('<text x="75" y="90" text-anchor="middle" font-size="11" fill="#8a97a8">总计</text>');
+  svg.push('</svg>');
+  var legend = h('div', { class: 'donut-legend' });
+  data.forEach(function (x, i) {
+    var pct = Math.round(x.count / total * 100);
+    legend.appendChild(h('div', { class: 'row' },
+      h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
+      h('span', { style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
+      h('b', { style: 'color:#1d2c40', text: String(x.count) }),
+      h('span', { style: 'color:#8a97a8;width:40px;text-align:right;flex:none', text: pct + '%' })));
+  });
+  return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
+}
+
+/** 年度柱状图:近15年入伍趋势等 */
+function drawColumns(items, unit) {
+  if (!items || !items.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var W = 480, H = 220, padL = 34, padR = 10, padT = 20, padB = 28;
+  var max = 1;
+  items.forEach(function (x) { if (x.count > max) { max = x.count; } });
+  var n = items.length;
+  var step = (W - padL - padR) / n;
+  var bw = Math.min(34, step * 0.62);
+  function yAt(v) { return padT + (H - padT - padB) * (1 - v / max); }
+  var svg = ['<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">'];
+  [0, 0.5, 1].forEach(function (f) {
+    var y = yAt(max * f).toFixed(1);
+    svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5"/>');
+    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="#8a97a8">' + Math.round(max * f) + '</text>');
+  });
+  items.forEach(function (x, i) {
+    var cx = padL + step * (i + 0.5);
+    var y = yAt(x.count);
+    var hgt = (H - padB) - y;
+    svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="#2f6fd6" opacity="0.88"><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + '</title></rect>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#445262">' + x.count + '</text>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8">' + esc(String(x.name).slice(2)) + '</text>');
+  });
+  svg.push('</svg>');
+  return h('div', { html: svg.join('') });
+}
+
+function dashboardView() {
+  var root = h('div', { class: 'loading-inline', text: '加载中…' });
+  var widgets;
+  try { widgets = JSON.parse(localStorage.getItem('dashWidgets') || 'null'); } catch (e) { widgets = null; }
+  widgets = (widgets || []).filter(function (w) { return DASH_WIDGETS[w]; });
+  if (!widgets.length) { widgets = DASH_DEFAULT.slice(); }
+  var lastData = null;
+  var chartsGrid = h('div', { class: 'dash-grid' });
+  var eventsBox = h('div');
+
+  function saveWidgets() {
+    try { localStorage.setItem('dashWidgets', JSON.stringify(widgets)); } catch (e) { /* 忽略 */ }
+  }
+
+  function renderEvents(events) {
+    eventsBox.innerHTML = '';
+    if (!events || !events.length) {
+      eventsBox.appendChild(h('div', { class: 'empty-row', text: '近期没有需要关注的事件' }));
+      return;
+    }
+    events.forEach(function (ev) {
+      eventsBox.appendChild(h('div', { class: 'dash-event ' + (ev.type || 'info') },
+        h('span', { class: 'tag', text: ev.tag || '动态' }),
+        h('div', { class: 'ev-body' },
+          h('div', { class: 'txt', text: ev.text || '' }),
+          h('div', { class: 'dt', text: ev.date || '' }))));
+    });
+  }
+
+  function renderCharts(d) {
+    chartsGrid.innerHTML = '';
+    if (!widgets.length) {
+      chartsGrid.appendChild(h('div', { class: 'empty-row', style: 'grid-column:1/-1', text: '还没有图表,点击上方"添加图表"选择要展示的内容' }));
+      return;
+    }
+    widgets.forEach(function (wid) {
+      var def = DASH_WIDGETS[wid];
+      var body;
+      if (def.kind === 'columns') {
+        body = drawColumns(d.entryTrend, def.unit);
+      } else {
+        var items = (d.groups && d.groups[def.group]) || [];
+        body = def.kind === 'donut' ? drawDonut(items) : dashBarList(items, def.unit);
+      }
+      chartsGrid.appendChild(h('div', { class: 'chart-panel dash-card' },
+        h('div', { class: 'dash-card-head' },
+          h('h3', { style: 'margin:0', text: def.label }),
+          h('button', {
+            class: 'dash-card-x', text: '×', title: '移除此图表',
+            onclick: function () {
+              widgets = widgets.filter(function (w) { return w !== wid; });
+              saveWidgets();
+              renderCharts(lastData);
+            }
+          })),
+        body));
+    });
+  }
+
+  function openPicker() {
+    var grid = h('div', { class: 'dash-picker' });
+    Object.keys(DASH_WIDGETS).forEach(function (wid) {
+      var def = DASH_WIDGETS[wid];
+      var added = widgets.indexOf(wid) >= 0;
+      grid.appendChild(h('button', {
+        class: 'dash-pick-btn' + (added ? ' disabled' : ''),
+        disabled: added,
+        html: (added ? '<span class="ok">✓ 已添加</span>' : '<span class="ok">＋ 添加</span>') + '<b>' + esc(def.label) + '</b>'
+          + '<span class="kind">' + ({ bar: '条形图', donut: '环形图', columns: '柱状图' })[def.kind] + '</span>',
+        onclick: function () {
+          if (added) { return; }
+          widgets.push(wid);
+          saveWidgets();
+          renderCharts(lastData);
+          m.close();
+        }
+      }));
+    });
+    var m = openModal({
+      title: '添加图表(点击添加到仪表盘)',
+      body: grid,
+      footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+    });
+  }
+
+  function build(d, events) {
+    root.className = '';
+    root.innerHTML = '';
+    // 顶部概况卡
+    var chips = h('div', { class: 'stats-cards' });
+    function card(num, lbl, ic, danger) {
+      return h('div', { class: 'stat-card' + (danger && +num > 0 ? ' danger' : '') },
+        h('span', { class: 'ic', html: iconSvg(ic) }),
+        h('div', {}, h('div', { class: 'num', text: String(num) }), h('div', { class: 'lbl', text: lbl })));
+    }
+    chips.appendChild(card(d.total || 0, '人员总数', 'users'));
+    chips.appendChild(card(d.onDuty || 0, '在职人数', 'check'));
+    chips.appendChild(card(d.onLeave || 0, '休假中', 'calendar'));
+    chips.appendChild(card(d.deptCount || 0, '部门总数', 'building'));
+    chips.appendChild(card(d.vehicleCount || 0, '车辆总数', 'truck'));
+    chips.appendChild(card(d.materialLow || 0, '库存预警', 'box', true));
+    root.appendChild(chips);
+
+    root.appendChild(h('div', { class: 'dash-main' },
+      h('div', { class: 'dash-left' },
+        h('div', { class: 'dash-toolbar' },
+          h('button', { class: 'btn btn-primary', text: '＋ 添加图表', onclick: openPicker }),
+          h('button', {
+            class: 'btn btn-ghost', text: '恢复默认',
+            onclick: function () {
+              widgets = DASH_DEFAULT.slice();
+              saveWidgets();
+              renderCharts(lastData);
+            }
+          }),
+          h('span', { style: 'color:#8a97a8;font-size:12px', text: '图表选择保存在本机,可随时增删' })),
+        chartsGrid),
+      h('div', { class: 'dash-right' },
+        h('div', { class: 'dash-events' },
+          h('div', { class: 'dash-events-head' },
+            h('h3', { style: 'margin:0', text: '近期事件' }),
+            h('button', {
+              class: 'btn-link', text: '刷新',
+              onclick: function () {
+                eventsBox.innerHTML = '';
+                eventsBox.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+                GET('/api/dashboard/events').then(renderEvents).catch(function (e) {
+                  eventsBox.innerHTML = '';
+                  eventsBox.appendChild(h('div', { class: 'empty-row', text: e.message }));
+                });
+              }
+            }),
+            h('div', { style: 'font-size:12px;color:#8a97a8;margin:6px 0 10px', text: '库存不足 / 休假归队 / 休假计划 / 车辆保险年检到期' })),
+          eventsBox))));
+    renderEvents(events);
+    renderCharts(d);
   }
 
   function render(container) {
     container.appendChild(root);
-    GET('/api/stats/summary').then(function (s) {
-      var onDuty = 0;
-      (s.status || []).forEach(function (x) { if (x.name === '在职') onDuty = x.count; });
-      root.className = '';
-      root.innerHTML =
-        '<div class="stats-cards">' +
-        '<div class="stat-card"><span class="ic">' + iconSvg('users') + '</span><div class="num">' + (s.total || 0) + '</div><div class="lbl">人员总数</div></div>' +
-        '<div class="stat-card"><span class="ic">' + iconSvg('building') + '</span><div class="num">' + ((s.department || []).length) + '</div><div class="lbl">有人员的部门数</div></div>' +
-        '<div class="stat-card"><span class="ic">' + iconSvg('check') + '</span><div class="num">' + onDuty + '</div><div class="lbl">在职人数</div></div>' +
-        '</div>' +
-        '<div class="chart-panel"><h3>各部门人数</h3>' + barList(s.department || [], '') + '</div>' +
-        '<div class="chart-panel"><h3>性别分布</h3>' + barList(s.gender || [], 'green') + '</div>' +
-        '<div class="chart-panel"><h3>人员状态分布</h3>' + barList(s.status || [], 'orange') + '</div>';
-    }).catch(function (e) {
-      root.className = '';
-      root.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
-    });
+    Promise.all([GET('/api/stats/dashboard'), GET('/api/dashboard/events')])
+      .then(function (res) {
+        lastData = res[0] || { groups: {} };
+        build(lastData, res[1] || []);
+      })
+      .catch(function (e) {
+        root.className = '';
+        root.innerHTML = '';
+        root.appendChild(h('div', { class: 'empty-row', text: e.message }));
+      });
   }
   return { render: render };
 }
@@ -4927,7 +5137,7 @@ function renderShell() {
   var content = h('div', { class: 'content' });
   var titleEl = h('div', { class: 'topbar-title' });
   var menuItems = {};
-  var currentView = 'personnel';
+  var currentView = 'stats';
 
   function navigate(view) {
     currentView = view;
@@ -4948,7 +5158,7 @@ function renderShell() {
     var comp;
     if (view === 'department') { titleEl.textContent = '部门管理'; comp = departmentView(); }
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
-    else if (view === 'stats') { titleEl.textContent = '统计报表'; comp = statsView(); }
+    else if (view === 'stats') { titleEl.textContent = '仪表盘'; comp = dashboardView(); }
     else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
     else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
     else {
@@ -4971,12 +5181,12 @@ function renderShell() {
     menu.appendChild(item);
     menuItems[key] = item;
   }
+  addMenu('stats', 'chart', '仪表盘');   // 仪表盘置顶
   MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   addMenu('department', 'building', '部门管理');
   addMenu('dict', 'book', '数据字典');
   addMenu('backup', 'database', '备份恢复');
   addMenu('log', 'fileText', '操作日志');
-  addMenu('stats', 'chart', '统计报表');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
   var topbar = h('div', { class: 'topbar' },
@@ -5039,7 +5249,7 @@ function renderShell() {
   var initialView = (location.hash || '').replace('#', '');
   var validViews = Object.keys(menuItems);
   if (validViews.indexOf(initialView) < 0) {
-    initialView = localStorage.getItem('lastView') || 'personnel';
+    initialView = localStorage.getItem('lastView') || 'stats';
   }
   if (validViews.indexOf(initialView) < 0) {
     initialView = 'personnel';

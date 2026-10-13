@@ -54,4 +54,66 @@ public class StatsService {
         }
         return s;
     }
+
+    /* ================= 仪表盘 ================= */
+
+    /** 分组统计辅助 */
+    private List<StatsSummary.NameCount> group(String sql) {
+        List<StatsSummary.NameCount> out = new java.util.ArrayList<StatsSummary.NameCount>();
+        for (Map<String, Object> row : jdbc.queryForList(sql)) {
+            out.add(new StatsSummary.NameCount(String.valueOf(row.get("name")),
+                    ((Number) row.get("count")).longValue()));
+        }
+        return out;
+    }
+
+    private static final String PERSON_GROUP_TMPL =
+            "SELECT IFNULL(NULLIF(p.%s, ''), '未填写') AS name, COUNT(*) AS count FROM personnel p GROUP BY p.%s ORDER BY count DESC, name";
+
+    /**
+     * 仪表盘数据:概况数字 + 各维度分组(图表用) + 入伍趋势
+     */
+    public Map<String, Object> dashboard() {
+        Map<String, Object> m = new java.util.LinkedHashMap<String, Object>();
+        m.put("total", personnelDao.countAll());
+        m.put("onDuty", countOrZero("SELECT COUNT(*) FROM personnel WHERE status='在职'"));
+        m.put("onLeave", countOrZero("SELECT COUNT(*) FROM personnel WHERE status='休假'"));
+        m.put("deptCount", countOrZero("SELECT COUNT(*) FROM department"));
+        m.put("vehicleCount", countOrZero("SELECT COUNT(*) FROM vehicle"));
+        m.put("materialLow", countOrZero(
+                "SELECT COUNT(*) FROM material WHERE CAST(min_quantity AS REAL) > 0 AND CAST(quantity AS REAL) < CAST(min_quantity AS REAL)"));
+
+        Map<String, Object> groups = new java.util.LinkedHashMap<String, Object>();
+        groups.put("department", group(
+                "SELECT IFNULL(d.name, '未分配') AS name, COUNT(*) AS count FROM personnel p " +
+                "LEFT JOIN department d ON p.department_id = d.id GROUP BY p.department_id ORDER BY count DESC LIMIT 15"));
+        groups.put("status", group(String.format(PERSON_GROUP_TMPL, "status", "status")));
+        groups.put("gender", group(String.format(PERSON_GROUP_TMPL, "gender", "gender")));
+        groups.put("category", group(String.format(PERSON_GROUP_TMPL, "category", "category")));
+        groups.put("rank", group(String.format(PERSON_GROUP_TMPL, "rank", "rank") + " LIMIT 12"));
+        groups.put("education", group(String.format(PERSON_GROUP_TMPL, "education", "education")));
+        groups.put("politicalStatus", group(String.format(PERSON_GROUP_TMPL, "political_status", "political_status")));
+        groups.put("leaveType", group(
+                "SELECT IFNULL(NULLIF(l.leave_type, ''), '未填写') AS name, COUNT(*) AS count FROM leave_record l " +
+                "WHERE l.start_date LIKE strftime('%Y', 'now', 'localtime') || '%' GROUP BY l.leave_type ORDER BY count DESC"));
+        groups.put("fitnessGrade", group(
+                "SELECT IFNULL(NULLIF(f.grade, ''), '未填写') AS name, COUNT(*) AS count FROM fitness_record f " +
+                "WHERE f.test_date LIKE strftime('%Y', 'now', 'localtime') || '%' GROUP BY f.grade ORDER BY count DESC"));
+        groups.put("vehicleStatus", group(
+                "SELECT IFNULL(NULLIF(v.status, ''), '未填写') AS name, COUNT(*) AS count FROM vehicle v GROUP BY v.status ORDER BY count DESC"));
+        m.put("groups", groups);
+
+        // 入伍趋势:近15年
+        m.put("entryTrend", group(
+                "SELECT strftime('%Y', p.entry_date) AS name, COUNT(*) AS count FROM personnel p " +
+                "WHERE p.entry_date LIKE '____-__-__' " +
+                "AND CAST(strftime('%Y', p.entry_date) AS INTEGER) >= CAST(strftime('%Y', 'now', 'localtime') AS INTEGER) - 14 " +
+                "GROUP BY strftime('%Y', p.entry_date) ORDER BY name"));
+        return m;
+    }
+
+    private long countOrZero(String sql) {
+        Long n = jdbc.queryForObject(sql, Long.class);
+        return n == null ? 0 : n;
+    }
 }

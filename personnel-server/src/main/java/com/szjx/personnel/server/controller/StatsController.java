@@ -23,4 +23,10 @@ public class StatsController {
     public ApiResponse summary() {
         return ApiResponse.ok(statsService.summary());
     }
+
+    /** 仪表盘:概况数字 + 各维度分组 + 入伍趋势 */
+    @GetMapping("/dashboard")
+    public ApiResponse dashboard() {
+        return ApiResponse.ok(statsService.dashboard());
+    }
 }
