@@ -50,7 +50,7 @@ function openModal(opt) {
   var head = h('div', { class: 'dialog-head' }, h('div', { class: 'ttl', text: opt.title || '' }), closeBtn);
   var body = h('div', { class: 'dialog-body' });
   if (opt.body) body.appendChild(opt.body);
-  var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') }, head, body);
+  var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') + (opt.xwide ? ' xwide' : '') }, head, body);
   if (opt.footer) dlg.appendChild(h('div', { class: 'dialog-foot' }, opt.footer));
   mask.appendChild(dlg);
   mask.addEventListener('mousedown', function (e) { if (e.target === mask) close(); });
@@ -2532,51 +2532,298 @@ function batchImportPhotos(fileList) {
 
 var TREND_COLORS = ['#2f6fd6', '#e8743b', '#2ea44f', '#9333ea', '#d9463e', '#0d9488', '#b26a00'];
 
-/** 体能走势弹窗:某人各项目的分数折线(纯SVG,零依赖) */
-function openFitnessTrend(person) {
+/** 本次考核弹窗:某人某天的全部项目(合计/平均) */
+function openFitnessSession(rw, act) {
   var body = h('div');
   var m = openModal({
-    title: '体能走势 · ' + (person.name || ''),
+    title: '本次考核 · ' + (rw.personnelName || '') + ' ' + (rw.testDate || ''),
     body: body,
-    wide: true,
-    footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
+      h('button', { class: 'btn btn-primary', text: '体能档案', onclick: function () { m.close(); openPersonProfile(rw, act); } }),
+      h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })
+    ]
   });
   body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-  var q = '/api/fitness?size=200';
-  if (person.idCard) { q += '&idCard=' + encodeURIComponent(person.idCard); }
-  else { q += '&personnelId=' + person.personnelId; }
+  var q = '/api/fitness?size=100';
+  if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
+  else { q += '&personnelId=' + rw.personnelId; }
+  if (rw.testDate) { q += '&startDate=' + rw.testDate + '&endDate=' + rw.testDate; }
   GET(q).then(function (d) {
     var rows = (d && d.list) || [];
+    var total = 0;
     body.innerHTML = '';
-    if (!rows.length) {
-      body.appendChild(h('div', { class: 'empty-row', text: '暂无考核记录' }));
-      return;
-    }
-    var byItem = {};
-    rows.forEach(function (r) {
-      if (!r.testDate || !r.item) { return; }
-      var pts = (r.points === null || r.points === undefined || r.points === '') ? null : Number(r.points);
-      if (pts === null || isNaN(pts)) { return; }
-      (byItem[r.item] = byItem[r.item] || []).push({ date: r.testDate, score: pts });
+    var table = h('table', { class: 'grid', style: 'width:100%' });
+    var thead = h('thead', {}, h('tr', {},
+      h('th', { text: '考核项目' }), h('th', { text: '成绩' }), h('th', { text: '分数' }),
+      h('th', { text: '评定' }), h('th', { text: '备注' })));
+    var tbody = h('tbody');
+    rows.forEach(function (x) {
+      total += Number(x.points) || 0;
+      tbody.appendChild(h('tr', {},
+        h('td', { text: x.item || '' }),
+        h('td', { text: x.score || '' }),
+        h('td', { text: (x.points !== null && x.points !== undefined && x.points !== '') ? String(x.points) : '—' }),
+        h('td', { html: badge(x.grade) }),
+        h('td', { text: x.remark || '' })));
     });
-    var series = Object.keys(byItem).map(function (k) {
-      byItem[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
-      return { name: k, data: byItem[k] };
-    }).filter(function (x) { return x.data.length > 0; });
-    if (!series.length) {
-      body.appendChild(h('div', { class: 'empty-row', text: '暂无带分数的考核记录(分数为空的不参与走势)' }));
-      return;
-    }
-    body.appendChild(buildTrendChart(series));
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:48vh;overflow:auto' }, table));
+    body.appendChild(h('div', { style: 'margin-top:10px;display:flex;gap:18px;font-size:13px;color:#445262' },
+      h('span', { text: '共 ' + rows.length + ' 个项目' }),
+      h('b', { text: '合计分数:' + (Math.round(total * 10) / 10) + ' 分' }),
+      h('span', { text: '平均:' + (rows.length ? (Math.round(total / rows.length * 10) / 10) : 0) + ' 分' })));
   }).catch(function (e) {
     body.innerHTML = '';
     body.appendChild(h('div', { class: 'empty-row', text: e.message }));
   });
 }
 
-/** 折线图:series=[{name,data:[{date,score}]}],X=考核日期,Y=分数0-100 */
-function buildTrendChart(series) {
-  var W = 880, H = 430, padL = 46, padR = 18, padT = 18, padB = 62;
+/** 体能档案大窗口:左侧3D人体(最新身高体重) + 右侧基本信息 + 下方各项目成绩走势(时间范围可快捷/自定义) */
+function openPersonProfile(rw, act) {
+  var body = h('div');
+  var m = openModal({
+    title: '体能档案 · ' + (rw.personnelName || ''),
+    body: body, wide: true, xwide: true,
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
+      h('button', { class: 'btn btn-ghost', text: '本次考核', onclick: function () { m.close(); openFitnessSession(rw, act); } }),
+      h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })
+    ]
+  });
+  body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+  var fq = '/api/fitness?size=500';
+  if (rw.idCard) { fq += '&idCard=' + encodeURIComponent(rw.idCard); }
+  else { fq += '&personnelId=' + rw.personnelId; }
+  var pq = rw.idCard
+    ? GET('/api/personnel?idCard=' + encodeURIComponent(rw.idCard)).then(function (d) { return (d && d.list && d.list.length) ? d.list[0] : null; })
+    : GET('/api/personnel/' + rw.personnelId);
+  Promise.all([pq, GET(fq), GRADE_RULE ? Promise.resolve(null) : loadGradeRule()]).then(function (res) {
+    var p = res[0] || {};
+    var rows = (res[1] && res[1].list) || [];
+    body.innerHTML = '';
+    build(p, rows);
+  }).catch(function (e) {
+    body.innerHTML = '';
+    body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+  });
+
+  var allSeries = [];   // [{name,data:[{date,pts,raw,grade}]}] 每项目按日期升序
+  var chartsBox = h('div');
+  var chips = [];
+  var range = { months: 0 };   // 0=全部
+
+  function rangeStart(n) {     // 最近n个自然月(含本月)的第一天
+    var t = new Date();
+    var d = new Date(t.getFullYear(), t.getMonth() - (n - 1), 1);
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-01';
+  }
+
+  function setRange(n, btn) {
+    range.months = n;
+    chips.forEach(function (c) { c.style.background = ''; c.style.color = ''; c.style.borderColor = ''; });
+    if (btn) { btn.style.background = '#2f6fd6'; btn.style.color = '#fff'; btn.style.borderColor = '#2f6fd6'; }
+    renderCharts();
+  }
+
+  function build(p, rows) {
+    var idc = p.idCard || rw.idCard || '';
+    var birthday = p.birthday || (idc.length >= 14 ? idc.slice(6, 10) + '-' + idc.slice(10, 12) + '-' + idc.slice(12, 14) : '');
+    function cell(label, value) {
+      return h('div', {},
+        h('div', { style: 'font-size:12px;color:#8a97a8', text: label }),
+        h('div', { style: 'font-size:14px;font-weight:600;color:#1d2c40;word-break:break-all', text: (value === null || value === undefined || value === '') ? '—' : String(value) }));
+    }
+    var ageTxt = '';
+    var am = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthday || '');
+    if (am) {
+      var t = new Date();
+      var age = t.getFullYear() - (+am[1]) - ((t.getMonth() + 1 < +am[2] || (t.getMonth() + 1 === +am[2] && t.getDate() < +am[3])) ? 1 : 0);
+      if (age >= 0 && age < 130) { ageTxt = age + ' 岁'; }
+    }
+    var info = h('div', { style: 'flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;align-content:start' },
+      cell('姓名', p.name || rw.personnelName), cell('身份证号码', idc), cell('出生日期', birthday),
+      cell('年龄', ageTxt), cell('入伍时间', p.entryDate), cell('人员类别', p.category),
+      cell('军衔', p.rank), cell('职务', p.post), cell('所属单位', p.departmentName));
+    body.appendChild(h('div', { style: 'display:flex;gap:18px;align-items:stretch' },
+      h('div', { style: 'flex:none;width:300px;border:1px solid #edf1f6;border-radius:10px;padding:12px 10px;display:flex;justify-content:center' },
+        buildBodyFigure(p.height, p.weight)),
+      info));
+
+    // 按项目分组(带分数的参与走势)
+    var byItem = {};
+    rows.forEach(function (r) {
+      if (!r.testDate || !r.item) { return; }
+      var pts = (r.points === null || r.points === undefined || r.points === '') ? null : Number(r.points);
+      if (pts === null || isNaN(pts)) { return; }
+      (byItem[r.item] = byItem[r.item] || []).push({ date: r.testDate, pts: pts, raw: r.score, grade: r.grade });
+    });
+    allSeries = Object.keys(byItem).map(function (k) {
+      byItem[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      return { name: k, data: byItem[k] };
+    });
+
+    // 时间范围:快捷(本月/近N月/全部) + 自定义最近N个月
+    var chipDefs = [['本月', 1], ['近2月', 2], ['近3月', 3], ['近4月', 4], ['近5月', 5], ['近6月', 6], ['近12月', 12], ['全部', 0]];
+    var custom = h('input', { type: 'number', min: '1', max: '120', placeholder: 'N', style: 'width:54px;height:26px;padding:0 6px;border:1px solid #c5cdd8;border-radius:4px;font-size:13px' });
+    var bar = h('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 4px' },
+      h('span', { style: 'font-size:13px;color:#66788c', text: '时间范围:' }));
+    chipDefs.forEach(function (cd) {
+      var b = h('button', {
+        type: 'button', text: cd[0],
+        style: 'height:26px;padding:0 12px;border:1px solid #c5cdd8;border-radius:13px;background:#fff;color:#445262;font-size:12px;cursor:pointer',
+        onclick: function () { setRange(cd[1], b); }
+      });
+      chips.push(b);
+      bar.appendChild(b);
+    });
+    bar.appendChild(h('span', { style: 'font-size:12px;color:#8a97a8;margin-left:6px', text: '自定义:最近' }));
+    bar.appendChild(custom);
+    bar.appendChild(h('span', { style: 'font-size:12px;color:#8a97a8', text: '个月' }));
+    bar.appendChild(h('button', {
+      type: 'button', text: '查看',
+      style: 'height:26px;padding:0 12px;border:1px solid #2f6fd6;border-radius:4px;background:#2f6fd6;color:#fff;font-size:12px;cursor:pointer',
+      onclick: function () {
+        var n = parseInt(custom.value, 10);
+        if (!n || n < 1) { n = 1; }
+        if (n > 120) { n = 120; }
+        setRange(n, null);
+      }
+    }));
+    body.appendChild(h('div', { style: 'margin-top:16px;font-size:15px;font-weight:600;color:#1d2c40', text: '考核成绩与走势' }));
+    body.appendChild(bar);
+    body.appendChild(chartsBox);
+    chips[chips.length - 1].click();   // 默认选中"全部"
+  }
+
+  function chartCard(titleEl, rightEl, chartEl) {
+    return h('div', { style: 'border:1px solid #edf1f6;border-radius:10px;padding:12px;margin-top:12px' },
+      h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px' }, titleEl, rightEl),
+      chartEl);
+  }
+
+  function renderCharts() {
+    chartsBox.innerHTML = '';
+    var start = range.months > 0 ? rangeStart(range.months) : '';
+    var ser = allSeries.map(function (s) {
+      return { name: s.name, data: start ? s.data.filter(function (x) { return x.date >= start; }) : s.data.slice() };
+    }).filter(function (s) { return s.data.length > 0; });
+    if (!ser.length) {
+      chartsBox.appendChild(h('div', { class: 'empty-row', text: allSeries.length ? '该时间范围内没有带分数的考核记录' : '暂无带分数的考核记录' }));
+      return;
+    }
+    ser.sort(function (a, b) {   // 最近有成绩的项目排前面
+      var la = a.data[a.data.length - 1].date, lb = b.data[b.data.length - 1].date;
+      return la < lb ? 1 : la > lb ? -1 : b.data.length - a.data.length;
+    });
+    function chartData(s) { return { name: s.name, data: s.data.map(function (x) { return { date: x.date, score: x.pts }; }) }; }
+    function r1(v) { return Math.round(v * 10) / 10; }
+    // 总览:全部项目一张图对比
+    chartsBox.appendChild(chartCard(
+      h('div', { style: 'font-size:15px;font-weight:600;color:#1d2c40', text: '全部项目总览' }),
+      h('div', { style: 'font-size:12px;color:#8a97a8', text: '悬停圆点可查看明细' }),
+      buildTrendChart(ser.map(chartData), { H: 300 })));
+    // 每个项目一张小图 + 统计
+    ser.forEach(function (s) {
+      var pts = s.data.map(function (x) { return x.pts; });
+      var sum = 0; pts.forEach(function (v) { sum += v; });
+      var last = s.data[s.data.length - 1];
+      chartsBox.appendChild(chartCard(
+        h('div', { style: 'font-size:14px;font-weight:600;color:#1d2c40', text: s.name }),
+        h('div', { style: 'display:flex;gap:14px;align-items:center;font-size:12.5px;color:#445262;flex-wrap:wrap' },
+          h('span', { text: s.data.length + ' 次' }),
+          h('span', { text: '最新 ' + last.date + ':' }),
+          h('b', { style: 'color:#1d2c40', text: last.pts + ' 分' }),
+          h('span', { html: badge(last.grade || gradeForPoints(last.pts)) }),
+          h('span', { text: '成绩 ' + (last.raw || '—') }),
+          h('span', { text: '平均 ' + r1(sum / pts.length) + ' 分' }),
+          h('span', { text: '最好 ' + r1(Math.max.apply(null, pts)) + ' 分' })),
+        buildTrendChart([chartData(s)], { H: 190, legend: false })));
+    });
+  }
+}
+
+/** 伪3D人体模型:身高定高度、BMI定体宽,渐变模拟立体感;无数据给占位提示 */
+function buildBodyFigure(hcm, wkg) {
+  var hc = Number(hcm), wc = Number(wkg);
+  var has = hc > 80 && hc < 230 && wc > 25 && wc < 200;
+  var box = h('div', { style: 'display:flex;flex-direction:column;align-items:center;width:100%' });
+  if (!has) {
+    box.appendChild(h('div', { style: 'width:230px;height:296px;border:2px dashed #d5dce6;border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#8a97a8;font-size:13px;line-height:1.8', text: '暂无身高体重数据,请在人员管理中填写' }));
+    return box;
+  }
+  var bmi = wc / Math.pow(hc / 100, 2);
+  var wf = Math.max(0.78, Math.min(1.45, bmi / 21.5));   // 体宽系数
+  var k = 1.45;                                          // 1cm = 1.45px
+  var figH = hc * k;
+  var topY = 28, groundY = topY + figH;
+  var cx = 142;
+  var headR = Math.max(9, figH / 15);
+  var headCy = topY + headR;
+  var neckW = headR * 1.05, neckH = headR * 0.5;
+  var shoulderY = headCy + headR + neckH - 2;
+  var torsoH = figH * 0.335;
+  var torsoW = Math.max(26, figH * 0.21 * wf);
+  var hipY = shoulderY + torsoH;
+  var armW = Math.max(8, figH * 0.06 * wf), armL = figH * 0.305;
+  var legW = Math.max(10, figH * 0.082 * wf);
+  var legTop = hipY - 4;
+  var legH = groundY - legTop - 8;
+  var s = [];
+  s.push('<svg viewBox="0 0 250 366" style="width:100%;max-width:280px;display:block">');
+  s.push('<defs>' +
+    '<linearGradient id="pfUni" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8fb07c"/><stop offset="0.45" stop-color="#5d7d4c"/><stop offset="1" stop-color="#39522d"/></linearGradient>' +
+    '<linearGradient id="pfUniD" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7d9a68"/><stop offset="0.45" stop-color="#4d6a3e"/><stop offset="1" stop-color="#2f4525"/></linearGradient>' +
+    '<linearGradient id="pfSkin" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f6d5b0"/><stop offset="0.5" stop-color="#e2b184"/><stop offset="1" stop-color="#c08a5a"/></linearGradient>' +
+    '</defs>');
+  // 左侧身高标尺 + 本人身高标记线
+  s.push('<line x1="40" y1="' + topY + '" x2="40" y2="' + groundY + '" stroke="#c9d3de" stroke-width="1"/>');
+  for (var cm = 140; cm <= 200; cm += 10) {
+    var y = groundY - cm * k;
+    if (y < topY - 4 || y > groundY) { continue; }
+    s.push('<line x1="35" y1="' + y.toFixed(1) + '" x2="45" y2="' + y.toFixed(1) + '" stroke="#c9d3de" stroke-width="1"/>');
+    if (cm % 20 === 0) {
+      s.push('<text x="32" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="#8a97a8">' + cm + '</text>');
+    }
+  }
+  s.push('<line x1="40" y1="' + topY + '" x2="' + (cx - headR).toFixed(1) + '" y2="' + topY + '" stroke="#2f6fd6" stroke-dasharray="4 3" stroke-width="1"/>');
+  // 地面影子
+  s.push('<ellipse cx="' + cx + '" cy="' + (groundY + 5) + '" rx="' + (figH * 0.155).toFixed(1) + '" ry="7" fill="#1d2c40" opacity="0.10"/>');
+  // 腿 + 靴
+  [-1, 1].forEach(function (side) {
+    var lx = cx + (side < 0 ? -legW - 2 : 2);
+    s.push('<rect x="' + lx.toFixed(1) + '" y="' + legTop.toFixed(1) + '" width="' + legW.toFixed(1) + '" height="' + legH.toFixed(1) + '" rx="' + (legW / 2).toFixed(1) + '" fill="url(#pfUniD)"/>');
+    s.push('<rect x="' + (lx - 1.5).toFixed(1) + '" y="' + (groundY - 8).toFixed(1) + '" width="' + (legW + 3).toFixed(1) + '" height="9" rx="3" fill="#2b3138"/>');
+  });
+  // 手臂(微外张)+ 手
+  [-1, 1].forEach(function (side) {
+    var ax = cx + side * (torsoW / 2 + armW * 0.35);
+    s.push('<rect x="' + (ax - armW / 2).toFixed(1) + '" y="' + (shoulderY + 2).toFixed(1) + '" width="' + armW.toFixed(1) + '" height="' + armL.toFixed(1) + '" rx="' + (armW / 2).toFixed(1) + '" fill="url(#pfUniD)" transform="rotate(' + (side * 5) + ' ' + ax.toFixed(1) + ' ' + (shoulderY + 4).toFixed(1) + ')"/>');
+    s.push('<circle cx="' + (ax + side * armL * 0.09).toFixed(1) + '" cy="' + (shoulderY + armL + 2).toFixed(1) + '" r="' + (armW * 0.52).toFixed(1) + '" fill="url(#pfSkin)"/>');
+  });
+  // 躯干 + 腰带 + 高光
+  s.push('<rect x="' + (cx - torsoW / 2).toFixed(1) + '" y="' + shoulderY.toFixed(1) + '" width="' + torsoW.toFixed(1) + '" height="' + (torsoH + 6).toFixed(1) + '" rx="' + (torsoW * 0.3).toFixed(1) + '" fill="url(#pfUni)"/>');
+  s.push('<rect x="' + (cx - torsoW / 2).toFixed(1) + '" y="' + (hipY - 2).toFixed(1) + '" width="' + torsoW.toFixed(1) + '" height="7" rx="2" fill="#2f3d28" opacity="0.85"/>');
+  s.push('<ellipse cx="' + (cx - torsoW * 0.22).toFixed(1) + '" cy="' + (shoulderY + torsoH * 0.32).toFixed(1) + '" rx="' + (torsoW * 0.12).toFixed(1) + '" ry="' + (torsoH * 0.3).toFixed(1) + '" fill="#ffffff" opacity="0.13"/>');
+  // 脖子 + 头 + 头发
+  s.push('<rect x="' + (cx - neckW / 2).toFixed(1) + '" y="' + (headCy + headR * 0.4).toFixed(1) + '" width="' + neckW.toFixed(1) + '" height="' + (neckH + 8).toFixed(1) + '" rx="3" fill="url(#pfSkin)"/>');
+  s.push('<circle cx="' + cx + '" cy="' + headCy.toFixed(1) + '" r="' + headR.toFixed(1) + '" fill="url(#pfSkin)"/>');
+  s.push('<path d="M ' + (cx - headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' A ' + headR.toFixed(1) + ' ' + headR.toFixed(1) + ' 0 0 1 ' + (cx + headR).toFixed(1) + ' ' + headCy.toFixed(1) + ' Z" fill="#3a332b"/>');
+  s.push('</svg>');
+  var bmiV = Math.round(bmi * 10) / 10;
+  var bl = bmi < 18.5 ? ['偏瘦', '#2f6fd6'] : bmi < 24 ? ['正常', '#2ea44f'] : bmi < 28 ? ['超重', '#e8743b'] : ['肥胖', '#d9463e'];
+  box.appendChild(h('div', { style: 'width:100%', html: s.join('') }));
+  box.appendChild(h('div', { style: 'margin-top:8px;font-size:13px;color:#445262;text-align:center' },
+    h('span', { text: '身高 ' + (+hc) + ' cm · 体重 ' + (+wc) + ' kg · BMI ' + bmiV + ' ' }),
+    h('b', { style: 'color:' + bl[1], text: bl[0] })));
+  return box;
+}
+
+/** 折线图:series=[{name,data:[{date,score}]}],X=考核日期,Y=分数0-100;opts:{W,H,legend:false} */
+function buildTrendChart(series, opts) {
+  opts = opts || {};
+  var W = opts.W || 880, H = opts.H || 430, padL = 46, padR = 18, padT = 18, padB = 62;
   var dates = [];
   series.forEach(function (s) {
     s.data.forEach(function (p) { if (dates.indexOf(p.date) < 0) { dates.push(p.date); } });
@@ -2613,6 +2860,8 @@ function buildTrendChart(series) {
     });
   });
   svg.push('</svg>');
+  var chartBox = h('div', { style: 'max-height:54vh;overflow:auto;border:1px solid #edf1f6;border-radius:8px;padding:10px', html: svg.join('') });
+  if (opts.legend === false) { return chartBox; }
   var legend = h('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:#445262' });
   series.forEach(function (s, si) {
     var color = TREND_COLORS[si % TREND_COLORS.length];
@@ -2620,9 +2869,7 @@ function buildTrendChart(series) {
       h('span', { style: 'width:16px;height:3px;background:' + color + ';display:inline-block;border-radius:2px' }),
       h('span', { text: s.name + '(' + s.data.length + '次)' })));
   });
-  return h('div', {},
-    h('div', { style: 'max-height:54vh;overflow:auto;border:1px solid #edf1f6;border-radius:8px;padding:10px', html: svg.join('') }),
-    legend);
+  return h('div', {}, chartBox, legend);
 }
 
 var GRADE_RULE = null;
@@ -3636,7 +3883,9 @@ var fitnessCfg = {
   ],
   columns: [
     { key: 'personnelName', label: '姓名' },
-    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'idCard', label: '身份证号', render: function (r) {
+        return r.idCard ? '<span class="view-detail" data-view-id="' + r.id + '" title="点击查看体能档案"><b>' + esc(r.idCard) + '</b></span>' : '—';
+      } },
     { key: 'item', label: '考核项目' },
     { key: 'score', label: '成绩' },
     { key: 'points', label: '分数', render: function (r) { return r.points != null && r.points !== '' ? r.points : '—'; } },
@@ -3644,53 +3893,8 @@ var fitnessCfg = {
     { key: 'testDate', label: '考核日期' }
   ],
   rowTitle: function (r) { return r.personnelName + ' · ' + r.item; },
-  // 点击姓名查看"本次考核"全部项目
-  onView: function (rw, act) {
-    var body = h('div');
-    var m = openModal({
-      title: '本次考核 · ' + (rw.personnelName || '') + ' ' + (rw.testDate || ''),
-      body: body,
-      footer: [
-        h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
-        h('button', { class: 'btn btn-primary', text: '体能走势', onclick: function () { m.close(); openFitnessTrend(rw); } }),
-        h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })
-      ]
-    });
-    body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-    var q = '/api/fitness?size=100';
-    if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
-    else { q += '&personnelId=' + rw.personnelId; }
-    if (rw.testDate) { q += '&startDate=' + rw.testDate + '&endDate=' + rw.testDate; }
-    GET(q).then(function (d) {
-      var rows = (d && d.list) || [];
-      var total = 0;
-      body.innerHTML = '';
-      var table = h('table', { class: 'grid', style: 'width:100%' });
-      var thead = h('thead', {}, h('tr', {},
-        h('th', { text: '考核项目' }), h('th', { text: '成绩' }), h('th', { text: '分数' }),
-        h('th', { text: '评定' }), h('th', { text: '备注' })));
-      var tbody = h('tbody');
-      rows.forEach(function (x) {
-        total += Number(x.points) || 0;
-        tbody.appendChild(h('tr', {},
-          h('td', { text: x.item || '' }),
-          h('td', { text: x.score || '' }),
-          h('td', { text: (x.points !== null && x.points !== undefined && x.points !== '') ? String(x.points) : '—' }),
-          h('td', { html: badge(x.grade) }),
-          h('td', { text: x.remark || '' })));
-      });
-      table.appendChild(thead);
-      table.appendChild(tbody);
-      body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:48vh;overflow:auto' }, table));
-      body.appendChild(h('div', { style: 'margin-top:10px;display:flex;gap:18px;font-size:13px;color:#445262' },
-        h('span', { text: '共 ' + rows.length + ' 个项目' }),
-        h('b', { text: '合计分数:' + (Math.round(total * 10) / 10) + ' 分' }),
-        h('span', { text: '平均:' + (rows.length ? (Math.round(total / rows.length * 10) / 10) : 0) + ' 分' })));
-    }).catch(function (e) {
-      body.innerHTML = '';
-      body.appendChild(h('div', { class: 'empty-row', text: e.message }));
-    });
-  },
+  // 点击姓名或身份证号 → 体能档案大窗口(3D人体+基本信息+走势)
+  onView: function (rw, act) { openPersonProfile(rw, act); },
   form: [
     { key: 'personnelId', label: '考核人员', type: 'personnel', required: true },
     { key: 'item', label: '考核项目', type: 'select', options: function () { return dictLabels('fitness_item'); }, required: true },
