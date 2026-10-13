@@ -478,10 +478,7 @@ table.grid td.empty-row { text-align: center; }
 
 /* 响应式小屏 */
 @media (max-width: 900px) {
-  .sidebar { transform: translateX(-144px); }
-  .main { margin-left: 64px; }
-  .sidebar-logo .t1, .sidebar-logo .t2, .menu-item span.txt { display: none; }
-  .menu-item { justify-content: center; }
+  /* 小屏侧栏自适应由 JS 自动收起处理(与FLIP动画一致),不再用CSS硬移位 */
   .form-grid { grid-template-columns: 1fr; }
   .dict-layout { flex-direction: column; }
   .dict-types { width: 100%; display: flex; flex-wrap: wrap; position: static; max-height: none; overflow: visible; }
@@ -492,7 +489,12 @@ table.grid td.empty-row { text-align: center; }
 .sidebar {
   overflow: hidden;
   transition: transform .3s cubic-bezier(.4,0,.2,1);
+  user-select: none; -webkit-user-select: none;
 }
+/* 收起后的隐形文字不可交互,避免点击选中出现高亮矩形 */
+.sidebar.collapsed .menu-item span.txt,
+.sidebar.collapsed .sidebar-logo .t1,
+.sidebar.collapsed .sidebar-logo .t2 { pointer-events: none; }
 .sidebar.collapsed { transform: translateX(-144px); }
 /* 盒子左移的同时,内部内容右移等量抵消:图标屏幕位置不动,
    可见的 64px 窗口(盒子坐标 144..208)正好呈现图标列 */

@@ -5805,6 +5805,14 @@ function renderShell() {
   var mainEl = h('div', { class: 'main' }, topbar, content);
   var SIDEBAR_W = 208, SIDEBAR_MINI = 64;
 
+  // 窗口太窄自动收起菜单(与手动收起同一动画),变宽自动展开;900/960滞回避免临界抖动
+  window.addEventListener('resize', function () {
+    var w = window.innerWidth;
+    var collapsed = sideEl.classList.contains('collapsed');
+    if (w < 900 && !collapsed) { setCollapsed(true); }
+    else if (w >= 960 && collapsed) { setCollapsed(false); }
+  });
+
   function setCollapsed(collapsed) {
     var was = sideEl.classList.contains('collapsed');
     sideEl.classList.toggle('collapsed', collapsed);
