@@ -946,3 +946,7 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .login-subtitle { color: #8a97a8; font-size: 13px; margin-top: 6px; }
 .theme-sw { transition: transform .15s, border-color .15s; }
 .theme-sw:hover { transform: scale(1.12); }
+
+/* 节假日色块 */
+.holi-chip { color: #fff; border-radius: 10px; padding: 1px 9px; font-size: 12px; white-space: nowrap; }
+.date-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: 1px; }

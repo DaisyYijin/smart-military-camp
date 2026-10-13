@@ -746,7 +746,7 @@ function refreshPersonnelOptions() {
 }
 
 function refreshAll() {
-  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions(), loadGradeRule()]);
+  return Promise.all([refreshDicts(), refreshDepts(), refreshPersonnelOptions(), loadGradeRule(), loadHolidayMap()]);
 }
 
 function loadRowPhotos(root) {
@@ -3857,6 +3857,36 @@ var vehicleCfg = {
   }
 };
 
+/** 节假日配色:同名节日永远同色(稳定哈希),日期命中节日也用该色 */
+var HOLIDAY_COLOR_CACHE = {};
+function holidayColor(name) {
+  if (!name) { return ''; }
+  if (HOLIDAY_COLOR_CACHE[name]) { return HOLIDAY_COLOR_CACHE[name]; }
+  var palette = ['#d9463e', '#e8960e', '#2ea44f', '#7048b7', '#0d8484', '#b26a00', '#2f6fd6', '#c2410c'];
+  var h = 0;
+  for (var i = 0; i < name.length; i++) { h = (h * 31 + name.charCodeAt(i)) & 0xffff; }
+  HOLIDAY_COLOR_CACHE[name] = palette[h % palette.length];
+  return HOLIDAY_COLOR_CACHE[name];
+}
+var HOLIDAY_MAP = {};   // '2026-10-01' → '国庆节'
+function loadHolidayMap() {
+  return GET('/api/leave/holidays').then(function (list) {
+    HOLIDAY_MAP = {};
+    (list || []).forEach(function (x) {
+      if (x.holiday_date) { HOLIDAY_MAP[x.holiday_date] = x.holiday_name || ''; }
+    });
+  }).catch(function () { });
+}
+/** 日期单元格渲染:命中节日 → 同色小方块+悬停节日名 */
+function holiDateCell(date) {
+  if (!date) { return ''; }
+  var fest = HOLIDAY_MAP[date];
+  if (fest) {
+    return '<span title="' + esc(fest) + '"><span class="date-dot" style="background:' + holidayColor(fest) + '"></span>' + esc(date) + '</span>';
+  }
+  return esc(date);
+}
+
 /** 休假档案:某人全部历史休假(按年度分组+汇总) */
 function openLeaveHistory(rw, act) {
   var body = h('div');
@@ -3909,8 +3939,8 @@ function openLeaveHistory(rw, act) {
         var sum = (Number(x.days) || 0) + (Number(x.travelDays) || 0) + (Number(x.holidayDays) || 0);
         tb.appendChild(h('tr', {},
           h('td', { html: badge(x.leaveType) }),
-          h('td', { text: x.startDate || '' }),
-          h('td', { text: x.endDate || '' }),
+          h('td', { html: holiDateCell(x.startDate) }),
+          h('td', { html: holiDateCell(x.endDate) }),
           h('td', { text: String(Number(x.days) || 0) }),
           h('td', { text: Number(x.travelDays) > 0 ? String(x.travelDays) : '—' }),
           h('td', { text: Number(x.holidayDays) > 0 ? String(x.holidayDays) : '—' }),
@@ -3945,14 +3975,16 @@ var leaveCfg = {
       } },
     { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
     { key: 'leaveType', label: '休假类型', render: function (r) { return badge(r.leaveType); } },
-    { key: 'startDate', label: '开始日期' },
-    { key: 'endDate', label: '结束日期' },
+    { key: 'startDate', label: '开始日期', render: function (r) { return holiDateCell(r.startDate); } },
+    { key: 'endDate', label: '结束日期', render: function (r) { return holiDateCell(r.endDate); } },
     { key: 'days', label: '基本天数' },
     { key: 'travelDays', label: '路途', render: function (r) { return Number(r.travelDays) > 0 ? Number(r.travelDays) + '天' : '—'; } },
     { key: 'holidayDays', label: '节假日', render: function (r) {
         var d = Number(r.holidayDays);
-        if (d > 0) return (r.holidayName ? r.holidayName + ' ' : '') + d + '天';
-        return r.holidayName || '—';
+        if (r.holidayName) {
+          return '<span class="holi-chip" style="background:' + holidayColor(r.holidayName) + '">' + esc(r.holidayName) + (d > 0 ? ' ' + d + '天' : '') + '</span>';
+        }
+        return d > 0 ? d + '天' : '—';
       } },
     { key: 'reason', label: '事由' }
   ],
