@@ -299,6 +299,18 @@ table.grid td.empty-row { text-align: center; }
 .bar-row.green .bf { background: #2f9e5b; }
 .bar-row.orange .bf { background: #e8960e; }
 .bar-row .bv { width: 60px; flex: none; color: #445262; font-size: 13px; }
+.bar-row .bf { display: block; }   /* 行内span会忽略width,填充必须块级 */
+/* 仪表盘卡片内的条形图:压缩标签列,靠左排布 */
+.dash-grid .bar-row .bn { width: 84px; font-size: 12.5px; }
+.dash-grid .bar-row .bv { width: 52px; font-size: 12.5px; }
+/* 小卡条形图改两行:上行=标签+数值,下行=全宽轨道 */
+.dash-grid .size-s .bar-row { flex-wrap: wrap; row-gap: 3px; }
+.dash-grid .size-s .bar-row .bn { width: auto; max-width: 55%; font-size: 12px; }
+.dash-grid .size-s .bar-row .bv { width: auto; margin-left: auto; text-align: right; font-size: 12px; }
+.dash-grid .size-s .bar-row .bt { order: 3; flex-basis: 100%; }
+/* 小卡环形/玫瑰图:图例放不下时换行,百分比列收窄 */
+.donut-box { flex-wrap: wrap; }
+.donut-legend .row span:last-child { width: 34px; }
 
 /* ---------- 仪表盘 ---------- */
 .stat-card.danger .num { color: #d9463e; }
@@ -329,6 +341,9 @@ table.grid td.empty-row { text-align: center; }
   margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f0f3f8;
 }
 .dash-card-head h3 { font-size: 15px; color: #1d2c40; }
+/* 小卡:标题与尺寸按钮允许换行,标题字号收窄 */
+.dash-grid .size-s .dash-card-head { flex-wrap: wrap; row-gap: 4px; }
+.dash-grid .size-s .dash-card-head h3 { font-size: 13.5px; }
 .dash-card-x {
   border: none; background: none; font-size: 18px; color: #b0bccb; cursor: pointer;
   width: 24px; height: 24px; line-height: 1; border-radius: 4px; flex: none;
