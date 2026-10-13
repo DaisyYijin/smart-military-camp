@@ -1152,6 +1152,7 @@ function setupPersonLookup(form, map) {
     pidEl.value = String(p.id);
     idCardEl.classList.remove('bad');
     idCardEl.title = p.departmentName || '';
+    idCardEl.dispatchEvent(new Event('change', { bubbles: true }));
   });
   // 编辑时预填了身份证号 → 自动带出校验
   if (String(idCardEl.value || '').trim()) setTimeout(lookup, 60);
@@ -4462,7 +4463,10 @@ var fitnessCfg = {
           idEl.classList.remove('bad');
           idEl.title = p.departmentName || '';
           GET('/api/personnel/' + p.id).then(function (full) {
-            if (ageEl && full && full.birthday) { ageEl.value = calcAge(full.birthday); }
+            if (ageEl && full && full.birthday) {
+              ageEl.value = calcAge(full.birthday);
+              ageEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
           }).catch(function () { });
         } else {
           form.inputs['personnelId'].value = '';
@@ -4506,6 +4510,7 @@ var fitnessCfg = {
       scoreEl._t = setTimeout(calc, 500);
     });
     if (itemEl && itemEl.addEventListener) { itemEl.addEventListener('change', calc); }
+    if (ageEl && ageEl.addEventListener) { ageEl.addEventListener('change', function () { clearTimeout(ageEl._ct); ageEl._ct = setTimeout(calc, 200); }); }
     if (row && row.score) { setTimeout(calc, 100); }
   },
   beforeSave: function (data) {
