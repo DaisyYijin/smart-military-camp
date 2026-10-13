@@ -2529,6 +2529,102 @@ function batchImportPhotos(fileList) {
 }
 
 /** 体能评定标准:[{label,op,min}] 按min降序;不及格为兜底 */
+
+var TREND_COLORS = ['#2f6fd6', '#e8743b', '#2ea44f', '#9333ea', '#d9463e', '#0d9488', '#b26a00'];
+
+/** 体能走势弹窗:某人各项目的分数折线(纯SVG,零依赖) */
+function openFitnessTrend(person) {
+  var body = h('div');
+  var m = openModal({
+    title: '体能走势 · ' + (person.name || ''),
+    body: body,
+    wide: true,
+    footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+  });
+  body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+  var q = '/api/fitness?size=200';
+  if (person.idCard) { q += '&idCard=' + encodeURIComponent(person.idCard); }
+  else { q += '&personnelId=' + person.personnelId; }
+  GET(q).then(function (d) {
+    var rows = (d && d.list) || [];
+    body.innerHTML = '';
+    if (!rows.length) {
+      body.appendChild(h('div', { class: 'empty-row', text: '暂无考核记录' }));
+      return;
+    }
+    var byItem = {};
+    rows.forEach(function (r) {
+      if (!r.testDate || !r.item) { return; }
+      var pts = (r.points === null || r.points === undefined || r.points === '') ? null : Number(r.points);
+      if (pts === null || isNaN(pts)) { return; }
+      (byItem[r.item] = byItem[r.item] || []).push({ date: r.testDate, score: pts });
+    });
+    var series = Object.keys(byItem).map(function (k) {
+      byItem[k].sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      return { name: k, data: byItem[k] };
+    }).filter(function (x) { return x.data.length > 0; });
+    if (!series.length) {
+      body.appendChild(h('div', { class: 'empty-row', text: '暂无带分数的考核记录(分数为空的不参与走势)' }));
+      return;
+    }
+    body.appendChild(buildTrendChart(series));
+  }).catch(function (e) {
+    body.innerHTML = '';
+    body.appendChild(h('div', { class: 'empty-row', text: e.message }));
+  });
+}
+
+/** 折线图:series=[{name,data:[{date,score}]}],X=考核日期,Y=分数0-100 */
+function buildTrendChart(series) {
+  var W = 880, H = 430, padL = 46, padR = 18, padT = 18, padB = 62;
+  var dates = [];
+  series.forEach(function (s) {
+    s.data.forEach(function (p) { if (dates.indexOf(p.date) < 0) { dates.push(p.date); } });
+  });
+  dates.sort();
+  var xi = {};
+  dates.forEach(function (d, i) { xi[d] = i; });
+  var n = dates.length;
+  function xAt(i) { return n === 1 ? (padL + (W - padL - padR) / 2) : padL + (W - padL - padR) * i / (n - 1); }
+  function yAt(v) {
+    var yMin = 0, yMax = 100, vv = Math.max(yMin, Math.min(yMax, v));
+    return padT + (H - padT - padB) * (1 - vv / (yMax - yMin));
+  }
+  var svg = ['<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;background:#fff;display:block">'];
+  [0, 20, 40, 60, 80, 100].forEach(function (v) {
+    var y = yAt(v).toFixed(1);
+    svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5" stroke-width="1"/>');
+    svg.push('<text x="' + (padL - 8) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="11" fill="#8a97a8">' + v + '</text>');
+  });
+  var step = Math.max(1, Math.ceil(n / 12));
+  dates.forEach(function (d, i) {
+    if (i % step !== 0 && i !== n - 1) { return; }
+    var x = xAt(i).toFixed(1);
+    svg.push('<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="#f5f7fa" stroke-width="1"/>');
+    svg.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" font-size="10" fill="#8a97a8">' + esc(d.slice(2)) + '</text>');
+  });
+  svg.push('<text x="' + (padL - 30) + '" y="' + (padT + 4) + '" font-size="11" fill="#8a97a8">分</text>');
+  series.forEach(function (s, si) {
+    var color = TREND_COLORS[si % TREND_COLORS.length];
+    var pts = s.data.map(function (p) { return xAt(xi[p.date]).toFixed(1) + ',' + yAt(p.score).toFixed(1); });
+    svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+    s.data.forEach(function (p) {
+      svg.push('<circle cx="' + xAt(xi[p.date]).toFixed(1) + '" cy="' + yAt(p.score).toFixed(1) + '" r="3.5" fill="' + color + '"><title>' + esc(s.name) + ' ' + p.date + ' : ' + p.score + '分</title></circle>');
+    });
+  });
+  svg.push('</svg>');
+  var legend = h('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:#445262' });
+  series.forEach(function (s, si) {
+    var color = TREND_COLORS[si % TREND_COLORS.length];
+    legend.appendChild(h('span', { style: 'display:flex;align-items:center;gap:5px' },
+      h('span', { style: 'width:16px;height:3px;background:' + color + ';display:inline-block;border-radius:2px' }),
+      h('span', { text: s.name + '(' + s.data.length + '次)' })));
+  });
+  return h('div', {},
+    h('div', { style: 'max-height:54vh;overflow:auto;border:1px solid #edf1f6;border-radius:8px;padding:10px', html: svg.join('') }),
+    legend);
+}
+
 var GRADE_RULE = null;
 function defaultGradeRule() {
   return [{ label: '优秀', op: '>=', min: 90 }, { label: '良好', op: '>=', min: 80 }, { label: '及格', op: '>=', min: 60 }];
@@ -3556,7 +3652,8 @@ var fitnessCfg = {
       body: body,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '编辑本条', onclick: function () { m.close(); act.edit(); } }),
-        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })
+        h('button', { class: 'btn btn-primary', text: '体能走势', onclick: function () { m.close(); openFitnessTrend(rw); } }),
+        h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })
       ]
     });
     body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
