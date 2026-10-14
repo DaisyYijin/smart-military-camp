@@ -6721,7 +6721,14 @@ function renderLogin(msg) {
   var userInput = h('input', { type: 'text', placeholder: '请输入管理员账号', autocomplete: 'username' });
   var pwInput = h('input', { type: 'password', placeholder: '请输入密码', autocomplete: 'current-password' });
   var rememberCb = h('input', { type: 'checkbox', id: 'remember-me' });
-  rememberCb.checked = true;
+  var savedUser = '';
+  try { savedUser = localStorage.getItem('savedUser') || ''; } catch (e) { }
+  if (savedUser) {
+    userInput.value = savedUser;
+    rememberCb.checked = true;
+  } else {
+    rememberCb.checked = false;
+  }
   var btn = h('button', { class: 'btn btn-primary login-btn', text: '登  录' });
 
   function submit() {
@@ -6731,6 +6738,11 @@ function renderLogin(msg) {
     btn.disabled = true; btn.textContent = '登录中…';
     errBox.textContent = '';
     api('POST', '/api/auth/login', { username: u, password: p }).then(function (data) {
+      if (rememberCb.checked) {
+        try { localStorage.setItem('savedUser', u); } catch (e) { }
+      } else {
+        try { localStorage.removeItem('savedUser'); } catch (e) { }
+      }
       saveSession(data.token, { username: data.username, displayName: data.displayName }, rememberCb.checked);
       return refreshAll().then(renderShell);
     }).catch(function (e) {
@@ -6757,8 +6769,8 @@ function renderLogin(msg) {
         h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
         h('label', { class: 'login-remember', for: 'remember-me' },
           rememberCb,
-          h('span', { text: '保持登录(记住我)' }),
-          h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录', style: 'display:block;margin-top:2px' })),
+          h('span', { text: '记住我' }),
+          h('span', { class: 'hint', text: '勾选后下次自动填入账号', style: 'display:block;margin-top:2px' })),
         errBox,
         btn),
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
