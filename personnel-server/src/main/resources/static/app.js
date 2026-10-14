@@ -4417,6 +4417,7 @@ function personnelPhotoBlock(row) {
 var equipmentCfg = {
   key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
   clickKey: 'name', addLabel: '新增装备',
+  personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
   filters: [
     { key: 'name', label: '名称' },
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
@@ -4446,11 +4447,19 @@ var equipmentCfg = {
     { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
     { key: 'model', label: '型号' },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('equipment_status'); } },
-    { key: 'keeperId', label: '保管人', type: 'personnel' },
+    { key: 'keeperIdCard', label: '保管人身份证', placeholder: '输入后自动带出姓名' },
+    { key: 'keeperName', label: '保管人姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'keeperId', type: 'hidden' },
     { key: 'location', label: '存放位置' },
     { key: 'buyDate', label: '购置日期', type: 'date' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
-  ]
+  ],
+  beforeSave: function (data) {
+    // keeperIdCard/keeperName 仅用于表单带出,不提交
+    delete data.keeperIdCard;
+    delete data.keeperName;
+    return data;
+  }
 };
 
 var materialCfg = {

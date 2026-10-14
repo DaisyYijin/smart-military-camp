@@ -683,9 +683,13 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 .cal-icon:hover { color: var(--pri, #2f6fd6); }
 
 /* ---------- 人员选择弹窗 + 选择按钮 ---------- */
-.field-row { display: flex; gap: 8px; align-items: center; }
-.field-row input { flex: 1; }
-.field-row .pick-btn { flex: none; }
+/* 选人按钮悬浮在输入框内右侧:输入框保持与其他字段同宽 */
+.field-row { position: relative; display: block; }
+.field-row input { width: 100%; padding-right: 56px; }
+.field-row .pick-btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  height: 26px; padding: 0 10px; font-size: 12px; flex: none; margin: 0;
+}
 .picker-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .picker-bar input { flex: 1; min-width: 110px; }
 .picker-bar .dd { flex: 1.2; min-width: 140px; }
