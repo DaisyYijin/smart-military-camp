@@ -6722,9 +6722,14 @@ function renderLogin(msg) {
   var pwInput = h('input', { type: 'password', placeholder: '请输入密码', autocomplete: 'current-password' });
   var rememberCb = h('input', { type: 'checkbox', id: 'remember-me' });
   var savedUser = '';
-  try { savedUser = localStorage.getItem('savedUser') || ''; } catch (e) { }
+  var savedPass = '';
+  try {
+    savedUser = localStorage.getItem('savedUser') || '';
+    savedPass = localStorage.getItem('savedPass') || '';
+  } catch (e) { }
   if (savedUser) {
     userInput.value = savedUser;
+    if (savedPass) { pwInput.value = savedPass; }
     rememberCb.checked = true;
   } else {
     rememberCb.checked = false;
@@ -6739,9 +6744,15 @@ function renderLogin(msg) {
     errBox.textContent = '';
     api('POST', '/api/auth/login', { username: u, password: p }).then(function (data) {
       if (rememberCb.checked) {
-        try { localStorage.setItem('savedUser', u); } catch (e) { }
+        try {
+          localStorage.setItem('savedUser', u);
+          localStorage.setItem('savedPass', p);
+        } catch (e) { }
       } else {
-        try { localStorage.removeItem('savedUser'); } catch (e) { }
+        try {
+          localStorage.removeItem('savedUser');
+          localStorage.removeItem('savedPass');
+        } catch (e) { }
       }
       saveSession(data.token, { username: data.username, displayName: data.displayName }, rememberCb.checked);
       return refreshAll().then(renderShell);
@@ -6770,7 +6781,7 @@ function renderLogin(msg) {
         h('label', { class: 'login-remember', for: 'remember-me' },
           rememberCb,
           h('span', { text: '记住我' }),
-          h('span', { class: 'hint', text: '勾选后下次自动填入账号', style: 'display:block;margin-top:2px' })),
+          h('span', { class: 'hint', text: '勾选后下次自动填入账号和密码', style: 'display:block;margin-top:2px' })),
         errBox,
         btn),
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
