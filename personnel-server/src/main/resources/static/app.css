@@ -992,10 +992,13 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 
 /* 登录页:记住我 */
 .login-remember {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 16px;
   font-size: 13px; color: #66788c; cursor: pointer; user-select: none;
 }
-.login-remember input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--pri, #2f6fd6); cursor: pointer; }
+.login-remember input[type=checkbox] {
+  width: 15px; height: 15px; margin: 0; flex: none;
+  vertical-align: middle; accent-color: var(--pri, #2f6fd6); cursor: pointer;
+}
 .login-remember .hint { color: #a6b1bf; font-size: 12px; }
 
 .login-form { display: block; }
