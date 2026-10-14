@@ -617,27 +617,33 @@ function makeRegionField() {
   var distDd = makeDropdown([], '区/县');
   var wrap = h('div', { class: 'region-field' }, provDd, cityDd, distDd);
 
-  function findItem(type, label) {
+  function findItem(type, label, parentItem) {
     var hit = null;
-    dictItems(type).forEach(function (d) { if (d.dictLabel === label) hit = d; });
+    dictItems(type).forEach(function (d) {
+      if (d.dictLabel === label
+        && (!parentItem || String(d.parentId) === String(parentItem.id))) { hit = d; }
+    });
     return hit;
   }
-  function childrenOf(type, parentType, parentLabel) {
-    var p = parentLabel ? findItem(parentType, parentLabel) : null;
-    if (!p) return [];
+  function childrenOf(type, parentItem) {
+    if (!parentItem) return [];
     return dictItems(type).filter(function (d) {
-      return d.parentId && String(d.parentId) === String(p.id) && d.enabled !== false;
+      return d.parentId && String(d.parentId) === String(parentItem.id) && d.enabled !== false;
     }).map(function (d) { return d.dictLabel; });
   }
   function sync() { wrap.dispatchEvent(new CustomEvent('change')); }
   function refreshCities(keep) {
-    cityDd.setOptions(childrenOf('region_city', 'region_province', parts[0]));
+    var provItem = parts[0] ? findItem('region_province', parts[0]) : null;
+    cityDd.setOptions(childrenOf('region_city', provItem));
     if (keep && parts[1] && cityDd.value !== parts[1]) { cityDd.value = parts[1]; }
     if (!cityDd.value) { parts[1] = ''; }
     refreshDistricts(keep);
   }
   function refreshDistricts(keep) {
-    distDd.setOptions(childrenOf('region_district', 'region_city', parts[1]));
+    // 城市级按"已选省"消歧:四个直辖市的城市项同名"直辖市"
+    var provItem = parts[0] ? findItem('region_province', parts[0]) : null;
+    var cityItem = parts[1] ? findItem('region_city', parts[1], provItem) : null;
+    distDd.setOptions(childrenOf('region_district', cityItem));
     if (keep && parts[2] && distDd.value !== parts[2]) { distDd.value = parts[2]; }
     if (!distDd.value) { parts[2] = ''; }
   }

@@ -620,6 +620,7 @@ public class SchemaInitializer implements CommandLineRunner {
 
         initDefaultDict();
         seedRegionDict();
+        migrateMunicipalityCity();
 
         if (adminUserDao.count() == 0) {
             adminUserDao.insertAdmin("admin", PasswordUtil.hash("admin123"), "系统管理员");
@@ -749,6 +750,42 @@ public class SchemaInitializer implements CommandLineRunner {
             log.info("已初始化行政区划字典:省 {} / 市 {} / 区县 {}", provs.size(), cityKeys.size(), distBatch.size());
         } catch (Exception e) {
             log.warn("行政区划字典初始化失败:{}", e.getMessage());
+        }
+    }
+
+    /**
+     * 直辖市城市级改为"直辖市"(北京市/直辖市/东城区,而非重复省名)。
+     * 字典标签与人员已有数据(籍贯/入伍地)同步替换,幂等可重复执行。
+     */
+    private void migrateMunicipalityCity() {
+        try {
+            String[] munis = {"北京市", "天津市", "上海市", "重庆市"};
+            // 1) 字典:直辖市的城市级项改名为"直辖市"
+            int n = jdbc.update("UPDATE sys_dict SET dict_label='直辖市' WHERE dict_type='region_city' " +
+                    "AND parent_id IN (SELECT id FROM sys_dict WHERE dict_type='region_province' " +
+                    "AND dict_label IN ('北京市','天津市','上海市','重庆市')) " +
+                    "AND dict_label IN ('北京市','天津市','上海市','重庆市')");
+            // 2) 人员数据:"北京市/北京市/区县" → "北京市/直辖市/区县"
+            int rows = 0;
+            for (String m : munis) {
+                rows += jdbc.update("UPDATE personnel SET native_place = ? WHERE native_place = ?",
+                        m + "/直辖市", m + "/" + m);
+                rows += jdbc.update("UPDATE personnel SET enlist_place = ? WHERE enlist_place = ?",
+                        m + "/直辖市", m + "/" + m);
+                // 前缀"省/省/"共 2*len+2 字符,SUBSTR 从其下一字符开始
+                rows += jdbc.update("UPDATE personnel SET native_place = ? || SUBSTR(native_place, ?) WHERE native_place LIKE ?",
+                        m + "/直辖市/", 2 * m.length() + 3, m + "/" + m + "/%");
+                rows += jdbc.update("UPDATE personnel SET enlist_place = ? || SUBSTR(enlist_place, ?) WHERE enlist_place LIKE ?",
+                        m + "/直辖市/", 2 * m.length() + 3, m + "/" + m + "/%");
+            }
+            // 历史脏数据修复(曾产生"直辖市//区县"双斜杠)
+            rows += jdbc.update("UPDATE personnel SET native_place = REPLACE(native_place, '/直辖市//', '/直辖市/')");
+            rows += jdbc.update("UPDATE personnel SET enlist_place = REPLACE(enlist_place, '/直辖市//', '/直辖市/')");
+            if (n > 0 || rows > 0) {
+                log.info("迁移:直辖市城市级改为\"直辖市\",字典 {} 项,人员数据 {} 行", n, rows);
+            }
+        } catch (Exception e) {
+            log.warn("直辖市城市级迁移失败:{}", e.getMessage());
         }
     }
 }
