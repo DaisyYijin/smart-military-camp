@@ -4233,7 +4233,7 @@ var personnelCfg = {
     { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
     { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
     { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
-    { key: 'address', label: '详细地址', span: 'full', placeholder: '街道/门牌等具体地址,手动填写', hint: '与籍贯/入伍所在地的省市区联动填写' },
+    { key: 'address', label: '详细地址', span: 'full', placeholder: '街道/门牌号等具体住址', hint: '独立填写,与籍贯/入伍所在地无关(不一定相同)' },
     { section: '党团籍信息' },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },
