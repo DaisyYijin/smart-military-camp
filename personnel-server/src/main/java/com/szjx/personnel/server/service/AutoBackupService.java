@@ -93,6 +93,12 @@ public class AutoBackupService {
     }
 
     void runBackup(String trigger) {
+        // 操作日志自动清理(保留180天)
+        try {
+            jdbc.update("DELETE FROM op_log WHERE created_at < datetime('now','localtime','-180 days')");
+        } catch (Exception ignore) {
+            // 清理失败不影响备份
+        }
         try {
             Map<String, Object> r = backupService.createBackup(BackupService.allModuleKeys(), true);
             log.info("自动备份完成({}): {} ", trigger, r.get("name"));

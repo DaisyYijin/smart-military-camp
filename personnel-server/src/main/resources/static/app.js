@@ -388,7 +388,7 @@ function makeDateField() {
 function showProgressModal(title) {
   var fill = h('div', { class: 'pg-fill', style: 'width:0%' });
   var bar = h('div', { class: 'pg-bar' }, fill);
-  var status = h('div', { style: 'margin:10px 0 6px;font-size:13px;color:#66788c', text: '准备中…' });
+  var status = h('div', { style: 'margin:10px 0 6px;font-size:13px;color:var(--c-sub, #66788c)', text: '准备中…' });
   var pctText = h('div', { style: 'font-size:12px;color:#97a4b5;text-align:right', text: '0%' });
   var m = openModal({
     title: title,
@@ -628,17 +628,17 @@ function iconSvg(key) {
 }
 
 /* ================= 站点外观/主题(系统设置) ================= */
-var SITE = { name: '数智军营', title: '数智军营人员管理系统', subtitle: '人员管理系统', logo: '', favicon: '', theme: '#2f6fd6', pageSize: 20 };
+var SITE = { name: '数智军营', title: '数智军营人员管理系统', subtitle: '人员管理系统', logo: '', favicon: '', theme: 'var(--pri, #2f6fd6)', pageSize: 20 };
 
 /** 当前主题色(读 CSS 变量,图表绘制用) */
 function PRI() {
   var v = getComputedStyle(document.documentElement).getPropertyValue('--pri').trim();
-  return v || '#2f6fd6';
+  return v || 'var(--pri, #2f6fd6)';
 }
 /** 由主色派生深色(标题/选中态) */
 function shade(c, f) {
   var m = /^#([0-9a-f]{6})$/i.exec((c || '').trim());
-  if (!m) { return '#16437e'; }
+  if (!m) { return 'var(--pri-dark, #16437e)'; }
   var n = parseInt(m[1], 16);
   var c = function (x) { return Math.max(0, Math.min(255, Math.round(x))); };
   var r = c(((n >> 16) & 255) * f), g = c(((n >> 8) & 255) * f), b = c((n & 255) * f);
@@ -647,7 +647,7 @@ function shade(c, f) {
 /** 应用外观: 主题色/标签标题/favicon */
 /** 一次性应用全部主题派生色(启动/选色共用) */
 function applyThemeVars(c) {
-  var t = /^#[0-9a-f]{6}$/i.test(c) ? c : '#2f6fd6';
+  var t = /^#[0-9a-f]{6}$/i.test(c) ? c : 'var(--pri, #2f6fd6)';
   document.documentElement.style.setProperty('--pri', t);
   document.documentElement.style.setProperty('--pri-dark', shade(t, 0.62));
   document.documentElement.style.setProperty('--pri-deep', shade(t, 0.40));   // 侧栏底色
@@ -726,7 +726,7 @@ function saveSession(token, user, remember) {
 }
 function clearSession() {
   TOKEN = ''; USER = null;
-  try { sessionStorage.removeItem('tk'); sessionStorage.removeItem('usr'); } catch (e) { }
+  try { sessionStorage.removeItem('tk'); sessionStorage.removeItem('usr'); } catch (e) { /* 忽略 */ }
   localStorage.removeItem('tk'); localStorage.removeItem('usr');
 }
 
@@ -1355,7 +1355,7 @@ function setupLeaveAutoCalc(form, row) {
           if (old) old.remove();
           var w = document.createElement('span');
           w.className = 'travel-warn';
-          w.style.cssText = 'color:#d9463e;font-size:12px;margin-left:6px';
+          w.style.cssText = 'color:var(--c-danger, #d9463e);font-size:12px;margin-left:6px';
           w.textContent = '(' + yr + '年度路途已在 ' + when + ' 使用)';
           lbl.appendChild(w);
         }
@@ -1577,6 +1577,33 @@ function crudView(cfg) {
         });
       }
     }
+    // 所有身份证号字段自动校验(18位+加权校验码)
+    Object.keys(form.inputs).forEach(function (fk) {
+      var el = form.inputs[fk];
+      if (!el || !el.addEventListener) { return; }
+      if (fk.toLowerCase().indexOf('idcard') < 0 && fk.toLowerCase().indexOf('id_card') < 0) { return; }
+      if (el._idcardHooked) { return; }
+      el._idcardHooked = true;
+      function check() {
+        var v = String(el.value || '').trim();
+        if (!v || v.length < 18) { return; }
+        if (!validateIdCard(v)) {
+          el.classList.add('bad');
+          el.title = '身份证校验码不正确,请核对';
+        } else {
+          el.classList.remove('bad');
+          el.title = '校验通过';
+        }
+      }
+      el.addEventListener('change', check);
+      el.addEventListener('input', function () {
+        clearTimeout(el._ict);
+        el._ict = setTimeout(function () {
+          if (String(el.value || '').trim().length >= 18) { check(); }
+        }, 400);
+      });
+    });
+
     // 身份证反查人员(如车辆的驾驶员)
     if (cfg.personLookup) {
       setupPersonLookup(form, cfg.personLookup);
@@ -2052,7 +2079,7 @@ function openDetailModal(cfg, row, act) {
             if (!list || !list.length) {
               holder.appendChild(h('div', { class: 'detail-sub-line', text: '暂无记录' }));
             }
-          }).catch(function () { });
+          }).catch(function (err) { /* 忽略 */ });
         })(f.section, SUB_KINDS[f.section]);
       }
       return;
@@ -2609,7 +2636,7 @@ function batchImportPhotos(fileList) {
   }
 
   var bar = h('div', { class: 'pg-bar' }, h('div', { class: 'pg-fill', style: 'width:0%' }));
-  var status = h('div', { style: 'margin:10px 0 4px;font-size:13px;color:#66788c', text: '正在读取人员列表…' });
+  var status = h('div', { style: 'margin:10px 0 4px;font-size:13px;color:var(--c-sub, #66788c)', text: '正在读取人员列表…' });
   var summary = h('div', { style: 'font-size:13px;line-height:1.9;white-space:pre-wrap' });
   var m = openModal({
     title: '批量导入照片',
@@ -2710,7 +2737,7 @@ function batchImportPhotos(fileList) {
 
 /** 体能评定标准:[{label,op,min}] 按min降序;不及格为兜底 */
 
-var TREND_COLORS = ['#2f6fd6', '#e8743b', '#2ea44f', '#9333ea', '#d9463e', '#0d9488', '#b26a00'];
+var TREND_COLORS = ['var(--pri, #2f6fd6)', '#e8743b', 'var(--c-ok, #2ea44f)', '#9333ea', 'var(--c-danger, #d9463e)', '#0d9488', '#b26a00'];
 
 /** 本次考核弹窗:某人某天的全部项目(合计/平均) */
 function openFitnessSession(rw, act) {
@@ -2750,7 +2777,7 @@ function openFitnessSession(rw, act) {
     table.appendChild(thead);
     table.appendChild(tbody);
     body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:48vh;overflow:auto' }, table));
-    body.appendChild(h('div', { style: 'margin-top:10px;display:flex;gap:18px;font-size:13px;color:#445262' },
+    body.appendChild(h('div', { style: 'margin-top:10px;display:flex;gap:18px;font-size:13px;color:var(--c-body, #445262)' },
       h('span', { text: '共 ' + rows.length + ' 个项目' }),
       h('b', { text: '合计分数:' + (Math.round(total * 10) / 10) + ' 分' }),
       h('span', { text: '平均:' + (rows.length ? (Math.round(total / rows.length * 10) / 10) : 0) + ' 分' })));
@@ -2812,8 +2839,8 @@ function openPersonProfile(rw, act) {
     var birthday = p.birthday || (idc.length >= 14 ? idc.slice(6, 10) + '-' + idc.slice(10, 12) + '-' + idc.slice(12, 14) : '');
     function cell(label, value) {
       return h('div', {},
-        h('div', { style: 'font-size:12px;color:#8a97a8', text: label }),
-        h('div', { style: 'font-size:14px;font-weight:600;color:#1d2c40;word-break:break-all', text: (value === null || value === undefined || value === '') ? '—' : String(value) }));
+        h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8)', text: label }),
+        h('div', { style: 'font-size:14px;font-weight:600;color:var(--c-dark, #1d2c40);word-break:break-all', text: (value === null || value === undefined || value === '') ? '—' : String(value) }));
     }
     var ageTxt = '';
     var profileAge = null;
@@ -2849,19 +2876,19 @@ function openPersonProfile(rw, act) {
     var chipDefs = [['本月', 1], ['近2月', 2], ['近3月', 3], ['近4月', 4], ['近5月', 5], ['近6月', 6], ['近12月', 12], ['全部', 0]];
     var custom = h('input', { type: 'number', min: '1', max: '120', placeholder: 'N', style: 'width:54px;height:26px;padding:0 6px;border:1px solid #c5cdd8;border-radius:4px;font-size:13px' });
     var bar = h('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 4px' },
-      h('span', { style: 'font-size:13px;color:#66788c', text: '时间范围:' }));
+      h('span', { style: 'font-size:13px;color:var(--c-sub, #66788c)', text: '时间范围:' }));
     chipDefs.forEach(function (cd) {
       var b = h('button', {
         type: 'button', text: cd[0],
-        style: 'height:26px;padding:0 12px;border:1px solid #c5cdd8;border-radius:13px;background:#fff;color:#445262;font-size:12px;cursor:pointer',
+        style: 'height:26px;padding:0 12px;border:1px solid #c5cdd8;border-radius:13px;background:#fff;color:var(--c-body, #445262);font-size:12px;cursor:pointer',
         onclick: function () { setRange(cd[1], b); }
       });
       chips.push(b);
       bar.appendChild(b);
     });
-    bar.appendChild(h('span', { style: 'font-size:12px;color:#8a97a8;margin-left:6px', text: '自定义:最近' }));
+    bar.appendChild(h('span', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);margin-left:6px', text: '自定义:最近' }));
     bar.appendChild(custom);
-    bar.appendChild(h('span', { style: 'font-size:12px;color:#8a97a8', text: '个月' }));
+    bar.appendChild(h('span', { style: 'font-size:12px;color:var(--c-muted, #8a97a8)', text: '个月' }));
     bar.appendChild(h('button', {
       type: 'button', text: '查看',
       style: 'height:26px;padding:0 12px;border:1px solid var(--pri);border-radius:4px;background:var(--pri);color:#fff;font-size:12px;cursor:pointer',
@@ -2872,7 +2899,7 @@ function openPersonProfile(rw, act) {
         setRange(n, null);
       }
     }));
-    body.appendChild(h('div', { style: 'margin-top:16px;font-size:15px;font-weight:600;color:#1d2c40', text: '考核成绩与走势' }));
+    body.appendChild(h('div', { style: 'margin-top:16px;font-size:15px;font-weight:600;color:var(--c-dark, #1d2c40)', text: '考核成绩与走势' }));
     body.appendChild(bar);
     body.appendChild(chartsBox);
     chips[chips.length - 1].click();   // 默认选中"全部"
@@ -2902,8 +2929,8 @@ function openPersonProfile(rw, act) {
     function r1(v) { return Math.round(v * 10) / 10; }
     // 总览:全部项目一张图对比
     chartsBox.appendChild(chartCard(
-      h('div', { style: 'font-size:15px;font-weight:600;color:#1d2c40', text: '全部项目总览' }),
-      h('div', { style: 'font-size:12px;color:#8a97a8', text: '悬停圆点可查看明细' }),
+      h('div', { style: 'font-size:15px;font-weight:600;color:var(--c-dark, #1d2c40)', text: '全部项目总览' }),
+      h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8)', text: '悬停圆点可查看明细' }),
       buildTrendChart(ser.map(chartData), { H: 300 })));
     // 每个项目一张小图 + 统计
     ser.forEach(function (s) {
@@ -2911,11 +2938,11 @@ function openPersonProfile(rw, act) {
       var sum = 0; pts.forEach(function (v) { sum += v; });
       var last = s.data[s.data.length - 1];
       chartsBox.appendChild(chartCard(
-        h('div', { style: 'font-size:14px;font-weight:600;color:#1d2c40', text: s.name }),
-        h('div', { style: 'display:flex;gap:14px;align-items:center;font-size:12.5px;color:#445262;flex-wrap:wrap' },
+        h('div', { style: 'font-size:14px;font-weight:600;color:var(--c-dark, #1d2c40)', text: s.name }),
+        h('div', { style: 'display:flex;gap:14px;align-items:center;font-size:12.5px;color:var(--c-body, #445262);flex-wrap:wrap' },
           h('span', { text: s.data.length + ' 次' }),
           h('span', { text: '最新 ' + last.date + ':' }),
-          h('b', { style: 'color:#1d2c40', text: last.pts + ' 分' }),
+          h('b', { style: 'color:var(--c-dark, #1d2c40)', text: last.pts + ' 分' }),
           h('span', { html: badge(last.grade || gradeForPoints(last.pts)) }),
           h('span', { text: '成绩 ' + (last.raw || '—') }),
           h('span', { text: '平均 ' + r1(sum / pts.length) + ' 分' }),
@@ -2931,7 +2958,7 @@ function buildBodyFigure(hcm, wkg, gender, age) {
   var has = hc > 80 && hc < 230 && wc > 25 && wc < 200;
   var box = h('div', { style: 'display:flex;flex-direction:column;align-items:center;width:100%' });
   if (!has) {
-    box.appendChild(h('div', { style: 'width:230px;height:296px;border:2px dashed #d5dce6;border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#8a97a8;font-size:13px;line-height:1.8', text: '暂无身高体重数据,请在人员管理中填写' }));
+    box.appendChild(h('div', { style: 'width:230px;height:296px;border:2px dashed #d5dce6;border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--c-muted, #8a97a8);font-size:13px;line-height:1.8', text: '暂无身高体重数据,请在人员管理中填写' }));
     return box;
   }
   var bmi = wc / Math.pow(hc / 100, 2);
@@ -2965,12 +2992,12 @@ function buildBodyFigure(hcm, wkg, gender, age) {
     if (y < topY - 4 || y > groundY) { continue; }
     s.push('<line x1="35" y1="' + y.toFixed(1) + '" x2="45" y2="' + y.toFixed(1) + '" stroke="#c9d3de" stroke-width="1"/>');
     if (cm % 20 === 0) {
-      s.push('<text x="32" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="#8a97a8">' + cm + '</text>');
+      s.push('<text x="32" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--c-muted, #8a97a8)">' + cm + '</text>');
     }
   }
   s.push('<line x1="40" y1="' + topY + '" x2="' + (cx - headR).toFixed(1) + '" y2="' + topY + '" stroke="'+PRI()+'" stroke-dasharray="4 3" stroke-width="1"/>');
   // 地面影子
-  s.push('<ellipse cx="' + cx + '" cy="' + (groundY + 5) + '" rx="' + (figH * 0.155).toFixed(1) + '" ry="7" fill="#1d2c40" opacity="0.10"/>');
+  s.push('<ellipse cx="' + cx + '" cy="' + (groundY + 5) + '" rx="' + (figH * 0.155).toFixed(1) + '" ry="7" fill="var(--c-dark, #1d2c40)" opacity="0.10"/>');
   // 腿 + 靴
   [-1, 1].forEach(function (side) {
     var lx = cx + (side < 0 ? -legW - 2 : 2);
@@ -2996,10 +3023,10 @@ function buildBodyFigure(hcm, wkg, gender, age) {
   // 体重标准判定(按性别+身高行+年龄列,可在体能标准-体重标准中配置)
   var v = weightVerdict(wc, hc, gender, age);
   box.appendChild(h('div', { style: 'width:100%', html: s.join('') }));
-  box.appendChild(h('div', { style: 'margin-top:8px;font-size:13px;color:#445262;text-align:center' },
+  box.appendChild(h('div', { style: 'margin-top:8px;font-size:13px;color:var(--c-body, #445262);text-align:center' },
     h('span', { text: '身高 ' + (+hc) + ' cm · 体重 ' + (+wc) + ' kg · BMI ' + bmiV + ' ' }),
     h('b', { style: 'color:' + v[2], text: v[1] })));
-  box.appendChild(h('div', { style: 'margin-top:3px;font-size:11.5px;color:#8a97a8;text-align:center',
+  box.appendChild(h('div', { style: 'margin-top:3px;font-size:11.5px;color:var(--c-muted, #8a97a8);text-align:center',
     text: v[3] ? ('体重合格区间(' + v[3].split(' ').slice(1).join(' ') + ')') : (gender === '女' ? '女' : '男') + '性暂无该身高标准' }));
   return box;
 }
@@ -3025,16 +3052,16 @@ function buildTrendChart(series, opts) {
   [0, 20, 40, 60, 80, 100].forEach(function (v) {
     var y = yAt(v).toFixed(1);
     svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5" stroke-width="1"/>');
-    svg.push('<text x="' + (padL - 8) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="11" fill="#8a97a8">' + v + '</text>');
+    svg.push('<text x="' + (padL - 8) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="11" fill="var(--c-muted, #8a97a8)">' + v + '</text>');
   });
   var step = Math.max(1, Math.ceil(n / 12));
   dates.forEach(function (d, i) {
     if (i % step !== 0 && i !== n - 1) { return; }
     var x = xAt(i).toFixed(1);
     svg.push('<line x1="' + x + '" y1="' + padT + '" x2="' + x + '" y2="' + (H - padB) + '" stroke="#f5f7fa" stroke-width="1"/>');
-    svg.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" font-size="10" fill="#8a97a8">' + esc(d.slice(2)) + '</text>');
+    svg.push('<text x="' + x + '" y="' + (H - padB + 18) + '" text-anchor="middle" font-size="10" fill="var(--c-muted, #8a97a8)">' + esc(d.slice(2)) + '</text>');
   });
-  svg.push('<text x="' + (padL - 30) + '" y="' + (padT + 4) + '" font-size="11" fill="#8a97a8">分</text>');
+  svg.push('<text x="' + (padL - 30) + '" y="' + (padT + 4) + '" font-size="11" fill="var(--c-muted, #8a97a8)">分</text>');
   series.forEach(function (s, si) {
     var color = TREND_COLORS[si % TREND_COLORS.length];
     var pts = s.data.map(function (p) { return xAt(xi[p.date]).toFixed(1) + ',' + yAt(p.score).toFixed(1); });
@@ -3046,7 +3073,7 @@ function buildTrendChart(series, opts) {
   svg.push('</svg>');
   var chartBox = h('div', { style: 'max-height:54vh;overflow:auto;border:1px solid #edf1f6;border-radius:8px;padding:10px', html: svg.join('') });
   if (opts.legend === false) { return chartBox; }
-  var legend = h('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:#445262' });
+  var legend = h('div', { style: 'display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--c-body, #445262)' });
   series.forEach(function (s, si) {
     var color = TREND_COLORS[si % TREND_COLORS.length];
     legend.appendChild(h('span', { style: 'display:flex;align-items:center;gap:5px' },
@@ -3104,7 +3131,7 @@ function weightVerdict(weightKg, heightCm, gender, age) {
   window.__pfGender = gender;
   var row = weightRowFor(heightCm);
   window.__pfGender = null;
-  if (!row) { return [false, '无身高标准', '#8a97a8', null]; }
+  if (!row) { return [false, '无身高标准', 'var(--c-muted, #8a97a8)', null]; }
   var side = (gender === '女') ? '女' : '男';
   var col = -1;
   var std = BMI_STD || defaultBmiStd();
@@ -3120,12 +3147,12 @@ function weightVerdict(weightKg, heightCm, gender, age) {
     }
   });
   var pair = (row.w && col >= 0) ? row.w[col] : null;
-  if (!pair) { return [false, '无标准', '#8a97a8', null]; }
+  if (!pair) { return [false, '无标准', 'var(--c-muted, #8a97a8)', null]; }
   var inRange = weightKg >= pair[0] && weightKg <= pair[1];
   var desc = side + ' ' + (std.ages[col] || '') + ' ' + row.h.toFixed(2) + 'm:' + pair[0] + '-' + pair[1] + 'kg';
-  if (inRange) { return [true, '合格', '#2ea44f', desc]; }
-  if (weightKg < pair[0]) { return [false, '体重偏轻不合格', '#2f6fd6', desc]; }
-  return [false, '体重超标不合格', '#d9463e', desc];
+  if (inRange) { return [true, '合格', 'var(--c-ok, #2ea44f)', desc]; }
+  if (weightKg < pair[0]) { return [false, '体重偏轻不合格', 'var(--pri, #2f6fd6)', desc]; }
+  return [false, '体重超标不合格', 'var(--c-danger, #d9463e)', desc];
 }
 
 var GRADE_RULE = null;
@@ -3260,7 +3287,7 @@ function openGradeRuleManager() {
   var m = openModal({
     title: '体能评定标准(自上而下依次匹配,都不满足为不及格)',
     body: h('div', {},
-      h('div', { text: '规则按分数从高到低依次判断;例如 "分数 ≥ 90 时评为 优秀"。', style: 'color:#66788c;font-size:13px;margin-bottom:12px' }),
+      h('div', { text: '规则按分数从高到低依次判断;例如 "分数 ≥ 90 时评为 优秀"。', style: 'color:var(--c-sub, #66788c);font-size:13px;margin-bottom:12px' }),
       rulesBox,
       h('button', { class: 'btn btn-ghost', text: '＋ 添加规则', onclick: function () {
         rules.push({ label: '及格', op: '>=', min: 60 });
@@ -3352,7 +3379,7 @@ function openBodyStdManager() {
       var hr = h('tr', {}, h('th', { style: 'min-width:74px', html: '体重(kg)<br>身高(m)' }));
       data.ages.forEach(function (a) {
         var cell = h('th');
-        var i = h('input', { value: a, title: '年龄区间(如 0-24 或 25-29)', style: 'width:78px;border:1px solid #b9c6d6;background:#e8eef7;color:#16437e;font-weight:700;text-align:center;border-radius:4px;padding:3px 2px' });
+        var i = h('input', { value: a, title: '年龄区间(如 0-24 或 25-29)', style: 'width:78px;border:1px solid #b9c6d6;background:#e8eef7;color:var(--pri-dark, #16437e);font-weight:700;text-align:center;border-radius:4px;padding:3px 2px' });
         i.addEventListener('input', function () {
           var idx = data.ages.indexOf(a);
           if (idx >= 0) { data.ages[idx] = i.value; }
@@ -3432,13 +3459,13 @@ function openBodyStdManager() {
           renderGrid();
         } })));
       } catch (e) {
-        gridBox.innerHTML = '<div style="color:#d9463e;padding:10px">渲染失败:' + e.message + '</div>';
+        gridBox.innerHTML = '<div style="color:var(--c-danger, #d9463e);padding:10px">渲染失败:' + e.message + '</div>';
       }
     }
 
     var body = h('div', {},
       h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap' },
-        h('span', { style: 'font-size:13px;color:#66788c;flex:1;min-width:260px', text: '体重合格标准:行=身高(米),列=年龄段,单元格=合格体重区间(填 47.4~66.3)。判定:身高匹配行、年龄匹配列。' }),
+        h('span', { style: 'font-size:13px;color:var(--c-sub, #66788c);flex:1;min-width:260px', text: '体重合格标准:行=身高(米),列=年龄段,单元格=合格体重区间(填 47.4~66.3)。判定:身高匹配行、年龄匹配列。' }),
         h('button', { class: 'btn btn-ghost btn-sm', text: '下载模板', onclick: function () {
           var pm = showProgressModal('下载模板');
           apiBlobWithProgress('/api/fitness-std/weight/template', function (p) { pm.setProgress(p); }).then(function (r) {
@@ -3518,7 +3545,7 @@ function openFitnessStdManager() {
   var overlay = h('div', { style: 'position:fixed;inset:0;background:#eef2f7;z-index:90;display:flex;flex-direction:column' });
   var topbar = h('div', { style: 'height:48px;flex:none;background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;padding:0 20px' },
     h('div', { style: 'display:flex;align-items:center;gap:14px' },
-      h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: '体能评分标准管理' }),
+      h('div', { style: 'font-size:17px;font-weight:600;color:var(--c-dark, #1d2c40)', text: '体能评分标准管理' }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '体型标准', title: '设置身高体重体型合格标准', onclick: openBodyStdManager }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '下载模板', title: '下载评分标准Excel模板(每项目一个Sheet)', onclick: function () {
         var pm = showProgressModal('下载模板');
@@ -3529,7 +3556,7 @@ function openFitnessStdManager() {
       h('button', { class: 'btn btn-ghost btn-sm', text: '导入Excel', title: '导入评分标准(每Sheet一个项目:分数列+各年龄段列)', onclick: function () {
         importStdExcel('matrix', function () { refreshAll(); });
       } })),
-    h('div', { style: 'font-size:17px;font-weight:600;color:#1d2c40', text: ' ' }),
+    h('div', { style: 'font-size:17px;font-weight:600;color:var(--c-dark, #1d2c40)', text: ' ' }),
     h('button', { class: 'btn btn-primary', text: '✕ 关闭', onclick: function () { overlay.remove(); reloadFitnessMatrix(); } }));
   var mainArea = h('div', { style: 'flex:1;display:flex;overflow:hidden' });
 
@@ -3555,8 +3582,8 @@ function openFitnessStdManager() {
     items.forEach(function (it, idx) {
       var row = h('div', {
         style: 'display:flex;align-items:center;justify-content:space-between;padding:9px 12px;cursor:pointer;' +
-          (it === currentItem ? 'background:#e4edfb;color:#16437e;font-weight:600' : 'color:#445262') +
-          ';border-left:3px solid ' + (it === currentItem ? '#2f6fd6' : 'transparent')
+          (it === currentItem ? 'background:#e4edfb;color:var(--pri-dark, #16437e);font-weight:600' : 'color:var(--c-body, #445262)') +
+          ';border-left:3px solid ' + (it === currentItem ? 'var(--pri, #2f6fd6)' : 'transparent')
       });
       row.appendChild(h('span', { text: it, style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }));
       var pencilSpan = h('span', {
@@ -3592,7 +3619,7 @@ function openFitnessStdManager() {
           row.style.background = '#e4edfb';
           row.style.borderLeft = '3px solid #2f6fd6';
           row.style.fontWeight = '600';
-          row.style.color = '#16437e';
+          row.style.color = 'var(--pri-dark, #16437e)';
           loadMatrix(it);
         }
       });
@@ -3634,7 +3661,7 @@ function openFitnessStdManager() {
   }
 
   // 新增项目(带保存按钮)
-  addBox.appendChild(h('div', { style: 'font-size:12px;color:#8a97a8;margin-bottom:6px', text: '新增考核项目:' }));
+  addBox.appendChild(h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);margin-bottom:6px', text: '新增考核项目:' }));
   addBox.appendChild(h('button', {
     class: 'btn btn-primary btn-sm', text: '＋ 新建项目',
     style: 'width:100%',
@@ -3648,8 +3675,8 @@ function openFitnessStdManager() {
     var m2 = openModal({
       title: '新建考核项目',
       body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
-        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '项目名称(必填):' }), nameInput),
-        h('div', {}, h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:5px', text: '计分方式(必选):' }), unitDD)),
+        h('div', {}, h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:5px', text: '项目名称(必填):' }), nameInput),
+        h('div', {}, h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:5px', text: '计分方式(必选):' }), unitDD)),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m2.close(); } }),
         h('button', {
@@ -3708,7 +3735,7 @@ function openFitnessStdManager() {
 
     // 工具栏
     rightHead = h('div', { style: 'margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
-      h('strong', { style: 'font-size:15px;color:#16437e', text: currentItem }),
+      h('strong', { style: 'font-size:15px;color:var(--pri-dark, #16437e)', text: currentItem }),
       h('span', { style: 'color:#a6b3c4;font-size:12px', text: '单元格直接输入,失焦保存;表头点击编辑年龄/分数;× 删除列' }),
       h('div', { style: 'flex:1' }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 年龄段', onclick: promptAgeGroup }),
@@ -3722,13 +3749,13 @@ function openFitnessStdManager() {
       (rows || []).forEach(function (r) { if (r.value > maxV) { maxV = r.value; } });
       isTimeType = maxV > 300;
       var unitLabel = isTimeType ? '时间型(秒)' : '次数型(次)';
-      var unitColor = isTimeType ? '#e8960e' : '#2f9e5b';
+      var unitColor = isTimeType ? 'var(--c-warn, #e8960e)' : '#2f9e5b';
       var hintText = isTimeType
         ? "达标值填秒数,如750=12分30秒。成绩可填12分30秒或750。值越小越好。"
         : "达标值填次数,如15=做15个。成绩填数字即可。值越多越好。";
       right.appendChild(h('div', {
         style: 'background:#fff;border:1px solid #dbe4ee;border-left:3px solid ' + unitColor +
-          ';border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#445262;display:flex;align-items:center;gap:10px'
+          ';border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--c-body, #445262);display:flex;align-items:center;gap:10px'
       },
         h('span', {
           style: 'flex:none;padding:3px 10px;border-radius:10px;font-size:12px;font-weight:600;color:#fff;background:' + unitColor,
@@ -3753,14 +3780,14 @@ function openFitnessStdManager() {
     var head = '<thead><tr><th style="width:80px;text-align:center">分数\\年龄</th>';
     ageGroups.forEach(function (g) {
       head += '<th class="mx-age-head" data-col="' + esc(g) + '" style="text-align:center;white-space:nowrap">' +
-        '<input type="text" value="' + esc(g) + '" title="点击编辑年龄区间" style="width:64px;height:24px;text-align:center;font-weight:700;font-size:12px;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" />' +
+        '<input type="text" value="' + esc(g) + '" title="点击编辑年龄区间" style="width:64px;height:24px;text-align:center;font-weight:700;font-size:12px;color:var(--pri-dark, #16437e);background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" />' +
         '<button type="button" class="btn-link danger mx-age-del" data-col="' + esc(g) + '" title="删除该列" style="margin-left:3px;font-size:11px;vertical-align:middle">&times;</button></th>';
     });
     head += '</tr></thead>';
     var bodyHtml = '';
     scores.forEach(function (sc) {
       bodyHtml += '<tr><th style="text-align:center" class="mx-score-head" data-score="' + sc + '">' +
-        '<input type="text" value="' + sc + '" title="点击编辑分数" style="width:46px;height:24px;text-align:center;font-weight:700;font-size:12px;color:#16437e;background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" /></th>';
+        '<input type="text" value="' + sc + '" title="点击编辑分数" style="width:46px;height:24px;text-align:center;font-weight:700;font-size:12px;color:var(--pri-dark, #16437e);background:#e8eef7;border:1px solid #b9c6d6;border-radius:3px;padding:0 2px;line-height:24px;box-sizing:border-box" /></th>';
       ageGroups.forEach(function (g) {
         bodyHtml += '<td><input type="text" class="mx-input" data-col="' + esc(g) + '" data-score="' + sc +
           '" style="width:100%;height:28px;font-size:13px;padding:0 4px;text-align:center;border:1px solid transparent;border-radius:3px;background:transparent" /></td>';
@@ -3879,7 +3906,7 @@ function openFitnessStdManager() {
     var input = h('input', { type: 'text', placeholder: '如:0-24、25-29、40-42', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
     var m2 = openModal({
       title: '添加年龄段',
-      body: h('div', {}, h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:8px', text: '输入年龄段名称,将作为矩阵的新列:' }), input),
+      body: h('div', {}, h('div', { style: 'color:var(--c-sub, #66788c);font-size:13px;margin-bottom:8px', text: '输入年龄段名称,将作为矩阵的新列:' }), input),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m2.close(); } }),
         h('button', { class: 'btn btn-primary', text: '添加', onclick: function () {
@@ -3899,7 +3926,7 @@ function openFitnessStdManager() {
     var input = h('input', { type: 'number', placeholder: '如:50、45', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
     var m2 = openModal({
       title: '添加分数行',
-      body: h('div', {}, h('div', { style: 'color:#66788c;font-size:13px;margin-bottom:8px', text: '输入分数(0-100),将作为矩阵的新行:' }), input),
+      body: h('div', {}, h('div', { style: 'color:var(--c-sub, #66788c);font-size:13px;margin-bottom:8px', text: '输入分数(0-100),将作为矩阵的新行:' }), input),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m2.close(); } }),
         h('button', { class: 'btn btn-primary', text: '添加', onclick: function () {
@@ -3916,7 +3943,7 @@ function openFitnessStdManager() {
 
   // CSS
   var style = document.createElement('style');
-  style.textContent = '.mx-input:focus{outline:none}.mx-input:hover{border-color:#c5cdd8!important}';
+  style.textContent = '.mx-input:focus{outline:none}.mx-input:hover{border-color:var(--c-border, #c5cdd8)!important}';
   document.head.appendChild(style);
 
   // 初始化
@@ -4358,7 +4385,7 @@ var HOLIDAY_COLOR_CACHE = {};
 function holidayColor(name) {
   if (!name) { return ''; }
   if (HOLIDAY_COLOR_CACHE[name]) { return HOLIDAY_COLOR_CACHE[name]; }
-  var palette = ['#d9463e', '#e8960e', '#2ea44f', '#7048b7', '#0d8484', '#b26a00', '#2f6fd6', '#c2410c'];
+  var palette = ['var(--c-danger, #d9463e)', 'var(--c-warn, #e8960e)', 'var(--c-ok, #2ea44f)', '#7048b7', '#0d8484', '#b26a00', 'var(--pri, #2f6fd6)', '#c2410c'];
   var h = 0;
   for (var i = 0; i < name.length; i++) { h = (h * 31 + name.charCodeAt(i)) & 0xffff; }
   HOLIDAY_COLOR_CACHE[name] = palette[h % palette.length];
@@ -4373,7 +4400,7 @@ function loadHolidayMap() {
       var n = x.holiday_name || x.holidayName || '';
       if (d) { HOLIDAY_MAP[d] = n; }
     });
-  }).catch(function () { });
+  }).catch(function (err) { /* 忽略 */ });
 }
 /** 日期区间内命中某节日的天数(加假天数为空时自动推算) */
 function holidayDaysInRange(start, end, name) {
@@ -4433,7 +4460,7 @@ function openLeaveHistory(rw, act) {
       if (String(x.year) === yearNow) { nowDays += t; }
     });
     body.appendChild(h('div', { style: 'display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap' },
-      h('span', { style: 'background:#eef4ff;color:#16437e;border-radius:8px;padding:6px 14px;font-size:13px', text: '累计休假 ' + rows.length + ' 次' }),
+      h('span', { style: 'background:#eef4ff;color:var(--pri-dark, #16437e);border-radius:8px;padding:6px 14px;font-size:13px', text: '累计休假 ' + rows.length + ' 次' }),
       h('span', { style: 'background:#e9f7ef;color:#22633c;border-radius:8px;padding:6px 14px;font-size:13px', text: '累计 ' + (Math.round(totalDays * 10) / 10) + ' 天(含路途/节假日)' }),
       h('span', { style: 'background:#fdf1e7;color:#8a5a1a;border-radius:8px;padding:6px 14px;font-size:13px', text: yearNow + ' 年已休 ' + (Math.round(nowDays * 10) / 10) + ' 天' })));
     // 按年度分组(新→旧)
@@ -4444,7 +4471,7 @@ function openLeaveHistory(rw, act) {
       var list = byYear[y];
       var yDays = 0;
       list.forEach(function (x) { yDays += (Number(x.days) || 0) + (Number(x.travelDays) || 0) + (Number(x.holidayDays) || 0); });
-      body.appendChild(h('div', { style: 'font-weight:600;color:#1d2c40;margin:12px 0 6px;font-size:14px', text: y + ' 年(' + list.length + ' 次 · 共 ' + (Math.round(yDays * 10) / 10) + ' 天)' }));
+      body.appendChild(h('div', { style: 'font-weight:600;color:var(--c-dark, #1d2c40);margin:12px 0 6px;font-size:14px', text: y + ' 年(' + list.length + ' 次 · 共 ' + (Math.round(yDays * 10) / 10) + ' 天)' }));
       var table = h('table', { class: 'grid', style: 'width:100%' });
       table.appendChild(h('thead', {}, h('tr', {},
         h('th', { text: '类型' }), h('th', { text: '开始' }), h('th', { text: '结束' }),
@@ -4629,7 +4656,7 @@ var fitnessCfg = {
               ageEl.value = calcAge(full.birthday);
               ageEl.dispatchEvent(new Event('change', { bubbles: true }));
             }
-          }).catch(function () { });
+          }).catch(function (err) { /* 忽略 */ });
         } else {
           form.inputs['personnelId'].value = '';
           form.inputs['personnelName'].value = '';
@@ -4637,7 +4664,7 @@ var fitnessCfg = {
           idEl.classList.add('bad');
           idEl.title = '未找到对应人员';
         }
-      }).catch(function () { });
+      }).catch(function (err) { /* 忽略 */ });
     }
     idEl.addEventListener('change', lookup);
     if (String(idEl.value || '').trim()) { setTimeout(lookup, 60); }
@@ -4774,7 +4801,7 @@ function departmentView() {
       }
       if ((node.total || 0) > (node.count || 0)) {
         body.appendChild(h('div', {
-          style: 'margin-top:10px;font-size:13px;color:#66788c',
+          style: 'margin-top:10px;font-size:13px;color:var(--c-sub, #66788c)',
           text: '含下级部门共 ' + node.total + ' 人,此处仅列出直属人员;点击"去人员管理筛选此部门"可查看并维护。'
         }));
       }
@@ -4798,9 +4825,9 @@ function departmentView() {
         class: 'name clickable', html: nameHtml, title: '点击查看该部门人员',
         onclick: function () { openDeptPersonnel(node); }
       }),
-      node.leaderName ? chip('负责人 ' + node.leaderName, '#66788c') : null,
-      chip('直属 ' + (node.count || 0) + ' 人', (node.count || 0) > 0 ? '#2f6fd6' : ''),
-      hasKids && (node.total || 0) !== (node.count || 0) ? chip('含下级 ' + (node.total || 0) + ' 人', '#2ea44f') : null,
+      node.leaderName ? chip('负责人 ' + node.leaderName, 'var(--c-sub, #66788c)') : null,
+      chip('直属 ' + (node.count || 0) + ' 人', (node.count || 0) > 0 ? 'var(--pri, #2f6fd6)' : ''),
+      hasKids && (node.total || 0) !== (node.count || 0) ? chip('含下级 ' + (node.total || 0) + ' 人', 'var(--c-ok, #2ea44f)') : null,
       hasKids ? chip(hasKids + ' 个子部门', '') : null,
       h('span', { class: 'acts' },
         (node.count || 0) > 0 ? h('button', { class: 'btn-link', text: '查看人员', onclick: function () { openDeptPersonnel(node); } }) : null,
@@ -4848,9 +4875,9 @@ function departmentView() {
     statsEl.innerHTML = '';
     var unassigned = Math.max(0, stats.personTotal - stats.assigned);
     [
-      { num: stats.depts, lbl: '部门总数', ic: 'building', bg: '#e8f0fd', fg: '#2f6fd6' },
-      { num: stats.personTotal, lbl: '人员总数', ic: 'users', bg: '#e9f7ef', fg: '#2ea44f' },
-      { num: stats.assigned, lbl: '已分配部门', ic: 'check', bg: '#eef4ff', fg: '#16437e' },
+      { num: stats.depts, lbl: '部门总数', ic: 'building', bg: 'var(--c-pribg, #e8f0fd)', fg: 'var(--pri, #2f6fd6)' },
+      { num: stats.personTotal, lbl: '人员总数', ic: 'users', bg: '#e9f7ef', fg: 'var(--c-ok, #2ea44f)' },
+      { num: stats.assigned, lbl: '已分配部门', ic: 'check', bg: '#eef4ff', fg: 'var(--pri-dark, #16437e)' },
       { num: unassigned, lbl: '未分配部门', ic: 'shield', bg: '#fdf1e7', fg: '#e8743b' }
     ].forEach(function (c) {
       statsEl.appendChild(h('div', { class: 'dept-stat-card' },
@@ -5222,7 +5249,7 @@ function dictView() {
 
 /* ================= 仪表盘 ================= */
 
-var DASH_COLORS = ['#2f6fd6', '#2ea44f', '#e8960e', '#9333ea', '#d9463e', '#0d9488', '#b26a00', '#66788c'];
+var DASH_COLORS = ['var(--pri, #2f6fd6)', 'var(--c-ok, #2ea44f)', 'var(--c-warn, #e8960e)', '#9333ea', 'var(--c-danger, #d9463e)', '#0d9488', '#b26a00', 'var(--c-sub, #66788c)'];
 
 /** 仪表盘数据维度:cat=所属模块 group=接口分组 trend=按年趋势 gauge=仪表 drill=点击下钻 */
 var DASH_DIMS = {
@@ -5341,8 +5368,8 @@ function drawDonut(items, drill) {
       '><title>' + esc(x.name) + ': ' + x.count + (val != null ? '(点击查看)' : '') + '</title></circle>');
     deg += x.count / total * 360;
   });
-  svg.push('<text x="75" y="71" text-anchor="middle" font-size="21" font-weight="700" fill="#1d2c40">' + total + '</text>');
-  svg.push('<text x="75" y="90" text-anchor="middle" font-size="11" fill="#8a97a8">总计</text>');
+  svg.push('<text x="75" y="71" text-anchor="middle" font-size="21" font-weight="700" fill="var(--c-dark, #1d2c40)">' + total + '</text>');
+  svg.push('<text x="75" y="90" text-anchor="middle" font-size="11" fill="var(--c-muted, #8a97a8)">总计</text>');
   svg.push('</svg>');
   var legend = h('div', { class: 'donut-legend' });
   data.forEach(function (x, i) {
@@ -5350,8 +5377,8 @@ function drawDonut(items, drill) {
     legend.appendChild(h('div', { class: 'row' },
       h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
       h('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
-      h('b', { style: 'color:#1d2c40', text: String(x.count) }),
-      h('span', { style: 'color:#8a97a8;width:40px;text-align:right;flex:none', text: pct + '%' })));
+      h('b', { style: 'color:var(--c-dark, #1d2c40)', text: String(x.count) }),
+      h('span', { style: 'color:var(--c-muted, #8a97a8);width:40px;text-align:right;flex:none', text: pct + '%' })));
   });
   return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
 }
@@ -5370,7 +5397,7 @@ function drawColumns(items, unit, drill) {
   [0, 0.5, 1].forEach(function (f) {
     var y = yAt(max * f).toFixed(1);
     svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5"/>');
-    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="#8a97a8">' + Math.round(max * f) + '</text>');
+    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="var(--c-muted, #8a97a8)">' + Math.round(max * f) + '</text>');
   });
   items.forEach(function (x, i) {
     var cx = padL + step * (i + 0.5);
@@ -5380,8 +5407,8 @@ function drawColumns(items, unit, drill) {
     svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="' + PRI() + '" opacity="0.88"' +
       (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
-    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#445262" pointer-events="none">' + x.count + '</text>');
-    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="var(--c-body, #445262)" pointer-events="none">' + x.count + '</text>');
+    svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="var(--c-muted, #8a97a8)" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
   });
   svg.push('</svg>');
   return h('div', { html: svg.join('') });
@@ -5402,7 +5429,7 @@ function drawLine(items, unit, drill) {
   [0, 0.5, 1].forEach(function (f) {
     var y = yAt(max * f).toFixed(1);
     svg.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="#eef1f5"/>');
-    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="#8a97a8">' + Math.round(max * f) + '</text>');
+    svg.push('<text x="' + (padL - 6) + '" y="' + (+y + 4) + '" text-anchor="end" font-size="10" fill="var(--c-muted, #8a97a8)">' + Math.round(max * f) + '</text>');
   });
   svg.push('<polygon points="' + padL + ',' + (H - padB) + ' ' + pts.join(' ') + ' ' + (W - padR) + ',' + (H - padB) + '" fill="' + PRI() + '" opacity="0.10"/>');
   svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + PRI() + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>');
@@ -5411,7 +5438,7 @@ function drawLine(items, unit, drill) {
     svg.push('<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(x.count).toFixed(1) + '" r="4.5" fill="' + PRI() + '" stroke="#fff" stroke-width="1.5"' +
       (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></circle>');
-    svg.push('<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" font-size="9.5" fill="#8a97a8" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
+    svg.push('<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" font-size="9.5" fill="var(--c-muted, #8a97a8)" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
   });
   svg.push('</svg>');
   return h('div', { html: svg.join('') });
@@ -5487,15 +5514,15 @@ function drawRose(items, drill) {
       '><title>' + esc(x.name) + ': ' + x.count + '(' + Math.round(x.count / total * 100) + '%)' + (val != null ? '(点击查看)' : '') + '</title></path>');
   });
   svg.push('<circle cx="' + cx + '" cy="' + cy + '" r="22" fill="#fff"/>');
-  svg.push('<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="17" font-weight="700" fill="#1d2c40">' + total + '</text>');
-  svg.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="10" fill="#8a97a8">总计</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy - 1) + '" text-anchor="middle" font-size="17" font-weight="700" fill="var(--c-dark, #1d2c40)">' + total + '</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="10" fill="var(--c-muted, #8a97a8)">总计</text>');
   svg.push('</svg>');
   var legend = h('div', { class: 'donut-legend' });
   data.forEach(function (x, i) {
     legend.appendChild(h('div', { class: 'row' },
       h('span', { style: 'width:10px;height:10px;border-radius:2px;background:' + DASH_COLORS[i % DASH_COLORS.length] + ';flex:none' }),
       h('span', { style: 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: x.name, text: x.name }),
-      h('b', { style: 'color:#1d2c40', text: String(x.count) })));
+      h('b', { style: 'color:var(--c-dark, #1d2c40)', text: String(x.count) })));
   });
   return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
 }
@@ -5515,17 +5542,17 @@ function drawGauge(d, drill) {
     var large = (a2 - a1) > 180 ? 1 : 0;
     return 'M ' + polar(a1, R) + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + polar(a2, R);
   }
-  var color = pct >= 95 ? '#2ea44f' : pct >= 80 ? '#2f6fd6' : '#e8960e';
+  var color = pct >= 95 ? 'var(--c-ok, #2ea44f)' : pct >= 80 ? 'var(--pri, #2f6fd6)' : 'var(--c-warn, #e8960e)';
   var val = drill ? drill.valOf('在职') : null;
   var svg = ['<svg viewBox="0 0 240 160" style="width:100%;max-width:280px;display:block;margin:0 auto">'];
-  svg.push('<path d="' + arc(start, start + sweep) + '" fill="none" stroke="#edf1f6" stroke-width="' + SW + '" stroke-linecap="round"/>');
+  svg.push('<path d="' + arc(start, start + sweep) + '" fill="none" stroke="var(--c-bg, #edf1f6)" stroke-width="' + SW + '" stroke-linecap="round"/>');
   if (pct > 0) {
     svg.push('<path d="' + arc(start, start + sweep * pct / 100) + '" fill="none" stroke="' + color + '" stroke-width="' + SW + '" stroke-linecap="round"' +
       (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title) + '"' : '') +
       '><title>在职 ' + onDuty + ' / 共 ' + total + '(' + pct + '%)' + (val != null ? '(点击查看在职名单)' : '') + '</title></path>');
   }
-  svg.push('<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="30" font-weight="700" fill="#1d2c40">' + pct + '%</text>');
-  svg.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11.5" fill="#8a97a8">在职 ' + onDuty + ' / 共 ' + total + '</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="30" font-weight="700" fill="var(--c-dark, #1d2c40)">' + pct + '%</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11.5" fill="var(--c-muted, #8a97a8)">在职 ' + onDuty + ' / 共 ' + total + '</text>');
   svg.push('</svg>');
   return h('div', { html: svg.join('') });
 }
@@ -5579,7 +5606,7 @@ function openDrillModal(title, api, param, val) {
     });
     table.appendChild(tbody);
     body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:56vh;overflow:auto' }, table));
-    body.appendChild(h('div', { style: 'margin-top:10px;font-size:13px;color:#66788c', text: '共 ' + rows.length + ' 条' }));
+    body.appendChild(h('div', { style: 'margin-top:10px;font-size:13px;color:var(--c-sub, #66788c)', text: '共 ' + rows.length + ' 条' + (rows.length >= 200 ? '(仅显示前200条,可用筛选缩小范围)' : '') }));
     if (!rows.length) {
       body.appendChild(h('div', { class: 'empty-row', text: '没有符合条件的记录' }));
     }
@@ -5839,7 +5866,7 @@ function dashboardView() {
               renderCharts();
             }
           }),
-          h('span', { style: 'color:#8a97a8;font-size:12px', text: '卡片可拖动排序,小/中/大可切,布局保存在本机' })),
+          h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '卡片可拖动排序,小/中/大可切,布局保存在本机' })),
         chartsGrid),
       h('div', { class: 'dash-right' },
         h('div', { class: 'dash-events' },
@@ -5926,7 +5953,7 @@ function logView() {
           onclick: function () { state.keyword = kw.value.trim(); state.page = 1; load(); }
         }),
         h('div', { class: 'spacer' }),
-        h('span', { style: 'color:#8a97a8;font-size:13px', text: '自动记录:登录/登出/增删改/导入导出/备份' })),
+        h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:13px', text: '自动记录:登录/登出/增删改/导入导出/备份' })),
       h('div', { class: 'table-wrap' }, table),
       pagerBox));
     container.appendChild(root);
@@ -5943,22 +5970,22 @@ function settingsView() {
     siteTitle: SITE.title === '数智军营人员管理系统' ? '' : SITE.title,
     siteSubtitle: (SITE.subtitle === '人员管理系统' || !SITE.subtitle) ? '' : SITE.subtitle,
     siteLogo: SITE.logo || '', siteFavicon: SITE.favicon || '',
-    themeColor: SITE.theme || '#2f6fd6', pageSize: String(SITE.pageSize || 20), backupKeep: '14'
+    themeColor: SITE.theme || 'var(--pri, #2f6fd6)', pageSize: String(SITE.pageSize || 20), backupKeep: '14'
   };
   var root = h('div');
 
   function section(title) {
     var box = h('div', { class: 'panel', style: 'margin-bottom:16px' });
-    box.appendChild(h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: title }));
+    box.appendChild(h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:var(--c-dark, #1d2c40)', text: title }));
     var body = h('div', { style: 'padding:18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px' });
     box.appendChild(body);
     return { box: box, body: body };
   }
   function field(label, el, hint) {
     return h('div', { class: 'form-item', style: 'margin:0' },
-      h('label', { text: label, style: 'display:block;font-size:13px;color:#66788c;margin-bottom:6px' }),
+      h('label', { text: label, style: 'display:block;font-size:13px;color:var(--c-sub, #66788c);margin-bottom:6px' }),
       el,
-      hint ? h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:4px', text: hint }) : null);
+      hint ? h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);margin-top:4px', text: hint }) : null);
   }
   function txt(key, ph) {
     var i = h('input', { type: 'text', placeholder: ph || '', style: 'width:100%;height:34px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
@@ -6014,15 +6041,15 @@ function settingsView() {
 
   /* ---- Tab2 主题与显示 ---- */
   var s2 = section('主题色');
-  var presets = ['#2f6fd6', '#4a7c59', '#1f3a5f', '#8a4a2f', '#7048b7', '#b03a3a', '#0d8484', '#5a5f6b'];
+  var presets = ['var(--pri, #2f6fd6)', '#4a7c59', '#1f3a5f', '#8a4a2f', '#7048b7', '#b03a3a', '#0d8484', '#5a5f6b'];
   var swatches = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' });
   presets.forEach(function (c) {
-    var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? '#1d2c40' : 'transparent'), title: c });
+    var sw = h('span', { class: 'theme-sw', style: 'width:34px;height:34px;border-radius:8px;background:' + c + ';cursor:pointer;border:2px solid ' + (vals.themeColor === c ? 'var(--c-dark, #1d2c40)' : 'transparent'), title: c });
     sw.addEventListener('click', function () {
       vals.themeColor = c;
       applyThemeVars(c);
       Array.prototype.forEach.call(swatches.querySelectorAll('.theme-sw'), function (x) { x.style.borderColor = 'transparent'; });
-      sw.style.borderColor = '#1d2c40';
+      sw.style.borderColor = 'var(--c-dark, #1d2c40)';
       saveThemeNow(c);
     });
     swatches.appendChild(sw);
@@ -6036,10 +6063,10 @@ function settingsView() {
     clearTimeout(colorSaveTimer);
     colorSaveTimer = setTimeout(function () { saveThemeNow(customColor.value); }, 600);
   });
-  swatches.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '自定义:' }));
+  swatches.appendChild(h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '自定义:' }));
   swatches.appendChild(customColor);
   s2.body.appendChild(h('div', { style: 'grid-column:1/-1' }, swatches,
-    h('div', { style: 'font-size:12px;color:#8a97a8;margin-top:8px', text: '点击即时应用并保存;全站按钮/菜单/图表/侧栏随主题变化' })));
+    h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);margin-top:8px', text: '点击即时应用并保存;全站按钮/菜单/图表/侧栏随主题变化' })));
 
   var s3 = section('显示与维护');
   var pageSizeSel = h('select', { style: 'width:100%;height:34px;padding:0 8px;border:1px solid #c5cdd8;border-radius:4px' });
@@ -6055,7 +6082,7 @@ function settingsView() {
   s3.body.appendChild(field('自动备份保留份数', keepInput, '每天 03:00 自动备份,超出自动轮转删除(7~60)'));
   GET('/api/setting/backupKeep').then(function (v) {
     if (v) { keepInput.value = v; vals.backupKeep = v; }
-  }).catch(function () { });
+  }).catch(function (err) { /* 忽略 */ });
 
   /* ---- 保存条(基础+主题+显示通用) ---- */
   var saveBar = h('div', { class: 'panel', style: 'padding:14px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap' });
@@ -6101,7 +6128,7 @@ function settingsView() {
       });
     }
   }));
-  saveBar.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '设置保存在服务器,对所有使用本系统的人生效' }));
+  saveBar.appendChild(h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '设置保存在服务器,对所有使用本系统的人生效' }));
 
   /* ---- TAB 框架 ---- */
   var panels = {};
@@ -6113,7 +6140,7 @@ function settingsView() {
   ];
   // 记住最后浏览的TAB(刷新不跳回第一个)
   var savedTab = null;
-  try { savedTab = localStorage.getItem('settingsTab'); } catch (e) { }
+  try { savedTab = localStorage.getItem('settingsTab'); } catch (e) { /* 忽略 */ }
   var activeIdx = 0;
   tabDefs.forEach(function (td, idx) { if (td[0] === savedTab) { activeIdx = idx; } });
   var tabBar = h('div', { class: 'tabs panel', style: 'padding:0 8px;margin-bottom:16px' });
@@ -6128,7 +6155,7 @@ function settingsView() {
       tab.classList.add('active');
       Object.keys(panels).forEach(function (k) { panels[k].style.display = 'none'; });
       body.style.display = 'block';
-      try { localStorage.setItem('settingsTab', td[0]); } catch (e) { }
+      try { localStorage.setItem('settingsTab', td[0]); } catch (e) { /* 忽略 */ }
       if (td[2]) { td[2](); }
     } });
     tabEls.push(tab);
@@ -6210,7 +6237,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
     var group = checkGroup(avail);
     var body = h('div');
     body.appendChild(h('div', { class: 'backup-tip', text: '恢复会先清空所选模块的现有数据,再写入备份内容(每个模块独立执行)。例如只勾选“人员管理”则只覆盖人员,部门、装备等其他模块不受影响。管理员账号与密码不受影响。' }));
-    body.appendChild(h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:6px', text: '选择要恢复的模块:' }));
+    body.appendChild(h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:6px', text: '选择要恢复的模块:' }));
     body.appendChild(group.el);
     var m = openModal({
       title: '恢复备份 - ' + bk.createdText,
@@ -6297,7 +6324,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         /* ---- 数据上报(下级→上级) ---- */
         if (mode !== 'backup')
         root.appendChild(h('div', { class: 'panel', style: 'margin-bottom:16px' },
-          h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:#1d2c40', text: '数据上报(下级单位 ↔ 上级单位)' }),
+          h('div', { style: 'padding:14px 20px;border-bottom:1px solid #edf1f6;font-weight:600;color:var(--c-dark, #1d2c40)', text: '数据上报(下级单位 ↔ 上级单位)' }),
           h('div', { style: 'padding:16px 20px;display:flex;gap:14px;flex-wrap:wrap;align-items:center' },
             h('button', {
               class: 'btn btn-primary', text: '⬆ 导出上报数据包',
@@ -6309,7 +6336,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
               title: '导入下级单位的上报包:自动检索/新建对应部门,按身份证合并人员',
               onclick: openReportReceive
             }),
-            h('span', { style: 'color:#8a97a8;font-size:12px', text: '下级单位把"系统设置→网站名称"设为本单位名(如:XX班);上级接收时按该名称匹配/新建部门' }))));
+            h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '下级单位把"系统设置→网站名称"设为本单位名(如:XX班);上级接收时按该名称匹配/新建部门' }))));
 
         var reportFile = null;
         function openReportReceive() {
@@ -6384,7 +6411,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             });
           })(Ctx.deptTree, deptBox, 0);
           if (!(Ctx.deptFlat || []).length) {
-            deptBox.appendChild(h('span', { style: 'color:#8a97a8;font-size:12px', text: '(暂无部门)' }));
+            deptBox.appendChild(h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '(暂无部门)' }));
           }
           var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
 
@@ -6431,7 +6458,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                 paint();
               } })),
             modBox,
-            h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:10px;line-height:1.7',
+            h('div', { style: 'color:var(--c-muted, #8a97a8);font-size:12px;margin-top:10px;line-height:1.7',
               text: '人员/休假/体能按所选单位导出;装备/物资/车辆为全单位台账。' }));
           paint();
 
@@ -6529,14 +6556,14 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             var top = h('option', { value: '0', text: '(作为顶级部门)' });
             parentSel.insertBefore(top, parentSel.firstChild);
             parentSel.value = '0';
-            wrap.appendChild(h('span', { style: 'font-size:13px;color:#66788c;margin-right:6px', text: '上级:' }));
+            wrap.appendChild(h('span', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-right:6px', text: '上级:' }));
             wrap.appendChild(parentSel);
             return wrap;
           }
           renderDeptChoice();
 
           body.appendChild(deptArea);
-          body.appendChild(h('div', { style: 'color:#8a97a8;font-size:12px;margin-top:12px;line-height:1.8',
+          body.appendChild(h('div', { style: 'color:var(--c-muted, #8a97a8);font-size:12px;margin-top:12px;line-height:1.8',
             text: '合并规则:人员按身份证去重(新人入所选部门,老人仅更新不改单位);子表以下级为准替换;休假/体能跳过重复;装备按编号、物资按名称、车辆按车牌去重(有则更新,无则新增)。' }));
 
           var m = openModal({
@@ -6566,7 +6593,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                         pm.setProgress(Math.max(2, Math.round(pg.pct)));
                         pm.setStatus((pg.stage || '处理中') + (pg.detail ? ' · ' + pg.detail : ''));
                       }
-                    }).catch(function () { });
+                    }).catch(function (err) { /* 忽略 */ });
                   }, 400);
                   postFormWithProgress('/api/report/import', fd, function (pct) {
                     pm.setProgress(Math.max(1, Math.round(pct * 8)));
@@ -6599,7 +6626,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         keepInput.value = settings.keepCount || 10;
         var autoGroup = checkGroup(settings.modules && settings.modules.length
           ? settings.modules : MODULES.map(function (m) { return m.key; }));
-        var statusLine = h('div', { style: 'color:#66788c;font-size:13px;margin-top:10px' });
+        var statusLine = h('div', { style: 'color:var(--c-sub, #66788c);font-size:13px;margin-top:10px' });
         function syncStatusLine() {
           statusLine.textContent = settings.enabled
             ? (settings.autoLastRun
@@ -6615,7 +6642,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             h('label', {}, enabledBox, ' 启用自动备份'),
             h('label', {}, '每 '), intervalInput, h('span', { text: ' 小时备份一次' }),
             h('label', {}, '自动备份保留最近 '), keepInput, h('span', { text: ' 份(超出自动删除)' })),
-          h('div', { style: 'font-size:13px;color:#66788c;margin:8px 0 2px', text: '自动备份包含的模块:' }),
+          h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin:8px 0 2px', text: '自动备份包含的模块:' }),
           autoGroup.el,
           statusLine,
           h('div', { style: 'margin-top:12px' },
@@ -6836,7 +6863,7 @@ function renderShell() {
       h('button', {
         class: 'btn btn-ghost btn-sm', text: '退出',
         onclick: function () {
-          POST('/api/auth/logout').catch(function () { }).then(function () {
+          POST('/api/auth/logout').catch(function (err) { /* 忽略 */ }).then(function () {
             forceLogin('已退出登录');
           });
         }

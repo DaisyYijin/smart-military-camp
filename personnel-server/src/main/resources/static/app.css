@@ -1,5 +1,11 @@
 * { -webkit-tap-highlight-color: transparent; }
-:root { --pri: #2f6fd6; --pri-dark: #16437e; }:root { --pri: #2f6fd6; --pri-dark: var(--pri-dark, #16437e); }
+:root {
+  --pri: #2f6fd6; --pri-dark: #16437e;
+  --pri-deep: #132d52; --pri-light: #5b9bff; --pri-a28: #2f6fd647; --pri-a35: #2f6fd659;
+  --c-muted: #8a97a8; --c-sub: #66788c; --c-dark: #1d2c40; --c-body: #445262;
+  --c-border: #c5cdd8; --c-bg: #edf1f6; --c-warn: #e8960e; --c-ok: #2ea44f;
+  --c-danger: #d9463e; --c-pribg: #e8f0fd; --c-card: #f6f8fb; --c-hover: #eef4fd;
+}:root { --pri: #2f6fd6; --pri-dark: var(--pri-dark, #16437e); }
 /* 数智军营人员管理系统 - 网页端样式(零依赖,离线可用) */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #app { height: 100%; overflow-x: hidden; }
@@ -1013,3 +1019,22 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .cal-year-cell.today:hover { color: #d9463e; background: #fdf0ef; }
 .cal-panel .cal-grid { grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 2px; }
 .cal-title:hover { color: var(--pri, #2f6fd6); }
+
+/* 侧栏收起后悬停显示菜单名 */
+.sidebar.collapsed .menu-item { position: relative; }
+.sidebar.collapsed .menu-item:hover::after {
+  content: attr(data-tip);
+  position: absolute; left: 68px; top: 50%; transform: translateY(-50%);
+  background: #1d2c40; color: #fff; padding: 5px 12px; border-radius: 5px;
+  font-size: 13px; white-space: nowrap; z-index: 200; pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.sidebar.collapsed .menu-item:hover::before {
+  content: ''; position: absolute; left: 62px; top: 50%; transform: translateY(-50%);
+  border: 5px solid transparent; border-right-color: #1d2c40; z-index: 200; pointer-events: none;
+}
+
+/* 日期选择器按钮改日历图标 */
+.cal-btn-ic { width: 20px; height: 20px; color: #8a97a8; }
+
+.dialog.mid { width: 900px; }
