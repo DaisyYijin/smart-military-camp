@@ -839,6 +839,8 @@ table.sub-grid td.editing input, table.sub-grid td.editing .dd-btn, table.sub-gr
   align-self: stretch;
   max-height: none;
 }
+/* 收起时零尺寸:避免筛选内容参与布局把内容区撑出滚动条(与表格有无数据无关) */
+.filter-panel:not(.open) { height: 0; }
 .filter-panel.open {
   width: 270px;
   position: fixed;
