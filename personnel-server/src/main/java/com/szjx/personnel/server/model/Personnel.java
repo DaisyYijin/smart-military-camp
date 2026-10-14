@@ -29,7 +29,8 @@ public class Personnel {
     private String maritalStatus; // 婚姻状况
     private String education;     // 学历
     private String onlyChild;     // 是否独生子女
-    private String nativePlace;   // 籍贯
+    private String nativePlace;   // 籍贯所在地(省/市/区县)
+    private String enlistPlace;   // 入伍所在地(省/市/区县)
     private String spouseName;    // 配偶姓名
     private String spouseWork;    // 配偶工作单位
     private String spousePhone;   // 配偶电话
@@ -266,6 +267,14 @@ public class Personnel {
 
     public void setNativePlace(String nativePlace) {
         this.nativePlace = nativePlace;
+    }
+
+    public String getEnlistPlace() {
+        return enlistPlace;
+    }
+
+    public void setEnlistPlace(String enlistPlace) {
+        this.enlistPlace = enlistPlace;
     }
 
     public String getSpouseName() {

@@ -46,15 +46,15 @@ public class PersonnelFullExcel {
     /** 人员主表列(与 ExcelUtils.exportXlsx 对应但简化,此处自建) */
     private static final String[] MAIN_HEADERS = {
         "姓名", "性别", "身份证号", "出生日期", "手机号", "部门", "人员类别", "军衔/职级", "职务/岗位",
-        "状态", "入伍/入职日期", "民族", "籍贯", "血型", "政治面貌",
+        "状态", "入伍/入职日期", "民族", "籍贯所在地", "入伍所在地", "血型", "政治面貌",
         "入党/入团日期", "组织关系所在地", "党内职务",
         "提交申请书时间", "积极分子时间", "预备党员时间", "转正时间",
         "婚姻状况", "结婚日期", "离婚日期", "随军时间", "随军条件",
-        "学历", "是否独生子女", "身高(cm)", "体重(kg)", "家庭住址"
+        "学历", "是否独生子女", "身高(cm)", "体重(kg)", "详细地址"
     };
     private static final String[] MAIN_KEYS = {
         "name", "gender", "id_card", "birthday", "phone", "department_name", "category", "rank", "post",
-        "status", "entry_date", "nation", "native_place", "blood_type", "political_status",
+        "status", "entry_date", "nation", "native_place", "enlist_place", "blood_type", "political_status",
         "party_join_date", "party_org_location", "party_post",
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
         "marital_status", "marriage_date", "divorce_date", "follow_army_date", "follow_army_status",
@@ -63,12 +63,19 @@ public class PersonnelFullExcel {
 
     private static final String[] MAIN_COLS = {
         "name", "gender", "id_card", "birthday", "phone", "category", "rank", "post",
-        "status", "entry_date", "nation", "native_place", "blood_type", "political_status",
+        "status", "entry_date", "nation", "native_place", "enlist_place", "blood_type", "political_status",
         "party_join_date", "party_org_location", "party_post",
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
         "marital_status", "marriage_date", "divorce_date", "follow_army_date", "follow_army_status",
         "education", "only_child", "height", "weight", "address"
     };
+
+    /** 旧版模板表头 → 新键(导入兼容:老文件的"籍贯/家庭住址"仍能对上列) */
+    private static final java.util.Map<String, String> HEADER_ALIASES = new java.util.HashMap<String, String>();
+    static {
+        HEADER_ALIASES.put("籍贯", "native_place");
+        HEADER_ALIASES.put("家庭住址", "address");
+    }
 
     public PersonnelFullExcel(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -381,6 +388,10 @@ public class PersonnelFullExcel {
                     colMap.put(i, MAIN_KEYS[k]);
                 }
             }
+            // 旧版表头(籍贯/家庭住址)兼容:新列名没对上时按别名映射
+            if (!colMap.containsKey(i) && HEADER_ALIASES.containsKey(h)) {
+                colMap.put(i, HEADER_ALIASES.get(h));
+            }
         }
         for (int r = 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
@@ -439,6 +450,7 @@ public class PersonnelFullExcel {
         else if ("entry_date".equals(key)) { p.setEntryDate(val); }
         else if ("nation".equals(key)) { p.setNation(val); }
         else if ("native_place".equals(key)) { p.setNativePlace(val); }
+        else if ("enlist_place".equals(key)) { p.setEnlistPlace(val); }
         else if ("blood_type".equals(key)) { p.setBloodType(val); }
         else if ("political_status".equals(key)) { p.setPoliticalStatus(val); }
         else if ("party_join_date".equals(key)) { p.setPartyJoinDate(val); }

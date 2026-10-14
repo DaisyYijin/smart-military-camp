@@ -100,8 +100,12 @@ public class SchemaInitializer implements CommandLineRunner {
 
     private void addDict(String type, String[] labels) {
         for (int i = 0; i < labels.length; i++) {
-            jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark) VALUES(?,?,?,1,'')",
-                    type, labels[i], i);
+            // 唯一约束按 parent_id 区分后,顶级种子仅在"该类型下任何层级都没有此名称"时才插入,
+            // 避免每次启动为已挂接为子项的同名项重复造顶级孤儿行
+            jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark) " +
+                            "SELECT ?,?,?,1,'' WHERE NOT EXISTS" +
+                            "(SELECT 1 FROM sys_dict WHERE dict_type=? AND dict_label=?)",
+                    type, labels[i], i, type, labels[i]);
         }
     }
 
@@ -138,8 +142,13 @@ public class SchemaInitializer implements CommandLineRunner {
             return;
         }
         for (String label : labels) {
-            jdbc.update("UPDATE sys_dict SET parent_id=? WHERE dict_type=? AND dict_label=? AND parent_id=0",
-                    pid, type, label);
+            // 已有挂接子项时,残留的同名顶级孤儿行直接删除(否则改父级会撞唯一约束)
+            jdbc.update("DELETE FROM sys_dict WHERE dict_type=? AND dict_label=? AND parent_id=0 " +
+                            "AND EXISTS(SELECT 1 FROM sys_dict WHERE dict_type=? AND dict_label=? AND parent_id=?)",
+                    type, label, type, label, pid);
+            jdbc.update("UPDATE sys_dict SET parent_id=? WHERE dict_type=? AND dict_label=? AND parent_id=0 " +
+                            "AND NOT EXISTS(SELECT 1 FROM sys_dict WHERE dict_type=? AND dict_label=? AND parent_id=?)",
+                    pid, type, label, type, label, pid);
         }
     }
 
@@ -222,6 +231,7 @@ public class SchemaInitializer implements CommandLineRunner {
         ensureColumn("personnel", "education", "education TEXT DEFAULT ''");
         ensureColumn("personnel", "only_child", "only_child TEXT DEFAULT ''");
         ensureColumn("personnel", "native_place", "native_place TEXT DEFAULT ''");
+        ensureColumn("personnel", "enlist_place", "enlist_place TEXT DEFAULT ''");
         ensureColumn("personnel", "spouse_name", "spouse_name TEXT DEFAULT ''");
         ensureColumn("personnel", "spouse_work", "spouse_work TEXT DEFAULT ''");
         ensureColumn("personnel", "spouse_phone", "spouse_phone TEXT DEFAULT ''");
@@ -543,6 +553,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         // 字典下级(级联选择:如 车辆品牌→型号),0=顶级
         try { jdbc.execute("ALTER TABLE sys_dict ADD COLUMN parent_id INTEGER DEFAULT 0"); } catch (Exception ignore) {}
+        // 唯一约束升级:type+label → type+label+parent_id(区县同名在不同城市下合法,如"鼓楼区")
+        migrateDictUnique();
 
         // 人员类别(军衔按类别级联挂接在 initDefaultDict 中执行)
         try { jdbc.execute("ALTER TABLE personnel ADD COLUMN category TEXT DEFAULT ''"); } catch (Exception ignore) {}
@@ -607,11 +619,136 @@ public class SchemaInitializer implements CommandLineRunner {
         }
 
         initDefaultDict();
+        seedRegionDict();
 
         if (adminUserDao.count() == 0) {
             adminUserDao.insertAdmin("admin", PasswordUtil.hash("admin123"), "系统管理员");
             log.info("已创建默认管理员账号: admin / admin123");
             System.out.println("[初始化] 已创建默认管理员账号 admin / admin123,请登录后立即修改密码!");
+        }
+    }
+
+    /**
+     * sys_dict 唯一约束迁移:(type,label) → (type,label,parent_id)。
+     * 区县级地名存在跨市同名(鼓楼区/新华区等),必须按父项区分。
+     * SQLite 无法直接删约束,检测到旧约束时整表重建(保留 id 与 parent_id)。
+     */
+    private void migrateDictUnique() {
+        try {
+            boolean oldStyle = false;
+            List<Map<String, Object>> idx = jdbc.queryForList("PRAGMA index_list(sys_dict)");
+            for (Map<String, Object> ix : idx) {
+                if (!"1".equals(String.valueOf(ix.get("unique")))) { continue; }
+                List<String> cols = new java.util.ArrayList<String>();
+                for (Map<String, Object> c : jdbc.queryForList("PRAGMA index_info(" + ix.get("name") + ")")) {
+                    cols.add(String.valueOf(c.get("name")));
+                }
+                java.util.Collections.sort(cols);
+                if ("dict_label,dict_type".equals(String.join(",", cols))) {
+                    oldStyle = true; // 唯一索引只含 type+label,不含 parent_id
+                }
+            }
+            if (!oldStyle) { return; }
+            log.info("迁移:sys_dict 唯一约束升级为 (dict_type, dict_label, parent_id)");
+            jdbc.execute("CREATE TABLE sys_dict_mig (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "dict_type TEXT NOT NULL," +
+                    "dict_label TEXT NOT NULL," +
+                    "sort INTEGER DEFAULT 0," +
+                    "enabled INTEGER DEFAULT 1," +
+                    "remark TEXT DEFAULT ''," +
+                    "parent_id INTEGER DEFAULT 0," +
+                    "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                    "updated_at TEXT DEFAULT (datetime('now','localtime'))," +
+                    "UNIQUE(dict_type, dict_label, parent_id)" +
+                    ")");
+            jdbc.update("INSERT OR IGNORE INTO sys_dict_mig(id, dict_type, dict_label, sort, enabled, remark, parent_id, created_at, updated_at) " +
+                    "SELECT id, dict_type, dict_label, sort, enabled, remark, parent_id, created_at, updated_at FROM sys_dict");
+            jdbc.execute("DROP TABLE sys_dict");
+            jdbc.execute("ALTER TABLE sys_dict_mig RENAME TO sys_dict");
+        } catch (Exception e) {
+            log.warn("sys_dict 唯一约束迁移失败:{}", e.getMessage());
+        }
+    }
+
+    /**
+     * 省市区三级行政区划 → 数据字典:
+     * region_province(省) / region_city(市,挂省) / region_district(区县,挂市)。
+     * 数据来自 resources/region/regions.tsv(民政部行政区划整理,直辖市合并为 省/省/区)。
+     */
+    private void seedRegionDict() {
+        try {
+            Integer cnt = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM sys_dict WHERE dict_type='region_district'", Integer.class);
+            if (cnt != null && cnt > 2000) { return; } // 已初始化过
+
+            java.io.InputStream in = getClass().getResourceAsStream("/region/regions.tsv");
+            if (in == null) { log.warn("行政区划资源 region/regions.tsv 不存在,跳过"); return; }
+            java.util.List<String[]> rows = new java.util.ArrayList<String[]>();
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(in, "UTF-8"));
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) { continue; }
+                String[] seg = line.split("\t");
+                if (seg.length >= 3) { rows.add(new String[]{seg[0], seg[1], seg[2]}); }
+            }
+            br.close();
+            if (rows.isEmpty()) { return; }
+
+            // 去重保序:省、市
+            java.util.LinkedHashSet<String> provs = new java.util.LinkedHashSet<String>();
+            java.util.LinkedHashSet<String> cityKeys = new java.util.LinkedHashSet<String>();
+            for (String[] r : rows) {
+                provs.add(r[0]);
+                cityKeys.add(r[0] + "\t" + r[1]);
+            }
+            // 1) 省
+            List<Object[]> provBatch = new java.util.ArrayList<Object[]>();
+            int i = 0;
+            for (String p : provs) { provBatch.add(new Object[]{"region_province", p, i++}); }
+            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',0)", provBatch);
+            // 2) 市(挂省)
+            java.util.Map<String, Long> provIds = new java.util.HashMap<String, Long>();
+            for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label FROM sys_dict WHERE dict_type='region_province'")) {
+                provIds.put(String.valueOf(m.get("dict_label")), ((Number) m.get("id")).longValue());
+            }
+            List<Object[]> cityBatch = new java.util.ArrayList<Object[]>();
+            java.util.Map<String, Long> cityIds = new java.util.HashMap<String, Long>();
+            for (String ck : cityKeys) {
+                int tab = ck.indexOf('\t');
+                String p = ck.substring(0, tab), c = ck.substring(tab + 1);
+                Long pid = provIds.get(p);
+                if (pid == null) { continue; }
+                cityBatch.add(new Object[]{"region_city", c, cityBatch.size(), pid});
+                cityIds.put(ck, pid); // 先占位,插入后回填真实 id
+            }
+            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", cityBatch);
+            for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label, parent_id FROM sys_dict WHERE dict_type='region_city'")) {
+                Long pid = ((Number) m.get("parent_id")).longValue();
+                for (java.util.Map.Entry<String, Long> e : cityIds.entrySet()) {
+                    if (e.getValue().equals(pid) && e.getKey().endsWith("\t" + String.valueOf(m.get("dict_label")))) {
+                        cityIds.put(e.getKey(), ((Number) m.get("id")).longValue());
+                        break;
+                    }
+                }
+            }
+            // 3) 区县(挂市)
+            List<Object[]> distBatch = new java.util.ArrayList<Object[]>();
+            java.util.Map<String, Integer> distSort = new java.util.HashMap<String, Integer>();
+            for (String[] r : rows) {
+                Long cid = cityIds.get(r[0] + "\t" + r[1]);
+                if (cid == null) { continue; }
+                String key = r[0] + "\t" + r[1] + "\t" + r[2];
+                int s = distSort.containsKey(key) ? distSort.get(key) : distBatch.size();
+                distSort.put(key, s);
+                distBatch.add(new Object[]{"region_district", r[2], s, cid});
+            }
+            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", distBatch);
+            log.info("已初始化行政区划字典:省 {} / 市 {} / 区县 {}", provs.size(), cityKeys.size(), distBatch.size());
+        } catch (Exception e) {
+            log.warn("行政区划字典初始化失败:{}", e.getMessage());
         }
     }
 }

@@ -574,6 +574,72 @@ function makeDropdown(opts, placeholder) {
   return wrap;
 }
 
+/**
+ * 省市区三级联动(字典驱动):region_province → region_city → region_district。
+ * 值存为 "省/市/区县" 组合串;旧自由文本无 "/" 时原样保留,重新选择后覆盖。
+ */
+function makeRegionField() {
+  var parts = ['', '', ''];
+  var provDd = makeDropdown([], '省份');
+  var cityDd = makeDropdown([], '城市');
+  var distDd = makeDropdown([], '区/县');
+  var wrap = h('div', { class: 'region-field' }, provDd, cityDd, distDd);
+
+  function findItem(type, label) {
+    var hit = null;
+    dictItems(type).forEach(function (d) { if (d.dictLabel === label) hit = d; });
+    return hit;
+  }
+  function childrenOf(type, parentType, parentLabel) {
+    var p = parentLabel ? findItem(parentType, parentLabel) : null;
+    if (!p) return [];
+    return dictItems(type).filter(function (d) {
+      return d.parentId && String(d.parentId) === String(p.id) && d.enabled !== false;
+    }).map(function (d) { return d.dictLabel; });
+  }
+  function sync() { wrap.dispatchEvent(new CustomEvent('change')); }
+  function refreshCities(keep) {
+    cityDd.setOptions(childrenOf('region_city', 'region_province', parts[0]));
+    if (keep && parts[1] && cityDd.value !== parts[1]) { cityDd.value = parts[1]; }
+    if (!cityDd.value) { parts[1] = ''; }
+    refreshDistricts(keep);
+  }
+  function refreshDistricts(keep) {
+    distDd.setOptions(childrenOf('region_district', 'region_city', parts[1]));
+    if (keep && parts[2] && distDd.value !== parts[2]) { distDd.value = parts[2]; }
+    if (!distDd.value) { parts[2] = ''; }
+  }
+
+  provDd.addEventListener('change', function () {
+    parts[0] = provDd.value || '';
+    refreshCities(false);
+    sync();
+  });
+  cityDd.addEventListener('change', function () {
+    parts[1] = cityDd.value || '';
+    refreshDistricts(false);
+    sync();
+  });
+  distDd.addEventListener('change', function () { parts[2] = distDd.value || ''; sync(); });
+
+  function joined() {
+    var seg = [parts[0], parts[1], parts[2]];
+    for (var i = 2; i >= 0; i--) { if (seg[i]) break; seg.pop(); }
+    return seg.join('/');
+  }
+  Object.defineProperty(wrap, 'value', {
+    get: function () { return joined(); },
+    set: function (v) {
+      var seg = String(v == null ? '' : v).split('/');
+      parts = [seg[0] || '', seg[1] || '', seg[2] || ''];
+      provDd.setOptions(dictLabels('region_province'));
+      provDd.value = parts[0];
+      refreshCities(true);
+    }
+  });
+  return wrap;
+}
+
 // 标签栏鼠标拖动横向滚动
 (function tabsDragInit() {
   document.addEventListener('mousedown', function (e) {
@@ -953,6 +1019,9 @@ function buildForm(fields, values, extraPanels) {
     } else if (f.type === 'date') {
       el = makeDateField();
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
+    } else if (f.type === 'region') {
+      el = makeRegionField();
+      el.value = val === undefined || val === null ? '' : String(val);
     } else if (f.type === 'textarea') {
       el = h('textarea', { placeholder: f.placeholder || '' });
       el.value = val || '';
@@ -4003,7 +4072,7 @@ var personnelCfg = {
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
     { key: 'post', label: '职务/岗位' },
-    { key: 'nativePlace', label: '籍贯' },
+    { key: 'nativePlace', label: '籍贯所在地' },
     { key: 'entryDateStart', label: '入伍起', type: 'date' },
     { key: 'entryDateEnd', label: '入伍止', type: 'date' }
   ],
@@ -4068,16 +4137,17 @@ var personnelCfg = {
     { key: 'entryDate', label: '入伍/入职日期', type: 'date' },
     { section: '更多资料' },
     { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
-    { key: 'nativePlace', label: '籍贯' },
+    { key: 'nativePlace', label: '籍贯所在地', type: 'region' },
+    { key: 'enlistPlace', label: '入伍所在地', type: 'region' },
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
-    
-    
-    
+
+
+
     { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
     { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
     { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
-    { key: 'address', label: '家庭住址', span: 'full' },
+    { key: 'address', label: '详细地址', span: 'full', placeholder: '街道/门牌等具体地址,手动填写', hint: '与籍贯/入伍所在地的省市区联动填写' },
     { section: '党团籍信息' },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },

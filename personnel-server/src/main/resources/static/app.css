@@ -609,6 +609,11 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 
 /* ---------- 自绘下拉(替代原生select弹层,杜绝核显环境空白卡顿) ---------- */
 .dd { position: relative; }
+/* 省市区三级联动:一行三个等宽下拉 */
+.region-field { display: flex; gap: 8px; }
+.region-field .dd { flex: 1; min-width: 0; }
+.region-field .dd-btn { height: 36px; }
+.region-field .dd-btn .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dd-btn {
   width: 100%; height: 36px; background: #fff; border: 1px solid #c5cdd8; border-radius: 4px;
   display: flex; align-items: center; justify-content: space-between; padding: 0 10px;

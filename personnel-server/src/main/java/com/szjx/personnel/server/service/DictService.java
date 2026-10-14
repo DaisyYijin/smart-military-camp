@@ -58,6 +58,9 @@ public class DictService {
         TYPE_NAMES.put("vehicle_fuel", "车辆燃料");
         TYPE_NAMES.put("vehicle_model", "车辆型号");
         TYPE_NAMES.put("holiday_type", "节假日");
+        TYPE_NAMES.put("region_province", "省份(行政区划)");
+        TYPE_NAMES.put("region_city", "城市(行政区划)");
+        TYPE_NAMES.put("region_district", "区县(行政区划)");
     }
 
     /**
@@ -119,7 +122,15 @@ public class DictService {
         if (!StringUtils.hasText(d.getDictLabel())) {
             throw new IllegalArgumentException("字典项内容不能为空");
         }
-        if (dictDao.exists(d.getDictType(), d.getDictLabel())) {
+        if (d.getParentId() != null && d.getParentId() > 0) {
+            // 有上级的项允许跨父级同名(如不同城市下的同名区县)
+            Long n = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM sys_dict WHERE dict_type=? AND dict_label=? AND parent_id=?",
+                    Long.class, d.getDictType(), d.getDictLabel(), d.getParentId());
+            if (n != null && n > 0) {
+                throw new IllegalArgumentException("该类型下已存在相同的选项");
+            }
+        } else if (dictDao.exists(d.getDictType(), d.getDictLabel())) {
             throw new IllegalArgumentException("该类型下已存在相同的选项");
         }
         if (d.getEnabled() == null) {
@@ -144,9 +155,20 @@ public class DictService {
         String type = StringUtils.hasText(d.getDictType()) ? d.getDictType() : old.getDictType();
         String oldLabel = old.getDictLabel();
         String newLabel = d.getDictLabel();
-        if (!newLabel.equals(oldLabel)
-                && dictDao.exists(type, newLabel)) {
-            throw new IllegalArgumentException("该类型下已存在相同的选项");
+        Long newParent = d.getParentId() != null ? d.getParentId()
+                : (old.getParentId() != null ? old.getParentId() : 0L);
+        if (!newLabel.equals(oldLabel)) {
+            if (newParent != null && newParent > 0) {
+                // 有上级的项允许跨父级同名
+                Long n = jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM sys_dict WHERE dict_type=? AND dict_label=? AND parent_id=? AND id<>?",
+                        Long.class, type, newLabel, newParent, id);
+                if (n != null && n > 0) {
+                    throw new IllegalArgumentException("该类型下已存在相同的选项");
+                }
+            } else if (dictDao.exists(type, newLabel)) {
+                throw new IllegalArgumentException("该类型下已存在相同的选项");
+            }
         }
         d.setId(id);
         if (!StringUtils.hasText(d.getDictType())) {
