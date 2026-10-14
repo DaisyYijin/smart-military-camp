@@ -80,6 +80,13 @@ public class StatsService {
         m.put("onLeave", countOrZero("SELECT COUNT(*) FROM personnel WHERE status='休假'"));
         m.put("deptCount", countOrZero("SELECT COUNT(*) FROM department"));
         m.put("vehicleCount", countOrZero("SELECT COUNT(*) FROM vehicle"));
+        m.put("equipmentTotal", countOrZero("SELECT COUNT(*) FROM equipment"));
+        m.put("equipmentRepair", countOrZero("SELECT COUNT(*) FROM equipment WHERE status='维修'"));
+        m.put("materialTotal", countOrZero("SELECT COUNT(*) FROM material"));
+        m.put("materialLowStock", countOrZero("SELECT COUNT(*) FROM material WHERE CAST(min_quantity AS REAL)>0 AND CAST(quantity AS REAL)<CAST(min_quantity AS REAL)"));
+        m.put("leaveThisYear", countOrZero("SELECT COUNT(*) FROM leave_record WHERE start_date LIKE strftime('%Y','now','localtime') || '%'"));
+        m.put("fitnessThisYear", countOrZero("SELECT COUNT(*) FROM fitness_record WHERE test_date LIKE strftime('%Y','now','localtime') || '%'"));
+        m.put("vehicleRepair", countOrZero("SELECT COUNT(*) FROM vehicle WHERE status='维修'"));
         m.put("materialLow", countOrZero(
                 "SELECT COUNT(*) FROM material WHERE CAST(min_quantity AS REAL) > 0 AND CAST(quantity AS REAL) < CAST(min_quantity AS REAL)"));
 

@@ -5842,27 +5842,91 @@ function dashboardView() {
     });
   }
 
+  // 概况卡目录(可配置显示/隐藏)
+  var STAT_CARDS = {
+    total:          { label: '人员总数',   icon: 'users',    danger: false },
+    onDuty:         { label: '在职人数',   icon: 'check',    danger: false },
+    onLeave:        { label: '休假中',     icon: 'calendar', danger: false },
+    deptCount:      { label: '部门总数',   icon: 'building', danger: false },
+    vehicleCount:   { label: '车辆总数',   icon: 'truck',    danger: false },
+    vehicleRepair:  { label: '车辆维修',   icon: 'truck',    danger: true },
+    equipmentTotal: { label: '装备总数',   icon: 'box',      danger: false },
+    equipmentRepair:{ label: '装备维修',   icon: 'box',      danger: true },
+    materialTotal:  { label: '物资总数',   icon: 'box',      danger: false },
+    materialLow:    { label: '库存预警',   icon: 'box',      danger: true },
+    leaveThisYear:  { label: '今年休假',   icon: 'calendar', danger: false },
+    fitnessThisYear:{ label: '今年考核',   icon: 'activity', danger: false }
+  };
+  var STAT_DEFAULT = ['total', 'onDuty', 'onLeave', 'deptCount', 'vehicleCount', 'materialLow'];
+
+  function getStatCards() {
+    try {
+      var v = JSON.parse(localStorage.getItem('dashStatCards') || 'null');
+      if (v && v.length) { return v; }
+    } catch (e) { }
+    return STAT_DEFAULT.slice();
+  }
+
+  function saveStatCards(v) {
+    try { localStorage.setItem('dashStatCards', JSON.stringify(v)); } catch (e) { }
+  }
+
+  function openStatCardPicker() {
+    var current = getStatCards();
+    var body = h('div', {},
+      h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:12px', text: '勾选要在仪表盘顶部显示的统计卡片(按住拖动可排序):' }));
+    var listBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+    var boxes = {};
+    Object.keys(STAT_CARDS).forEach(function (k) {
+      var def = STAT_CARDS[k];
+      var cb = h('input', { type: 'checkbox' });
+      cb.checked = current.indexOf(k) >= 0;
+      boxes[k] = cb;
+      listBox.appendChild(h('label', { style: 'display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #dbe4ee;border-radius:6px;cursor:pointer;font-size:13px;background:' + (cb.checked ? '#eef4fd' : '#fff') },
+        cb, h('span', { text: def.label })));
+    });
+    body.appendChild(listBox);
+
+    var m = openModal({
+      title: '配置统计卡片', body: body,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '恢复默认', onclick: function () { saveStatCards(STAT_DEFAULT.slice()); m.close(); lastData ? build(lastData, lastEvents) : location.reload(); } }),
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: '确定', onclick: function () {
+          var sel = [];
+          Object.keys(STAT_CARDS).forEach(function (k) { if (boxes[k].checked) { sel.push(k); } });
+          if (!sel.length) { toast('至少选择一个统计卡片', 'err'); return; }
+          saveStatCards(sel);
+          m.close();
+          if (lastData) { build(lastData, lastEvents); }
+        } })
+      ]
+    });
+  }
+
   function build(d, events) {
     root.className = '';
     root.innerHTML = '';
-    // 顶部概况卡
+    // 顶部概况卡(可配置)
     var chips = h('div', { class: 'stats-cards' });
     function card(num, lbl, ic, danger) {
       return h('div', { class: 'stat-card' + (danger && +num > 0 ? ' danger' : '') },
         h('span', { class: 'ic', html: iconSvg(ic) }),
         h('div', {}, h('div', { class: 'num', text: String(num) }), h('div', { class: 'lbl', text: lbl })));
     }
-    chips.appendChild(card(d.total || 0, '人员总数', 'users'));
-    chips.appendChild(card(d.onDuty || 0, '在职人数', 'check'));
-    chips.appendChild(card(d.onLeave || 0, '休假中', 'calendar'));
-    chips.appendChild(card(d.deptCount || 0, '部门总数', 'building'));
-    chips.appendChild(card(d.vehicleCount || 0, '车辆总数', 'truck'));
-    chips.appendChild(card(d.materialLow || 0, '库存预警', 'box', true));
+    var statSel = getStatCards();
+    statSel.forEach(function (k) {
+      var def = STAT_CARDS[k];
+      if (def && d[k] !== undefined) {
+        chips.appendChild(card(d[k] || 0, def.label, def.icon, def.danger));
+      }
+    });
     root.appendChild(chips);
 
     root.appendChild(h('div', { class: 'dash-main' },
       h('div', { class: 'dash-left' },
         h('div', { class: 'dash-toolbar' },
+          h('button', { class: 'btn btn-ghost', text: '统计卡', title: '配置顶部统计卡片', onclick: openStatCardPicker }),
           h('button', { class: 'btn btn-primary', text: '＋ 添加图表', onclick: openPicker }),
           h('button', {
             class: 'btn btn-ghost', text: '恢复默认',
