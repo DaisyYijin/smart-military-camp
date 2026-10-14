@@ -100,6 +100,17 @@ public class StatsService {
         groups.put("rank", group(String.format(PERSON_GROUP_TMPL, "rank", "rank") + " LIMIT 12"));
         groups.put("education", group(String.format(PERSON_GROUP_TMPL, "education", "education")));
         groups.put("politicalStatus", group(String.format(PERSON_GROUP_TMPL, "political_status", "political_status")));
+        // 籍贯/入伍地按省份分布(取"省/市/区县"组合串中的省)
+        groups.put("nativePlace", group(
+                "SELECT IFNULL(NULLIF(prov, ''), '未填写') AS name, COUNT(*) AS count FROM (" +
+                "SELECT CASE WHEN INSTR(p.native_place, '/') > 0 " +
+                "THEN SUBSTR(p.native_place, 1, INSTR(p.native_place, '/') - 1) ELSE p.native_place END AS prov " +
+                "FROM personnel p) GROUP BY name ORDER BY count DESC, name"));
+        groups.put("enlistPlace", group(
+                "SELECT IFNULL(NULLIF(prov, ''), '未填写') AS name, COUNT(*) AS count FROM (" +
+                "SELECT CASE WHEN INSTR(p.enlist_place, '/') > 0 " +
+                "THEN SUBSTR(p.enlist_place, 1, INSTR(p.enlist_place, '/') - 1) ELSE p.enlist_place END AS prov " +
+                "FROM personnel p) GROUP BY name ORDER BY count DESC, name"));
         groups.put("leaveType", group(
                 "SELECT IFNULL(NULLIF(l.leave_type, ''), '未填写') AS name, COUNT(*) AS count FROM leave_record l " +
                 "WHERE l.start_date LIKE strftime('%Y', 'now', 'localtime') || '%' GROUP BY l.leave_type ORDER BY count DESC"));

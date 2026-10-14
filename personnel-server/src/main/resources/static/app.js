@@ -121,7 +121,7 @@ var ICON_PATHS = {
 function makeDateField() {
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
   function fmt(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
-  function parse(s) {
+  function parseDayText(s) {
     var t = String(s == null ? '' : s).trim();
     var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t) || /^(\d{4})(\d{2})(\d{2})$/.exec(t);
     if (!m) {
@@ -144,20 +144,20 @@ function makeDateField() {
   var view = { y: 0, m: 0 };
 
   /** 月份输入(2026-09):合法返回规范化 YYYY-MM,否则 null */
-  function monthText(t) {
+  function normMonthText(t) {
     var m = /^(\d{4})-(\d{1,2})$/.exec(String(t == null ? '' : t).trim());
     return m && +m[2] >= 1 && +m[2] <= 12 ? m[1] + '-' + p2(+m[2]) : null;
   }
 
-  function commit(text) {
-    var mo = monthText(text);
+  function commitCalInput(text) {
+    var mo = normMonthText(text);
     if (mo) {
       input.value = mo;
       input.classList.remove('bad');
       wrap.dispatchEvent(new CustomEvent('change'));
       return;
     }
-    var d = parse(text);
+    var d = parseDayText(text);
     if (d) {
       input.value = fmt(d);
       input.classList.remove('bad');
@@ -172,12 +172,12 @@ function makeDateField() {
 
   Object.defineProperty(wrap, 'value', {
     get: function () {
-      var d = parse(input.value);
+      var d = parseDayText(input.value);
       if (d) { return fmt(d); }
-      return monthText(input.value) || '';
+      return normMonthText(input.value) || '';
     },
     set: function (v) {
-      var d = parse(v);
+      var d = parseDayText(v);
       input.value = d ? fmt(d) : '';
       input.classList.remove('bad');
     }
@@ -344,7 +344,7 @@ function makeDateField() {
 
   function openPanel() {
     ensurePanel();
-    var base = parse(input.value);
+    var base = parseDayText(input.value);
     var t = base || new Date();
     view.y = t.getFullYear();
     view.m = t.getMonth();
@@ -378,13 +378,13 @@ function makeDateField() {
   });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
-      commit(input.value);
+      commitCalInput(input.value);
       wrap.classList.remove('open');
       e.preventDefault();
     }
   });
   input.addEventListener('blur', function () {
-    commit(input.value);
+    commitCalInput(input.value);
   });
 
   return wrap;
@@ -708,7 +708,7 @@ function PRI() {
   return v || 'var(--pri, #2f6fd6)';
 }
 /** 由主色派生深色(标题/选中态) */
-function shade(c, f) {
+function shadeColor(c, f) {
   var m = /^#([0-9a-f]{6})$/i.exec((c || '').trim());
   if (!m) { return 'var(--pri-dark, #16437e)'; }
   var n = parseInt(m[1], 16);
@@ -721,9 +721,9 @@ function shade(c, f) {
 function applyThemeVars(c) {
   var t = /^#[0-9a-f]{6}$/i.test(c) ? c : 'var(--pri, #2f6fd6)';
   document.documentElement.style.setProperty('--pri', t);
-  document.documentElement.style.setProperty('--pri-dark', shade(t, 0.62));
-  document.documentElement.style.setProperty('--pri-deep', shade(t, 0.40));   // 侧栏底色
-  document.documentElement.style.setProperty('--pri-light', shade(t, 1.45));  // 亮描边
+  document.documentElement.style.setProperty('--pri-dark', shadeColor(t, 0.62));
+  document.documentElement.style.setProperty('--pri-deep', shadeColor(t, 0.40));   // 侧栏底色
+  document.documentElement.style.setProperty('--pri-light', shadeColor(t, 1.45));  // 亮描边
   document.documentElement.style.setProperty('--pri-a28', t + '47');          // 28%透明
   document.documentElement.style.setProperty('--pri-a35', t + '59');          // 35%透明
 }
@@ -2401,24 +2401,24 @@ function subRecordsPanel(kind, personnelId, opt) {
       if (r[c.key]) {
         editor.value = r[c.key];
       }
-      editor.addEventListener('change', function () { commit(r, c, editor.value); });
+      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.value); });
     } else if (c.type === 'select') {
       var ddOpts = typeof c.options === 'function' ? c.options() : (c.options || []);
       editor = makeDropdown(ddOpts, '请选择');
       if (r[c.key]) {
         editor.value = r[c.key];
       }
-      editor.addEventListener('change', function () { commit(r, c, editor.value); });
+      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.value); });
       var btn = editor.querySelector('.dd-btn');
       if (btn) {
         btn.addEventListener('blur', function () {
-          setTimeout(function () { commit(r, c, r[c.key]); }, 150);
+          setTimeout(function () { commitCellEdit(r, c, r[c.key]); }, 150);
         });
       }
     } else {
       editor = h('input', { type: 'text', style: 'width:100%' });
       editor.value = r[c.key] || '';
-      editor.addEventListener('blur', function () { commit(r, c, editor.value); });
+      editor.addEventListener('blur', function () { commitCellEdit(r, c, editor.value); });
       editor.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { editor.blur(); }
         if (e.key === 'Tab') {
@@ -2453,7 +2453,7 @@ function subRecordsPanel(kind, personnelId, opt) {
     return false;
   }
 
-  function commit(r, c, value) {
+  function commitCellEdit(r, c, value) {
     value = String(value == null ? '' : value).trim();
     if (String(r[c.key] || '') === value) {
       autoRemoveIfEmpty(r);
@@ -5402,6 +5402,8 @@ var DASH_DIMS = {
   rank:             { cat: '人员管理', label: '军衔分布',    group: 'rank', unit: '人', drill: { api: '/api/personnel', param: 'rank' } },
   education:        { cat: '人员管理', label: '学历分布',    group: 'education', drill: { api: '/api/personnel', param: 'education' } },
   politicalStatus:  { cat: '人员管理', label: '政治面貌',    group: 'politicalStatus', drill: { api: '/api/personnel', param: 'politicalStatus' } },
+  nativePlace:      { cat: '人员管理', label: '籍贯省份分布', group: 'nativePlace', unit: '人', drill: { api: '/api/personnel', param: 'nativePlace' } },
+  enlistPlace:      { cat: '人员管理', label: '入伍地省份分布', group: 'enlistPlace', unit: '人', drill: { api: '/api/personnel', param: 'enlistPlace' } },
   entryTrend:       { cat: '人员管理', label: '入伍趋势',    trend: true, unit: '人', drill: { api: '/api/personnel', param: 'entryYear' } },
   onDuty:           { cat: '人员管理', label: '人员在位率',  gauge: true, drill: { api: '/api/personnel', param: 'status', fixedVal: '在职' } },
   equipmentCategory:{ cat: '装备管理', label: '装备类别',    group: 'equipmentCategory', unit: '件', drill: { api: '/api/equipment', param: 'category' } },
@@ -5929,7 +5931,8 @@ function dashboardView() {
 
   /* ---------- 添加图表:先选指标,再选图表类型 ---------- */
   function openPicker() {
-    var wrap = h('div', { style: 'max-height:62vh;overflow:auto' });
+    // 不再自设 max-height/overflow:滚动交给弹窗的 .dialog-body,避免出现双滚动条
+    var wrap = h('div');
     var cats = [];
     Object.keys(DASH_DIMS).forEach(function (k) {
       var c = DASH_DIMS[k].cat;
@@ -6019,7 +6022,7 @@ function dashboardView() {
       { name: '考勤', keys: ['leaveThisYear', 'fitnessThisYear'] }
     ];
 
-    var wrap = h('div', { style: 'max-height:62vh;overflow:auto' });
+    var wrap = h('div');
     var boxes = {};
 
     function paint() {

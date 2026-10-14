@@ -85,31 +85,31 @@ public class PersonnelDao {
      * 分页查询
      */
     public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status,
-                                 String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String education,
+                                 String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education,
                                  String maritalStatus, String nation, String bloodType, String onlyChild,
                                  String entryDateStart, String entryDateEnd,
                                  int page, int size) {
         StringBuilder sql = new StringBuilder(BASE_SELECT).append(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
         sql.append(" ORDER BY p.updated_at DESC, p.id DESC LIMIT ? OFFSET ? ");
         args.add(size);
         args.add((page - 1) * size);
         return jdbc.query(sql.toString(), MAPPER, args.toArray());
     }
 
-    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM personnel p WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
         return n == null ? 0 : n;
     }
 
     private void appendFilter(StringBuilder sql, List<Object> args,
                               String keyword, String name, String idCard, Long departmentId, String status,
-                              String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String education,
+                              String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education,
                               String maritalStatus, String nation, String bloodType, String onlyChild,
                               String entryDateStart, String entryDateEnd) {
         if (keyword != null && !keyword.trim().isEmpty()) {
@@ -179,6 +179,10 @@ public class PersonnelDao {
         if (nativePlace != null && !nativePlace.trim().isEmpty()) {
             sql.append(" AND p.native_place LIKE ? ");
             args.add("%" + nativePlace.trim() + "%");
+        }
+        if (enlistPlace != null && !enlistPlace.trim().isEmpty()) {
+            sql.append(" AND p.enlist_place LIKE ? ");
+            args.add("%" + enlistPlace.trim() + "%");
         }
         if (education != null && !education.trim().isEmpty()) {
             sql.append(" AND p.education = ? ");
