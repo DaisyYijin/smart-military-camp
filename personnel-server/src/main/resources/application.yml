@@ -31,8 +31,7 @@ app:
     # 登录令牌有效期(小时)
     token-expire-hours: 24
 
+# 日志滚动策略见 logback-spring.xml:按天一个文件,保留30天,总量500MB
 logging:
   level:
     root: info
-  file:
-    name: logs/personnel-server.log
