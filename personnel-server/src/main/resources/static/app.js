@@ -5845,7 +5845,7 @@ function dashboardView() {
   // 概况卡目录(可配置显示/隐藏)
   var STAT_CARDS = {
     total:          { label: '人员总数',   icon: 'users',    danger: false },
-    onDuty:         { label: '在职人数',   icon: 'check',    danger: false },
+    onDuty:         { label: '在位人员',   icon: 'check',    danger: false },
     onLeave:        { label: '休假中',     icon: 'calendar', danger: false },
     deptCount:      { label: '部门总数',   icon: 'building', danger: false },
     vehicleCount:   { label: '车辆总数',   icon: 'truck',    danger: false },
@@ -5871,37 +5871,69 @@ function dashboardView() {
     try { localStorage.setItem('dashStatCards', JSON.stringify(v)); } catch (e) { }
   }
 
+  /** 统计卡配置: 分组按钮式(和图表添加一致,点亮=显示) */
   function openStatCardPicker() {
     var current = getStatCards();
-    var body = h('div', {},
-      h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:12px', text: '勾选要在仪表盘顶部显示的统计卡片(按住拖动可排序):' }));
-    var listBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
+
+    // 分组: 人员 / 装备物资 / 车辆 / 考勤
+    var groups = [
+      { name: '人员', keys: ['total', 'onDuty', 'onLeave', 'deptCount'] },
+      { name: '装备物资', keys: ['equipmentTotal', 'equipmentRepair', 'materialTotal', 'materialLow'] },
+      { name: '车辆', keys: ['vehicleCount', 'vehicleRepair'] },
+      { name: '考勤', keys: ['leaveThisYear', 'fitnessThisYear'] }
+    ];
+
+    var wrap = h('div', { style: 'max-height:62vh;overflow:auto' });
     var boxes = {};
-    Object.keys(STAT_CARDS).forEach(function (k) {
-      var def = STAT_CARDS[k];
-      var cb = h('input', { type: 'checkbox' });
-      cb.checked = current.indexOf(k) >= 0;
-      boxes[k] = cb;
-      listBox.appendChild(h('label', { style: 'display:flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #dbe4ee;border-radius:6px;cursor:pointer;font-size:13px;background:' + (cb.checked ? '#eef4fd' : '#fff') },
-        cb, h('span', { text: def.label })));
+
+    function paint() {
+      Object.keys(boxes).forEach(function (k) {
+        boxes[k].className = 'pick-kind-btn' + (current.indexOf(k) >= 0 ? ' mod-on' : '');
+      });
+      countLbl.textContent = '已选:' + current.length + ' 个';
+    }
+
+    groups.forEach(function (g) {
+      wrap.appendChild(h('div', { class: 'dash-pick-cat', text: g.name }));
+      var row = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px' });
+      g.keys.forEach(function (k) {
+        var def = STAT_CARDS[k];
+        if (!def) { return; }
+        var b = h('button', { type: 'button', class: 'pick-kind-btn', text: def.label });
+        b.addEventListener('click', function () {
+          var idx = current.indexOf(k);
+          if (idx >= 0) { current.splice(idx, 1); } else { current.push(k); }
+          paint();
+        });
+        boxes[k] = b;
+        row.appendChild(b);
+      });
+      wrap.appendChild(row);
     });
-    body.appendChild(listBox);
+
+    var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
 
     var m = openModal({
-      title: '配置统计卡片', body: body,
+      title: '配置统计卡片', body: h('div', {},
+        h('div', { style: 'font-size:13px;color:#66788c;margin-bottom:12px', text: '点亮=在仪表盘顶部显示(和图表添加方式一致)' }),
+        wrap),
       footer: [
-        h('button', { class: 'btn btn-ghost', text: '恢复默认', onclick: function () { saveStatCards(STAT_DEFAULT.slice()); m.close(); lastData ? build(lastData, lastEvents) : location.reload(); } }),
+        h('button', { class: 'btn btn-ghost', text: '恢复默认', onclick: function () {
+          saveStatCards(STAT_DEFAULT.slice());
+          m.close();
+          if (lastData) { build(lastData, lastEvents); }
+        } }),
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', { class: 'btn btn-primary', text: '确定', onclick: function () {
-          var sel = [];
-          Object.keys(STAT_CARDS).forEach(function (k) { if (boxes[k].checked) { sel.push(k); } });
-          if (!sel.length) { toast('至少选择一个统计卡片', 'err'); return; }
-          saveStatCards(sel);
+          if (!current.length) { toast('至少选择一个统计卡片', 'err'); return; }
+          saveStatCards(current);
           m.close();
           if (lastData) { build(lastData, lastEvents); }
         } })
       ]
     });
+    // 工具栏旁的已选数量提示
+    paint();
   }
 
   function build(d, events) {
