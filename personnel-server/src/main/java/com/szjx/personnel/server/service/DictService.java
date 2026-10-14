@@ -23,6 +23,9 @@ public class DictService {
 
     static {
         TYPE_NAMES.put("leave_type", "休假类型");
+        TYPE_NAMES.put("device_type", "设备类型");
+        TYPE_NAMES.put("device_status", "设备状态");
+        TYPE_NAMES.put("phone_brand", "手机品牌");
         TYPE_NAMES.put("fitness_item", "体能项目");
         TYPE_NAMES.put("fitness_grade", "评定等级");
         TYPE_NAMES.put("personnel_status", "人员状态");
