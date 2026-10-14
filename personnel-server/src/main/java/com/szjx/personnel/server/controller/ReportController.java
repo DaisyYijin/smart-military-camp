@@ -32,6 +32,22 @@ import java.util.Map;
 @RequestMapping("/api/report")
 public class ReportController {
 
+    /** 合法表名白名单(防SQL注入) */
+    private static final java.util.Set<String> SAFE_TABLES = new java.util.HashSet<String>(java.util.Arrays.asList(
+            "personnel", "department", "equipment", "material", "vehicle",
+            "leave_record", "fitness_record", "position_history", "reward_punish",
+            "child_info", "family_member", "driver_license", "personal_card",
+            "private_vehicle", "housing_info"));
+
+    /** 校验表名安全(防注入) */
+    private static String safeTable(String t) {
+        if (t == null || !SAFE_TABLES.contains(t)) {
+            throw new IllegalArgumentException("非法表名: " + t);
+        }
+        return t;
+    }
+
+    /** 合法表名白名单(防SQL注入) */
     private static final String[] SUB_TABLES = {
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info"};
@@ -172,7 +188,7 @@ public class ReportController {
 
     private List<Map<String, Object>> rowsWithCard(String table, Map<Long, String> cardOf) {
         List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
-        for (Map<String, Object> r : jdbc.queryForList("SELECT * FROM " + table + " ORDER BY id")) {
+        for (Map<String, Object> r : jdbc.queryForList("SELECT * FROM " + safeTable(table) + " ORDER BY id")) {
             Object pid = r.get("personnel_id");
             String card = "";
             if (pid instanceof Number) {
@@ -375,7 +391,7 @@ public class ReportController {
                     Long id2 = pidOfCard(r.get("_card"), localPidByCard);
                     if (id2 != null) { dels.add(new Object[]{id2}); }
                 }
-                if (!dels.isEmpty()) { jdbc.batchUpdate("DELETE FROM " + table + " WHERE personnel_id=?", dels); }
+                if (!dels.isEmpty()) { jdbc.batchUpdate("DELETE FROM " + safeTable(table) + " WHERE personnel_id=?", dels); }
                 List<Object[]> ins = new ArrayList<Object[]>();
                 List<String> insCols = new ArrayList<String>();
                 for (Map<String, Object> r : rows) {
@@ -396,7 +412,7 @@ public class ReportController {
                     subRows++;
                 }
                 if (!ins.isEmpty()) {
-                    jdbc.batchUpdate("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
+                    jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
                 }
             }
         }
@@ -485,7 +501,7 @@ public class ReportController {
             n++;
         }
         if (!ins.isEmpty()) {
-            jdbc.batchUpdate("INSERT INTO " + table + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
+            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
         }
         return n;
     }
@@ -560,10 +576,10 @@ public class ReportController {
             }
         }
         if (!ins.isEmpty()) {
-            jdbc.batchUpdate("INSERT INTO " + table + "(" + join(cols0) + ") VALUES(" + marks(cols0.size()) + ")", ins);
+            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(" + join(cols0) + ") VALUES(" + marks(cols0.size()) + ")", ins);
         }
         if (!upd.isEmpty()) {
-            StringBuilder sql = new StringBuilder("UPDATE " + table + " SET ");
+            StringBuilder sql = new StringBuilder("UPDATE " + safeTable(table) + " SET ");
             for (int c = 0; c < cols0.size(); c++) {
                 if (c > 0) { sql.append(","); }
                 sql.append(cols0.get(c)).append("=?");

@@ -40,6 +40,31 @@ public class PersonnelController {
         this.jdbc = jdbc;
     }
 
+    /** 统一年龄计算: 按指定日期(默认今天)算周岁 */
+    @GetMapping("/{id}/age")
+    public ApiResponse getAge(@PathVariable Long id,
+                              @RequestParam(required = false) String refDate) {
+        java.util.Map<String, Object> p = jdbc.queryForMap(
+                "SELECT birthday FROM personnel WHERE id=?", id);
+        String bd = String.valueOf(p.get("birthday") == null ? "" : p.get("birthday"));
+        if (bd.length() < 10) {
+            return ApiResponse.ok(java.util.Collections.singletonMap("age", ""));
+        }
+        java.time.LocalDate birth;
+        java.time.LocalDate ref;
+        try {
+            birth = java.time.LocalDate.parse(bd.substring(0, 10));
+            ref = (refDate != null && refDate.length() >= 10)
+                    ? java.time.LocalDate.parse(refDate.substring(0, 10))
+                    : java.time.LocalDate.now();
+        } catch (Exception e) {
+            return ApiResponse.ok(java.util.Collections.singletonMap("age", ""));
+        }
+        int age = java.time.Period.between(birth, ref).getYears();
+        return ApiResponse.ok(java.util.Collections.singletonMap("age",
+                age >= 0 && age < 130 ? String.valueOf(age) : ""));
+    }
+
     /** 按身份证号精确查找人员(各模块表单自动带出姓名用),找不到返回 null */
     @GetMapping("/by-idcard")
     public ApiResponse findByIdCard(@RequestParam String idCard) {
