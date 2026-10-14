@@ -140,6 +140,7 @@ var ICON_PATHS = {
   chart: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
   check: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
   chevronL: '<polyline points="15 18 9 12 15 6"/>',
   chevronR: '<polyline points="9 18 15 12 9 6"/>',
   schedule: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -649,12 +650,16 @@ function makeRegionField() {
   }
 
   provDd.addEventListener('change', function () {
-    parts[0] = provDd.value || '';
+    parts = [provDd.value || '', '', ''];
+    cityDd.value = '';
+    distDd.value = '';
     refreshCities(false);
     sync();
   });
   cityDd.addEventListener('change', function () {
     parts[1] = cityDd.value || '';
+    parts[2] = '';
+    distDd.value = '';
     refreshDistricts(false);
     sync();
   });
@@ -785,6 +790,8 @@ function loadSiteSettings() {
     if (d.siteLogo) { SITE.logo = d.siteLogo; }
     if (d.siteFavicon) { SITE.favicon = d.siteFavicon; }
     if (d.themeColor && /^#[0-9a-f]{6}$/i.test(d.themeColor)) { SITE.theme = d.themeColor; }
+    var pageSize = parseInt(d.pageSize, 10);
+    if (pageSize >= 1 && pageSize <= 200) SITE.pageSize = pageSize;
     applyBranding();
     return d;
   }).catch(function () { applyBranding(); });
@@ -882,6 +889,21 @@ function GET(p) { return api('GET', p); }
 function POST(p, b) { return api('POST', p, b); }
 function PUT(p, b) { return api('PUT', p, b); }
 function DEL(p) { return api('DELETE', p); }
+
+function loadAllRows(path) {
+  var rows = [], page = 1;
+  function next() {
+    return GET(path + (path.indexOf('?') >= 0 ? '&' : '?') + 'page=' + page + '&size=200').then(function (data) {
+      var list = (data && data.list) || [];
+      rows = rows.concat(list);
+      if (rows.length >= Number(data && data.total || 0)) return { list: rows, total: rows.length };
+      if (!list.length) throw new Error('数据分页未完整返回,请刷新后重试');
+      page++;
+      return next();
+    });
+  }
+  return next();
+}
 
 /**
  * FLIP 滑动:布局瞬时切换到终态,再施加反向 transform 从旧视觉位置平滑滑入。
@@ -1247,6 +1269,8 @@ function buildForm(fields, values, extraPanels) {
  * 导入结果摘要(人员多Sheet / 普通模块 两种返回结构)
  */
 function importResultSummary(r) {
+  r = r || {};
+  if (r.error) return '导入失败:' + r.error;
   var msg;
   if (r.subTotal !== undefined) {
     msg = '导入完成:人员 ' + ((r.added || 0) + (r.updated || 0)) + ' 条(新增 ' + (r.added || 0) + ',更新 ' + (r.updated || 0) + '),子记录 ' + r.subTotal + ' 条';
@@ -1262,7 +1286,7 @@ function importResultSummary(r) {
     if (r.subFailed > 0) { msg += ';子记录失败 ' + r.subFailed + ' 条'; }
     if (r.cardWarn > 0) { msg += ';注意:' + r.cardWarn + ' 条身份证号不是18位,请核对'; }
   } else {
-    msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
+    msg = '导入完成:新增 ' + (r.added || 0) + ' 条,更新 ' + (r.updated || 0) + ' 条,失败 ' + (r.failed || 0) + ' 条';
   }
   return msg;
 }
@@ -1281,7 +1305,10 @@ function openImportResultModal(summary, errors) {
       h('div', { style: 'margin-bottom:12px;font-size:14px;color:#26313d', text: summary }),
       h('div', { style: 'font-size:13px;color:#d9463e;font-weight:600;margin-bottom:8px', text: '以下 ' + errors.length + ' 条未导入:' }),
       list),
-    footer: [h('button', { class: 'btn btn-primary', text: '知道了', onclick: function () { m.close(); } })]
+    footer: [h('button', { class: 'btn btn-ghost', text: '下载失败明细', onclick: function () {
+      var report = errors.map(function (e) { return String(e); }).join('\r\n');
+      downloadBlob(new Blob(['\uFEFF' + summary + '\r\n\r\n' + report], { type: 'text/plain;charset=utf-8' }), '导入失败明细.txt');
+    } }), h('button', { class: 'btn btn-primary', text: '知道了', onclick: function () { m.close(); } })]
   });
 }
 
@@ -1519,6 +1546,7 @@ function setupLeaveAutoCalc(form, row) {
           w.textContent = '(' + yr + '年度路途已在 ' + when + ' 使用)';
           lbl.appendChild(w);
         }
+        calc();
       } else {
         unlockTravel();
       }
@@ -1565,7 +1593,7 @@ function setupLeaveAutoCalc(form, row) {
       var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
       if (m) {
         var d = new Date(+m[1], +m[2] - 1, +m[3]);
-        d.setDate(d.getDate() + Math.round(total) - 1);
+        d.setDate(d.getDate() + Math.ceil(total) - 1);
         endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       }
     }
@@ -1577,6 +1605,106 @@ function setupLeaveAutoCalc(form, row) {
   if (travelEl) travelEl.addEventListener('input', calc);
   if (holidayEl) holidayEl.addEventListener('input', calc);
   if (row) setTimeout(calc, 200);
+}
+
+/** 人员删除撤回:列出最近删除的人员(含级联数据快照),可一键恢复或彻底删除 */
+function openPersonnelUndo() {
+  var listBox = h('div');
+  var m = openModal({
+    title: '删除撤回',
+    body: h('div', {},
+      h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:12px;line-height:1.7',
+        text: '可恢复最近删除的人员及其全部关联记录(手机、休假、体能、档案子表、装备/物资/车辆保管、部门负责人、照片)。快照保留 30 天,总量最多 1000 条,批量删除逐人保留。' }),
+      listBox),
+    wide: true,
+    footer: [
+      h('button', {
+        class: 'btn btn-ghost', text: '全部撤回',
+        onclick: function () {
+          var rows = $all('[data-undo-id]', listBox);
+          if (!rows.length) { toast('没有可撤回的记录', 'err'); return; }
+          confirmBox('撤回全部 ' + rows.length + ' 名人员及其关联记录?', true).then(function (yes) {
+            if (!yes) { return; }
+            var ids = [];
+            rows.forEach(function (b) { ids.push(b.getAttribute('data-undo-id')); });
+            var ok = 0, fail = 0, firstErr = '';
+            var chain = Promise.resolve();
+            ids.forEach(function (uid) {
+              chain = chain.then(function () {
+                return POST('/api/personnel/undo/' + uid).then(function () { ok++; })
+                  .catch(function (e) { fail++; if (!firstErr) { firstErr = e.message; } });
+              });
+            });
+            chain.then(function () {
+              toast('撤回完成:成功 ' + ok + ' 人' + (fail ? ',失败 ' + fail + ' 人' + (firstErr ? '(' + firstErr + ')' : '') : ''), fail ? 'info' : 'ok');
+              load();
+              refreshDepts();
+              refreshPersonnelOptions();
+            });
+          });
+        }
+      }),
+      h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+  });
+
+  function fmtTime(t) {
+    return t ? String(t).replace('T', ' ').replace(/\.\d+$/, '') : '';
+  }
+
+  function load() {
+    listBox.innerHTML = '<div class="empty-row">加载中…</div>';
+    GET('/api/personnel/undo-list').then(function (list) {
+      listBox.innerHTML = '';
+      if (!list || !list.length) {
+        listBox.appendChild(h('div', { class: 'empty-row', text: '暂无可撤回的删除记录' }));
+        return;
+      }
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.appendChild(h('thead', {}, h('tr', {},
+        h('th', { text: '姓名' }), h('th', { text: '删除时间' }),
+        h('th', { text: '将恢复的关联记录' }), h('th', { text: '操作', style: 'width:150px' }))));
+      var tb = h('tbody');
+      list.forEach(function (r) {
+        tb.appendChild(h('tr', { 'data-undo-id': r.id },
+          h('td', { text: r.name || ('ID ' + r.personnel_id) }),
+          h('td', { text: fmtTime(r.created_at || r.createdAt) }),
+          h('td', { text: r.summary || '—', style: 'max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }),
+          h('td', { class: 'actions', style: 'white-space:nowrap' },
+            h('button', {
+              class: 'btn-link', text: '撤回',
+              onclick: function () {
+                POST('/api/personnel/undo/' + r.id).then(function (res) {
+                  var skipped = (res && res.skipped) || [];
+                  var msg = '已恢复「' + ((res && res.person && res.person.name) || r.name) + '」' + (r.summary && r.summary !== '无关联记录' ? '及 ' + r.summary : '');
+                  if (skipped.length) { msg += ';注意:' + skipped.join(';'); }
+                  toast(msg, skipped.length ? 'info' : 'ok');
+                  load();
+                  refreshDepts();
+                  refreshPersonnelOptions();
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            }),
+            h('button', {
+              class: 'btn-link danger', text: '彻底删除',
+              onclick: function () {
+                confirmBox('彻底删除「' + (r.name || ('ID ' + r.personnel_id)) + '」的撤回快照?关联记录和照片将无法恢复。', true).then(function (yes) {
+                  if (!yes) { return; }
+                  POST('/api/personnel/undo-discard/' + r.id).then(function () {
+                    toast('已彻底删除');
+                    load();
+                  }).catch(function (e) { toast(e.message, 'err'); });
+                });
+              }
+            }))));
+      });
+      table.appendChild(tb);
+      listBox.appendChild(h('div', { class: 'table-wrap' }, table));
+    }).catch(function (e) {
+      listBox.innerHTML = '';
+      listBox.appendChild(h('div', { class: 'empty-row', text: e.message }));
+    });
+  }
+  load();
 }
 
 function crudView(cfg) {
@@ -1608,6 +1736,12 @@ function crudView(cfg) {
 
   function buildQuery(append) {
     var q = {};
+    // 分组视图固定筛选(如枪支管理固定类别=枪支),不受筛选面板影响
+    if (cfg.fixedFilter) {
+      Object.keys(cfg.fixedFilter).forEach(function (k) {
+        if (cfg.fixedFilter[k]) { q[k] = cfg.fixedFilter[k]; }
+      });
+    }
     Object.keys(state.filters).forEach(function (k) {
       if (state.filters[k] !== '') q[k] = state.filters[k];
     });
@@ -1712,6 +1846,14 @@ function crudView(cfg) {
   function openForm(row) {
     var subExtra = cfg.subPanels ? cfg.subPanels(row) : null;
     var form = buildForm(cfg.form, row || {}, subExtra ? subExtra.panels : null);
+    // 分组视图新增时预填固定值(如枪支管理默认类别=枪支)
+    if (!row && cfg.presetNew) {
+      Object.keys(cfg.presetNew).forEach(function (k) {
+        if (form.inputs[k] && !form.inputs[k].value) {
+          form.inputs[k].value = cfg.presetNew[k];
+        }
+      });
+    }
     var extra = cfg.formTop ? cfg.formTop(row) : null;
     var body = h('div');
     if (extra) body.appendChild(extra.el);
@@ -1785,7 +1927,8 @@ function crudView(cfg) {
             // 保存前转换钩子(剔除仅用于展示的虚拟字段等)
             if (cfg.beforeSave) {
               var transformed = cfg.beforeSave(data, row);
-              if (transformed) data = transformed;
+              if (transformed === null || transformed === false) return;
+              if (transformed !== undefined) data = transformed;
             }
             if (extra && extra.get) {
               var ex = extra.get();
@@ -2007,16 +2150,19 @@ function crudView(cfg) {
       ).then(function (r) {
         pm.setProgress(80);
         pm.setStatus('正在处理数据…');
+        r = r || {};
         var msg = importResultSummary(r);
         pm.setProgress(100);
-        pm.setStatus('导入完成');
+        pm.setStatus(r.error ? '导入失败' : '处理完成');
         pm.close();
-        if (r.errors && r.errors.length) {
-          openImportResultModal(msg, r.errors);
+        var errors = (r.errors || []).slice();
+        if (r.error && errors.indexOf(r.error) < 0) errors.unshift(r.error);
+        if (errors.length) {
+          openImportResultModal(msg, errors);
         } else {
-          toast(msg, r.failed ? 'info' : 'ok');
+          toast(msg, r.error ? 'err' : ((r.failed || r.subFailed) ? 'info' : 'ok'));
         }
-        load();
+        afterChange();
       }).catch(function (e) {
         pm.close();
         toast(e.message, 'err');
@@ -2214,41 +2360,40 @@ function crudView(cfg) {
 /** 通用详情弹窗:按模块表单定义分栏展示全部字段(人员模块附带照片) */
 function openDetailModal(cfg, row, act) {
   var grid = h('div', { class: 'detail-grid' });
-  var SUB_KINDS = { '任职经历': 'position-history', '奖惩情况': 'reward-punish', '家庭信息': 'family' };
+  var SUB_KINDS = {
+    '任职经历': POSITION_SUB, '奖惩情况': REWARD_SUB, '家庭信息': FAMILY_SUB,
+    '驾驶证': DRIVER_SUB, '个人卡号': CARD_SUB, '私家车': PVEHICLE_SUB, '住房情况': HOUSING_SUB
+  };
   (cfg.form || []).forEach(function (f) {
     if (f.section) {
       grid.appendChild(h('div', { class: 'form-section', text: f.section }));
       if (SUB_KINDS[f.section] && row.id) {
         var holder = h('div', { style: 'grid-column:1/-1' });
         grid.appendChild(holder);
-        (function (title, kind) {
-          GET('/api/sub/' + kind + '?personnelId=' + row.id).then(function (list) {
+        (function (def) {
+          GET('/api/sub/' + def.kind + '?personnelId=' + row.id).then(function (list) {
             (list || []).forEach(function (r) {
-              var line;
-              if (title === '任职经历') {
-                line = esc((r.start_date || '—') + ' 至 ' + (r.end_date || '今') + '　'
-                  + r.place + '　任 ' + r.post);
-              } else if (title === '家庭信息') {
-                var age = calcAge(r.birth_date);
-                line = esc((r.relationship || '') + '　' + r.name
-                  + (r.gender ? '(' + r.gender + (age ? ',' + age + '岁' : '') + ')' : '')
-                  + (r.work_info ? '　' + r.work_info : '')
-                  + (r.phone ? '　电话 ' + r.phone : ''));
-              } else {
-                line = esc((r.occur_date || '—') + '　') + badge(r.kind)
-                  + esc('　' + r.reason + '　' + r.content);
-              }
-              holder.appendChild(h('div', { class: 'detail-sub-line', html: line }));
+              var values = def.columns.filter(function (c) { return !c.virtual; }).map(function (c) {
+                var v = r[c.key];
+                return c.label + ':' + (v === null || v === undefined || v === '' ? '—' : String(v));
+              });
+              holder.appendChild(h('div', { class: 'detail-sub-line', text: values.join('　') }));
             });
             if (!list || !list.length) {
               holder.appendChild(h('div', { class: 'detail-sub-line', text: '暂无记录' }));
             }
-          }).catch(function (err) { /* 忽略 */ });
-        })(f.section, SUB_KINDS[f.section]);
+          }).catch(function (err) {
+            holder.appendChild(h('div', { class: 'detail-sub-line', text: '加载失败:' + err.message }));
+          });
+        })(SUB_KINDS[f.section]);
       }
       return;
     }
+    if (f.type === 'hidden' || !f.label) return;
     var v = row[f.key];
+    if (f.type === 'dept') {
+      v = row.departmentName || (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).name || v;
+    }
     grid.appendChild(h('div', { class: 'detail-item' },
       h('div', { class: 'dl', text: f.label }),
       h('div', {
@@ -2829,7 +2974,7 @@ function batchImportPhotos(fileList) {
     });
   }
 
-  GET('/api/personnel?page=1&size=100000').then(function (pageData) {
+  loadAllRows('/api/personnel').then(function (pageData) {
     var byCard = {};
     (pageData && pageData.list ? pageData.list : []).forEach(function (p) {
       var card = (p.idCard || '').trim().toUpperCase();
@@ -2916,11 +3061,9 @@ function openFitnessSession(rw, act) {
     ]
   });
   body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-  var q = '/api/fitness?size=100';
-  if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
-  else { q += '&personnelId=' + rw.personnelId; }
-  if (rw.testDate) { q += '&startDate=' + rw.testDate + '&endDate=' + rw.testDate; }
-  GET(q).then(function (d) {
+  var q = '/api/fitness?personnelId=' + encodeURIComponent(rw.personnelId);
+  if (rw.testDate) { q += '&startDate=' + encodeURIComponent(rw.testDate) + '&endDate=' + encodeURIComponent(rw.testDate); }
+  loadAllRows(q).then(function (d) {
     var rows = (d && d.list) || [];
     var total = 0;
     body.innerHTML = '';
@@ -2964,13 +3107,9 @@ function openPersonProfile(rw, act) {
     ]
   });
   body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-  var fq = '/api/fitness?size=500';
-  if (rw.idCard) { fq += '&idCard=' + encodeURIComponent(rw.idCard); }
-  else { fq += '&personnelId=' + rw.personnelId; }
-  var pq = rw.idCard
-    ? GET('/api/personnel?idCard=' + encodeURIComponent(rw.idCard)).then(function (d) { return (d && d.list && d.list.length) ? d.list[0] : null; })
-    : GET('/api/personnel/' + rw.personnelId);
-  Promise.all([pq, GET(fq), GRADE_RULE ? Promise.resolve(null) : loadGradeRule(), BMI_STD ? Promise.resolve(null) : loadBmiStd()]).then(function (res) {
+  var fq = '/api/fitness?personnelId=' + encodeURIComponent(rw.personnelId);
+  var pq = GET('/api/personnel/' + encodeURIComponent(rw.personnelId));
+  Promise.all([pq, loadAllRows(fq), GRADE_RULE ? Promise.resolve(null) : loadGradeRule(), BMI_STD ? Promise.resolve(null) : loadBmiStd()]).then(function (res) {
     var p = res[0] || {};
     var rows = (res[1] && res[1].list) || [];
     body.innerHTML = '';
@@ -3249,10 +3388,7 @@ function buildTrendChart(series, opts) {
 
 var BMI_STD = null;   // {ranges:[{gender,ageMin,ageMax,min,max},...]}
 function defaultBmiStd() {
-  return { ranges: [
-    { gender: '男', ageMin: 0, ageMax: 99, min: 17.5, max: 27.5 },
-    { gender: '女', ageMin: 0, ageMax: 99, min: 17, max: 24.5 }
-  ] };
+  return normWeightStd({ male: [17.5, 27.5], female: [17, 24.5] });
 }
 /** 归一化:兼容旧 {male:[..],female:[..]} → ranges */
 function normWeightStd(v) {
@@ -3264,7 +3400,9 @@ function normWeightStd(v) {
     var rows = [];
     for (var h = 150; h <= 200; h++) {
       var m2 = h / 100;
-      rows.push({ h: m2, w: [Math.round(m2 * m2 * lo * 10) / 10, Math.round(m2 * m2 * hi * 10) / 10] });
+      rows.push({ h: m2, w: ['0-24', '25-29', '30-39', '40-49', '50-59', '60-99'].map(function () {
+        return [Math.round(m2 * m2 * lo * 10) / 10, Math.round(m2 * m2 * hi * 10) / 10];
+      }) });
     }
     return { rows: rows };
   };
@@ -3279,9 +3417,9 @@ function loadBmiStd() {
   }).catch(function () { BMI_STD = defaultBmiStd(); return BMI_STD; });
 }
 /** 身高(米)匹配标准中最接近的行 */
-function weightRowFor(heightCm) {
+function weightRowFor(heightCm, gender) {
   var std = BMI_STD || defaultBmiStd();
-  var side = (genderIsFemale(heightCumSkip(heightCm)) ? std.female : std.male) || { rows: [] };
+  var side = (gender === '女' ? std.female : std.male) || { rows: [] };
   var best = null, bestDiff = 1e9;
   (side.rows || []).forEach(function (r) {
     var d = Math.abs(r.h * 100 - heightCm);
@@ -3289,12 +3427,9 @@ function weightRowFor(heightCm) {
   });
   return (best && bestDiff <= 0.51) ? best : null;
 }
-function genderIsFemale(ignore) { return window.__pfGender === '女'; }
 /** 体重区间判定: [合格?, 标签, 颜色, 区间描述] */
 function weightVerdict(weightKg, heightCm, gender, age) {
-  window.__pfGender = gender;
-  var row = weightRowFor(heightCm);
-  window.__pfGender = null;
+  var row = weightRowFor(heightCm, gender);
   if (!row) { return [false, '无身高标准', 'var(--c-muted, #8a97a8)', null]; }
   var side = (gender === '女') ? '女' : '男';
   var col = -1;
@@ -3375,45 +3510,67 @@ function matchAgeGroup(ageGroups, age) {
   return null;
 }
 
-/** 根据项目+年龄+成绩文本 → 分数(100/95/.../55),无法计算返回 '' */
+function fitnessMatrixUnit(rows) {
+  var units = [];
+  (rows || []).forEach(function (r) {
+    if (r.unit && units.indexOf(r.unit) < 0) units.push(r.unit);
+  });
+  if (units.length) return units.length === 1 && (units[0] === 'time' || units[0] === 'count') ? units[0] : '';
+  var groups = {}, direction = '';
+  (rows || []).forEach(function (r) {
+    (groups[r.age_group] = groups[r.age_group] || []).push(r);
+  });
+  var invalid = false;
+  Object.keys(groups).forEach(function (key) {
+    var group = groups[key].slice().sort(function (a, b) { return Number(b.score) - Number(a.score); });
+    var groupDirection = '';
+    for (var i = 1; i < group.length; i++) {
+      var diff = Number(group[i].value) - Number(group[i - 1].value);
+      var current = diff > 0 ? 'time' : diff < 0 ? 'count' : '';
+      if (!current || (groupDirection && groupDirection !== current)) { invalid = true; break; }
+      groupDirection = current;
+    }
+    if (!groupDirection || (direction && direction !== groupDirection)) invalid = true;
+    direction = groupDirection;
+  });
+  return invalid ? '' : direction;
+}
+
+/** 根据项目+年龄+成绩文本 → 分数,无法计算返回 '' */
 function calcFitnessGrade(item, scoreText, age) {
   var matrix = FITNESS_MATRIX_CACHE[item];
-  if (!matrix || !matrix.length) { return ''; }
-  var maxV = 0;
-  matrix.forEach(function (r) { if (r.value > maxV) { maxV = r.value; } });
-  var isTime = maxV > 300;
-  var text = String(scoreText || '').trim();
-  if (!text) { return ''; }
-  var perf = null;
-  if (isTime) {
-    var m = /(\d+)['\u2032:](\d+)/.exec(text);
-    if (m) { perf = +m[1] * 60 + +m[2]; }
-    if (perf === null) {
-      var m2 = /(\d+)\s*秒/.exec(text);
-      if (m2) { perf = +m2[1]; }
-    }
-    if (perf === null) {
-      var m3 = /(\d+(?:\.\d+)?)/.exec(text);
-      if (m3) { perf = +m3[1]; }
-    }
-  } else {
-    var m4 = /(\d+)/.exec(text);
-    if (m4) { perf = +m4[1]; }
-  }
-  if (perf === null) { return ''; }
+  if (!matrix || !matrix.length) return '';
   var groups = [];
   matrix.forEach(function (r) {
-    if (groups.indexOf(r.age_group) < 0) { groups.push(r.age_group); }
+    if (groups.indexOf(r.age_group) < 0) groups.push(r.age_group);
   });
   var myGroup = matchAgeGroup(groups, age);
-  if (!myGroup) { return ''; }
+  if (!myGroup) return '';
   var scored = matrix.filter(function (r) { return r.age_group === myGroup; });
-  scored.sort(function (a, b) { return b.score - a.score; });
-  for (var i = 0; i < scored.length; i++) {
-    var need = scored[i].value;
-    if (isTime ? perf <= need : perf >= need) {
-      return String(scored[i].score);
+  var unit = fitnessMatrixUnit(scored);
+  if (!unit) return '';
+  var text = String(scoreText == null ? '' : scoreText).trim(), perf = null;
+  if (!text) return '';
+  if (unit === 'time') {
+    var clock = /^(\d+)\s*(?:分|['\u2032:])\s*(\d+(?:\.\d+)?)\s*(?:秒|["\u2033])?$/.exec(text);
+    if (clock) {
+      if (+clock[2] >= 60) return '';
+      perf = +clock[1] * 60 + +clock[2];
+    } else {
+      var minutes = /^(\d+(?:\.\d+)?)\s*分$/.exec(text);
+      var seconds = /^(\d+(?:\.\d+)?)\s*(?:秒|s)?$/i.exec(text);
+      if (minutes) perf = +minutes[1] * 60;
+      else if (seconds) perf = +seconds[1];
     }
+  } else {
+    var number = /^(\d+(?:\.\d+)?)\s*(?:次|个|米|m|厘米|cm)?$/i.exec(text);
+    if (number) perf = +number[1];
+  }
+  if (perf === null || !isFinite(perf) || perf < 0) return '';
+  scored.sort(function (a, b) { return Number(b.score) - Number(a.score); });
+  for (var i = 0; i < scored.length; i++) {
+    var need = Number(scored[i].value);
+    if (unit === 'time' ? perf <= need : perf >= need) return String(scored[i].score);
   }
   return '55';
 }
@@ -3898,10 +4055,43 @@ function openFitnessStdManager() {
     }
 
     // 工具栏
+    function openUnitDialog() {
+      GET('/api/fitness-matrix?item=' + encodeURIComponent(currentItem)).then(function (rows) {
+        var cur = fitnessMatrixUnit(rows || []);
+        var dd = makeDropdown([{ v: 'count', l: '次数型(越多越好)' }, { v: 'time', l: '时间型(越少越好)' }], '必选');
+        if (cur) { dd.value = cur; }
+        var curText = cur === 'time' ? '时间型(越少越好)' : cur === 'count' ? '次数型(越多越好)' : '待确认';
+        var m2 = openModal({
+          title: '修改计分方式 · ' + currentItem,
+          body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
+            h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c)', text: '当前计分方式:' + curText }),
+            h('div', {}, h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:4px', text: '改为:' }), dd),
+            h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);line-height:1.7',
+              text: '保存后立即对评分生效。达标值数值不会自动换算,请同时核对各分数档的达标值(次数型越大越好,时间型越小越好)。' })),
+          footer: [
+            h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m2.close(); } }),
+            h('button', {
+              class: 'btn btn-primary', text: '保存',
+              onclick: function () {
+                var unit = dd.value;
+                if (!unit) { toast('请选择计分方式', 'err'); return; }
+                POST('/api/fitness-matrix/unit', { item: currentItem, unit: unit }).then(function () {
+                  m2.close();
+                  renderRight();
+                  reloadFitnessMatrix();
+                  toast('计分方式已修改');
+                }).catch(function (e) { toast(e.message, 'err'); });
+              }
+            })
+          ]
+        });
+      });
+    }
     rightHead = h('div', { style: 'margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap' },
       h('strong', { style: 'font-size:15px;color:var(--pri-dark, #16437e)', text: currentItem }),
       h('span', { style: 'color:#a6b3c4;font-size:12px', text: '单元格直接输入,失焦保存;表头点击编辑年龄/分数;× 删除列' }),
       h('div', { style: 'flex:1' }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: '计分方式', title: '修改本项目的计分方式(次数型/时间型)', onclick: openUnitDialog }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '添加年龄段', onclick: promptAgeGroup }),
       h('button', { class: 'btn btn-ghost btn-sm', text: '添加分数行', onclick: promptScoreRow }));
     right.appendChild(rightHead);
@@ -3909,14 +4099,14 @@ function openFitnessStdManager() {
     // 单位提示条:自动检测数据类型并显示
     var isTimeType = false;
     GET('/api/fitness-matrix?item=' + encodeURIComponent(currentItem)).then(function (rows) {
-      var maxV = 0;
-      (rows || []).forEach(function (r) { if (r.value > maxV) { maxV = r.value; } });
-      isTimeType = maxV > 300;
-      var unitLabel = isTimeType ? '时间型(秒)' : '次数型(次)';
-      var unitColor = isTimeType ? 'var(--c-warn, #e8960e)' : '#2f9e5b';
-      var hintText = isTimeType
-        ? "达标值填秒数,如750=12分30秒。成绩可填12分30秒或750。值越小越好。"
-        : "达标值填次数,如15=做15个。成绩填数字即可。值越多越好。";
+      var unit = fitnessMatrixUnit(rows || []);
+      isTimeType = unit === 'time';
+      var unitLabel = unit ? (isTimeType ? '时间型(越少越好)' : '次数型(越多越好)') : '计分方式待确认';
+      var unitColor = isTimeType ? 'var(--c-warn, #e8960e)' : (unit ? '#2f9e5b' : 'var(--c-muted, #8a97a8)');
+      var hintText = !unit ? '该项目各分数档的达标值方向不一致,无法判断计分方式。请修改达标值:分数越高,时间型应越短、次数型应越多;或点上方「计分方式」按钮直接指定。'
+        : isTimeType
+          ? '按用时长短计分:分数越高,要求的用时越短。达标值填秒数,如 12分30秒 填 750。录入成绩时可填「12分30秒」或直接填秒数。'
+          : '按个数/距离计分:分数越高,要求的个数(或米数)越多。达标值直接填数字,支持小数,如俯卧撑填 40、立定跳远填 2.35。录入成绩时填同单位数字即可。';
       right.appendChild(h('div', {
         style: 'background:#fff;border:1px solid #dbe4ee;border-left:3px solid ' + unitColor +
           ';border-radius:6px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--c-body, #445262);display:flex;align-items:center;gap:12px'
@@ -4157,6 +4347,7 @@ var personnelCfg = {
     { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
+    { key: 'locationPoint', label: '所在点位', type: 'select', options: function () { return dictLabels('personnel_location'); } },
     { key: 'post', label: '职务/岗位' },
     { key: 'nativePlace', label: '籍贯所在地' },
     { key: 'entryDateStart', label: '入伍起', type: 'date' },
@@ -4174,6 +4365,7 @@ var personnelCfg = {
     { key: 'gender', label: '性别' },
     { key: 'idCard', label: '身份证号' },
     { key: 'departmentName', label: '部门' },
+    { key: 'locationPoint', label: '所在点位', render: function (r) { return r.locationPoint || '—'; } },
     { key: 'category', label: '人员类别', render: function (r) { return r.category || '—'; } },
     { key: 'rank', label: '军衔/职级' },
     { key: 'post', label: '职务' },
@@ -4184,11 +4376,16 @@ var personnelCfg = {
   ],
   rowTitle: function (r) { return r.name; },
   onView: function (row, act) { openDetailModal(personnelCfg, row, act); },
-  delTip: function (r) { return '确定删除人员「' + r.name + '」吗?相关休假、体能、装备保管记录将一并解除关联,删除后不可恢复。'; },
+  delTip: function (r) { return '确定删除人员「' + r.name + '」吗?其手机设备、休假、体能、档案子表记录将一并删除,装备/物资/车辆保管和部门负责人关联将解除。\n删除后可通过工具栏「删除撤回」完整恢复(快照保留 30 天)。'; },
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
   addLabel: '新增人员',
   toolbarExtra: function (bar, act) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '删除撤回',
+      title: '恢复最近删除的人员及其全部关联记录(手机、休假、体能、子表、保管关联、照片)',
+      onclick: function () { openPersonnelUndo(); }
+    }));
     var dirInput = h('input', { type: 'file', accept: 'image/*', multiple: true, style: 'display:none' });
     dirInput.setAttribute('webkitdirectory', '');
     dirInput.addEventListener('change', function () {
@@ -4214,6 +4411,7 @@ var personnelCfg = {
     { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
     { key: 'phone', label: '手机号', readonly: true, placeholder: '在「手机管理」中添加设备后自动带出', hint: '由手机管理模块维护,取本人最新设备的号码' },
     { key: 'departmentId', label: '部门', type: 'dept' },
+    { key: 'locationPoint', label: '所在点位', type: 'select', options: function () { return dictLabels('personnel_location'); }, hint: '人员当前所在地点,选项在数据字典「所在点位」中维护' },
     { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
     { section: '军衔职务' },
     { key: 'category', label: '人员类别', type: 'select', options: function () { return dictLabels('personnel_category'); } },
@@ -4240,8 +4438,8 @@ var personnelCfg = {
     { key: 'partyActivistDate', label: '积极分子时间', type: 'date' },
     { key: 'partyCandidateDate', label: '预备党员时间', type: 'date' },
     { key: 'partyFullDate', label: '转正时间', type: 'date' },
-    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date', requiredIf: function (v) { return v.politicalStatus === '党员' || v.politicalStatus === '团员'; } },
-    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委', requiredIf: function (v) { return v.politicalStatus === '党员'; } },
+    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date', requiredIf: function (v) { return ['党员', '团员', '中共党员', '共青团员'].indexOf(v.politicalStatus) >= 0; } },
+    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委', requiredIf: function (v) { return v.politicalStatus === '党员' || v.politicalStatus === '中共党员'; } },
     { key: 'partyPost', label: '党内职务', placeholder: '如:支部委员、党委书记' },
     { key: 'partyRemark', label: '党团备注', type: 'textarea', span: 'full' },
     { section: '婚姻状况' },
@@ -4436,7 +4634,7 @@ var equipmentCfg = {
     { key: 'category', label: '类别' },
     { key: 'model', label: '型号' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
-    { key: 'keeperName', label: '保管人' },
+    { key: 'keeperName', label: '保管人', render: function (r) { return r.keeperName || '—'; } },
     { key: 'location', label: '存放位置' },
     { key: 'buyDate', label: '购置日期' },
     { key: 'equipDate', label: '装备时间' }
@@ -4463,6 +4661,45 @@ var equipmentCfg = {
     return data;
   }
 };
+
+/** 装备分组子视图:同一装备台账,固定筛选某类别,新增时预填该类别 */
+function equipmentVariantCfg(key, title, category, icon) {
+  return {
+    key: key, title: title, icon: icon || 'shield', endpoint: '/api/equipment',
+    clickKey: 'name', addLabel: '新增' + title,
+    personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
+    fixedFilter: { category: category },
+    presetNew: { category: category },
+    filters: [
+      { key: 'name', label: '名称' },
+      { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('equipment_status'); } }
+    ],
+    moreFilters: [
+      { key: 'code', label: '编号' },
+      { key: 'keeperName', label: '保管人' },
+      { key: 'location', label: '存放位置' },
+      { key: 'buyDateStart', label: '购置起', type: 'date' },
+      { key: 'buyDateEnd', label: '购置止', type: 'date' }
+    ],
+    columns: [
+      { key: 'name', label: '装备名称' },
+      { key: 'code', label: '编号' },
+      { key: 'category', label: '类别' },
+      { key: 'model', label: '型号' },
+      { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+      { key: 'keeperName', label: '保管人', render: function (r) { return r.keeperName || '—'; } },
+      { key: 'location', label: '存放位置' },
+      { key: 'buyDate', label: '购置日期' },
+      { key: 'equipDate', label: '装备时间' }
+    ],
+    rowTitle: function (r) { return r.name; },
+    form: equipmentCfg.form,
+    beforeSave: equipmentCfg.beforeSave
+  };
+}
+var equipmentGunCfg = equipmentVariantCfg('equipment-gun', '枪支管理', '枪支');
+var equipmentLargeCfg = equipmentVariantCfg('equipment-large', '大型装备', '大型装备', 'box');
+var equipmentSmallCfg = equipmentVariantCfg('equipment-small', '小型装备', '小型装备', 'box');
 
 var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
@@ -4636,12 +4873,10 @@ function openLeaveHistory(rw, act) {
     ]
   });
   body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-  var q = '/api/leave?size=500';
-  if (rw.idCard) { q += '&idCard=' + encodeURIComponent(rw.idCard); }
-  else { q += '&personnelName=' + encodeURIComponent(rw.personnelName || ''); }
+  var q = '/api/leave?personnelId=' + encodeURIComponent(rw.personnelId);
   var ready = Object.keys(HOLIDAY_MAP).length ? Promise.resolve() : loadHolidayMap();
   ready.then(function () {
-  GET(q).then(function (d) {
+  loadAllRows(q).then(function (d) {
     var rows = (d && d.list) || [];
     body.innerHTML = '';
     if (!rows.length) {
@@ -4958,6 +5193,66 @@ var fitnessCfg = {
     delete data.idCard;
     delete data.personnelName;
     delete data.age;
+    return data;
+  }
+};
+
+/* ================= 军事考核(理论/射击/战术等,按分数评定) ================= */
+
+var militaryCfg = {
+  key: 'military', title: '军事考核', icon: 'flag', endpoint: '/api/military',
+  clickKey: 'personnelName', addLabel: '新增考核记录',
+  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('military_type'); } }
+  ],
+  moreFilters: [
+    { key: 'item', label: '考核项目' },
+    { key: 'grade', label: '评定', type: 'select', options: function () { return dictLabels('fitness_grade').length ? dictLabels('fitness_grade') : ['优秀', '良好', '及格', '不及格']; } },
+    { key: 'startDate', label: '考核起', type: 'date' },
+    { key: 'endDate', label: '考核止', type: 'date' }
+  ],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'category', label: '考核类别' },
+    { key: 'item', label: '考核项目' },
+    { key: 'score', label: '成绩', render: function (r) { return r.score || '—'; } },
+    { key: 'points', label: '分数' },
+    { key: 'grade', label: '评定', render: function (r) { return badge(r.grade); } },
+    { key: 'testDate', label: '考核日期' }
+  ],
+  rowTitle: function (r) { return r.personnelName + ' · ' + (r.item || ''); },
+  form: [
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'category', label: '考核类别', type: 'select', options: function () { return dictLabels('military_type'); } },
+    { key: 'item', label: '考核项目', required: true, placeholder: '如:军事理论、射击、战术基础动作' },
+    { key: 'score', label: '成绩', placeholder: '如:92分、良好、48环' },
+    { key: 'points', label: '分数(0-100)', type: 'number', step: '0.5', hint: '填写后自动评定等级,可手动修改' },
+    { key: 'grade', label: '评定', type: 'select', options: function () { return dictLabels('fitness_grade').length ? dictLabels('fitness_grade') : ['优秀', '良好', '及格', '不及格']; } },
+    { key: 'testDate', label: '考核日期', type: 'date', required: true },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ],
+  formSetup: function (form, row) {
+    var ptsEl = form.inputs['points'];
+    var gradeEl = form.inputs['grade'];
+    if (ptsEl && gradeEl) {
+      if (!GRADE_RULE) { loadGradeRule(); }
+      function autoGrade() {
+        var g = gradeForPoints(ptsEl.value);
+        if (g) { gradeEl.value = g; }
+      }
+      ptsEl.addEventListener('input', function () { clearTimeout(ptsEl._gt); ptsEl._gt = setTimeout(autoGrade, 300); });
+      ptsEl.addEventListener('change', autoGrade);
+    }
+  },
+  beforeSave: function (data) {
+    delete data.idCard;
+    delete data.personnelName;
+    if (data.points === '') { delete data.points; }
     return data;
   }
 };
@@ -6549,7 +6844,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
       var box = h('input', { type: 'checkbox', value: m.key });
       box.checked = checkedKeys.indexOf(m.key) >= 0;
       boxes.push(box);
-      wrap.appendChild(h('label', {}, box, m.label));
+      wrap.appendChild(h('label', {}, box, m.label || m.title));
     });
     return {
       el: wrap,
@@ -7247,7 +7542,26 @@ function openChangePassword() {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg];
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg];
+
+/** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
+var NAV_GROUPS = [
+  { key: 'military', icon: 'flag', label: '军事管理', children: [
+    { key: 'military', label: '军事考核' },
+    { key: 'fitness', label: '体能考核' }
+  ] },
+  { key: 'asset', icon: 'shield', label: '装备管理', children: [
+    { key: 'equipment', label: '全部装备' },
+    { key: 'vehicle', label: '车辆管理' },
+    { key: 'equipment-gun', label: '枪支管理' },
+    { key: 'equipment-large', label: '大型装备' },
+    { key: 'equipment-small', label: '小型装备' }
+  ] }
+];
+var NAV_VIEWS = MODULES.concat([equipmentGunCfg, equipmentLargeCfg, equipmentSmallCfg]);
+/** 页面 → 所属分组key(用于父级高亮) */
+var GROUP_OF = {};
+NAV_GROUPS.forEach(function (g) { g.children.forEach(function (c) { GROUP_OF[c.key] = g.key; }); });
 
 function renderShell() {
   if (!TOKEN) {
@@ -7270,7 +7584,10 @@ function renderShell() {
     }
     localStorage.setItem('lastView', view);
     Object.keys(menuItems).forEach(function (k) { menuItems[k].classList.remove('active'); });
+    Object.keys(groupParents).forEach(function (k) { groupParents[k].classList.remove('active'); });
     if (menuItems[view]) menuItems[view].classList.add('active');
+    var gk = GROUP_OF[view];
+    if (gk && groupParents[gk]) { groupParents[gk].classList.add('active'); }
 
     // 切换页面时清理筛选按钮和滚动按钮(非 CRUD 页面不显示)
     $all('.filter-tab-btn', document).forEach(function (b) { b.remove(); });
@@ -7287,7 +7604,7 @@ function renderShell() {
     else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
     else {
       var cfg = null;
-      MODULES.forEach(function (m) { if (m.key === view) cfg = m; });
+      NAV_VIEWS.forEach(function (m) { if (m.key === view) cfg = m; });
       if (!cfg) { cfg = personnelCfg; view = 'personnel'; }
       titleEl.textContent = cfg.title;
       comp = crudView(cfg);
@@ -7296,6 +7613,7 @@ function renderShell() {
   }
 
   var menu = h('div', { class: 'menu' });
+  var groupParents = {};
   function addMenu(key, icon, label) {
     var item = h('div', {
       class: 'menu-item', 'data-tip': label,
@@ -7305,8 +7623,41 @@ function renderShell() {
     menu.appendChild(item);
     menuItems[key] = item;
   }
+  /** 分组菜单:点击父级展开/收起,子项进入对应页面 */
+  function addGroupMenu(g) {
+    var open = localStorage.getItem('menuGroup:' + g.key) !== '0';
+    var arrow = h('span', { class: 'ga', text: '▸' });
+    var children = h('div', { class: 'menu-sub' + (open ? ' open' : '') });
+    var item = h('div', {
+      class: 'menu-item group' + (open ? ' open' : ''), 'data-tip': g.label,
+      onclick: function () {
+        open = !open;
+        item.classList.toggle('open', open);
+        children.classList.toggle('open', open);
+        localStorage.setItem('menuGroup:' + g.key, open ? '1' : '0');
+      }
+    },
+      h('span', { class: 'ic', html: iconSvg(g.icon) }),
+      h('span', { class: 'txt', text: g.label }),
+      arrow);
+    g.children.forEach(function (c) {
+      var sub = h('div', {
+        class: 'menu-item sub', 'data-tip': c.label,
+        onclick: function (e) { e.stopPropagation(); navigate(c.key); }
+      },
+        h('span', { class: 'dot' }),
+        h('span', { class: 'txt', text: c.label }));
+      children.appendChild(sub);
+      menuItems[c.key] = sub;
+    });
+    menu.appendChild(item);
+    menu.appendChild(children);
+    groupParents[g.key] = item;
+  }
   addMenu('stats', 'chart', '仪表盘');   // 仪表盘置顶
-  MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
+  addMenu('personnel', personnelCfg.icon, '人员管理');
+  NAV_GROUPS.forEach(addGroupMenu);
+  [materialCfg, leaveCfg, phoneCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   addMenu('department', 'building', '部门管理');
   addMenu('dict', 'book', '数据字典');
   addMenu('settings', 'shield', '系统设置');
