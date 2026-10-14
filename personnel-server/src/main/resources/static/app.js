@@ -987,6 +987,9 @@ function buildForm(fields, values, extraPanels) {
     }
     inputs[f.key] = el;
     wrap.appendChild(el);
+    if (f.hint) {
+      wrap.appendChild(h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin-top:4px;line-height:1.4', text: f.hint }));
+    }
     panel.appendChild(wrap);
 
     // 人员下拉旁加"选择"按钮:弹窗按姓名/身份证/部门搜索选人
@@ -4054,7 +4057,7 @@ var personnelCfg = {
     { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
     { key: 'birthday', label: '出生日期', type: 'date' },
     { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
-    { key: 'phone', label: '手机号' },
+    { key: 'phone', label: '手机号', readonly: true, placeholder: '在「手机管理」中添加设备后自动带出', hint: '由手机管理模块维护,取本人最新设备的号码' },
     { key: 'departmentId', label: '部门', type: 'dept' },
     { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
     { section: '军衔职务' },
@@ -4105,6 +4108,19 @@ var personnelCfg = {
     var gEl = form.inputs['gender'];
     var bEl = form.inputs['birthday'];
     var aEl = form.inputs['age'];
+    // 手机号只读:编辑时实时从手机管理取本人最新设备号码
+    var phEl = form.inputs['phone'];
+    if (phEl && row && row.id) {
+      phEl.value = String(row.phone || '');
+      api('GET', '/api/phone/by-person?personnelId=' + encodeURIComponent(row.id)).then(function (data) {
+        var list = data && data.list ? data.list : (Array.isArray(data) ? data : []);
+        for (var i = 0; i < list.length; i++) {
+          var pn = String(list[i].phone_number || '').trim();
+          if (pn) { phEl.value = pn; return; }
+        }
+        phEl.value = '';
+      }).catch(function () { /* 取不到设备时保留原值 */ });
+    }
     if (!idEl) { return; }
     function autoFill() {
       var v = String(idEl.value || '').trim().toUpperCase();
@@ -4136,6 +4152,7 @@ var personnelCfg = {
   },
   beforeSave: function (data) {
     delete data.age;
+    delete data.phone; // 手机号由手机管理模块维护,人员表单不修改
     var v = String(data.idCard || '').trim();
     if (v && !validateIdCard(v)) {
       toast('身份证号校验不通过,请核对后重试', 'err');

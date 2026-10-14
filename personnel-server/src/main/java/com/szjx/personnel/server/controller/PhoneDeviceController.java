@@ -84,11 +84,8 @@ public class PhoneDeviceController {
                 pid, deviceType, brand, str(r.get("model")), str(r.get("serialNo")),
                 str(r.get("imei1")), str(r.get("imei2")), str(r.get("phoneNumber")),
                 str(r.get("purchaseDate")), str(r.getOrDefault("status", "在用")), str(r.get("remark")));
-        // 联动:如果填了手机号且人员联系电话为空,自动更新
-        String pn = str(r.get("phoneNumber"));
-        if (!pn.isEmpty()) {
-            jdbc.update("UPDATE personnel SET phone=? WHERE id=? AND (phone IS NULL OR phone='')", pn, pid);
-        }
+        // 联动:人员手机号统一由本模块维护(取最新一个有号码的设备)
+        syncPersonnelPhone(pid);
         return ApiResponse.ok();
     }
 
@@ -103,16 +100,19 @@ public class PhoneDeviceController {
                 str(r.get("phoneNumber")), str(r.get("purchaseDate")),
                 str(r.getOrDefault("status", "在用")), str(r.get("remark")), id);
         if (n == 0) { return ApiResponse.error("记录不存在或已被删除"); }
-        String pn = str(r.get("phoneNumber"));
-        if (!pn.isEmpty()) {
-            jdbc.update("UPDATE personnel SET phone=? WHERE id=? AND (phone IS NULL OR phone='')", pn, pid);
-        }
+        // 联动:设备号码变更后同步人员手机号
+        syncPersonnelPhone(pid);
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/{id}")
     public ApiResponse delete(@PathVariable Long id) {
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT personnel_id FROM phone_device WHERE id=?", id);
         jdbc.update("DELETE FROM phone_device WHERE id=?", id);
+        if (!rows.isEmpty()) {
+            Object pid = rows.get(0).get("personnel_id");
+            if (pid != null) { syncPersonnelPhone(((Number) pid).longValue()); }
+        }
         return ApiResponse.ok();
     }
 
@@ -122,6 +122,14 @@ public class PhoneDeviceController {
         return ApiResponse.ok(jdbc.queryForList(
                 "SELECT l.*, p.name AS personnelName FROM phone_device l " +
                 "LEFT JOIN personnel p ON l.personnel_id = p.id WHERE l.personnel_id=? ORDER BY l.id DESC", personnelId));
+    }
+
+    /** 人员手机号镜像:取该人员最新一个有号码的设备,无设备则清空 */
+    private void syncPersonnelPhone(Long pid) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT phone_number FROM phone_device WHERE personnel_id=? AND phone_number IS NOT NULL AND phone_number!='' ORDER BY id DESC LIMIT 1", pid);
+        String pn = rows.isEmpty() ? "" : String.valueOf(rows.get(0).get("phone_number")).trim();
+        jdbc.update("UPDATE personnel SET phone=? WHERE id=?", pn, pid);
     }
 
     private static String str(Object v) {
