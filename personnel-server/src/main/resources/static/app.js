@@ -44,6 +44,38 @@ function toast(msg, type) {
   setTimeout(function () { t.remove(); }, 2800);
 }
 
+/**
+ * 字段校验气泡:在字段上方浮出红色提示(fixed 定位,不受弹窗滚动裁剪),
+ * 重新输入或 4 秒后自动消失。配套 hideFieldBubble 清除。
+ */
+function hideFieldBubble(el) {
+  if (el && el._fieldBubble) {
+    if (el._fieldBubble.parentNode) { el._fieldBubble.parentNode.removeChild(el._fieldBubble); }
+    el._fieldBubble = null;
+  }
+}
+
+function showFieldBubble(el, text) {
+  if (!el || !text) { return; }
+  hideFieldBubble(el);
+  var b = h('div', { class: 'field-bubble', text: text });
+  document.body.appendChild(b);
+  var r = el.getBoundingClientRect();
+  b.style.left = Math.max(8, Math.min(r.left, window.innerWidth - b.offsetWidth - 8)) + 'px';
+  var top = r.top - b.offsetHeight - 8;
+  b.style.top = (top < 6 ? r.bottom + 6 : top) + 'px';
+  b.classList.add(top < 6 ? 'below' : 'above');
+  el._fieldBubble = b;
+  function clear() {
+    hideFieldBubble(el);
+    el.removeEventListener('input', clear);
+    el.removeEventListener('change', clear);
+  }
+  el.addEventListener('input', clear);
+  el.addEventListener('change', clear);
+  setTimeout(clear, 4000);
+}
+
 function openModal(opt) {
   var mask = h('div', { class: 'mask' });
   var closeBtn = h('button', { class: 'dialog-close', text: '×', onclick: function () { close(); } });
@@ -1133,9 +1165,10 @@ function buildForm(fields, values, extraPanels) {
 
   var err = h('div', { class: 'form-err' });
 
-  /** 校验失败定位:跳到字段所在标签页,红框 + 滚动 + 聚焦 */
-  function markBad(el) {
+  /** 校验失败定位:跳到字段所在标签页,红框 + 气泡提示 + 滚动 + 聚焦 */
+  function markBad(el, reason) {
     el.classList.add('bad');
+    showFieldBubble(el, reason || el.title || '该项为必填,请填写');
     var focusEl = el;
     if (el.classList.contains('dd')) {
       focusEl = el.querySelector('.dd-btn');
@@ -1179,13 +1212,14 @@ function buildForm(fields, values, extraPanels) {
         }
       });
       // 再校验(含条件必填)
+      var firstBadLabel = '';
       fields.forEach(function (f) {
         if (f.section) { return; }
         var v = out[f.key];
         var need = f.required || (f.requiredIf && f.requiredIf(out));
         if (need && !v) {
           missing.push(f.label);
-          if (!firstBadKey) { firstBadKey = f.key; }
+          if (!firstBadKey) { firstBadKey = f.key; firstBadLabel = f.label; }
         }
       });
       if (missing.length) {
@@ -1193,7 +1227,7 @@ function buildForm(fields, values, extraPanels) {
           if (useTabs) {
             activateTab(sectionOf[firstBadKey]);
           }
-          markBad(inputs[firstBadKey]);
+          markBad(inputs[firstBadKey], '「' + firstBadLabel + '」为必填项');
         }
         this.setError('请填写:' + missing.join('、'));
         return null;
@@ -1668,9 +1702,11 @@ function crudView(cfg) {
         if (!validateIdCard(v)) {
           el.classList.add('bad');
           el.title = '身份证校验码不正确,请核对';
+          showFieldBubble(el, '身份证校验码不正确,请核对');
         } else {
           el.classList.remove('bad');
           el.title = '校验通过';
+          hideFieldBubble(el);
         }
       }
       el.addEventListener('change', check);
@@ -2021,7 +2057,7 @@ function crudView(cfg) {
     }
     toolbar.appendChild(h('button', {
       class: 'btn btn-primary',
-      text: '＋ ' + (cfg.addLabel || '新增' + cfg.title.replace(/管理$/, '')),
+      text: cfg.addLabel || '新增' + cfg.title.replace(/管理$/, ''),
       onclick: function () { openForm(null); }
     }));
     // 筛选按钮已改为固定在右侧边缘的垂直标签(document.body 上),不在工具栏
@@ -2568,7 +2604,7 @@ function subRecordsPanel(kind, personnelId, opt) {
 
   box.appendChild(h('div', { style: 'margin-bottom:12px;display:flex;align-items:center;gap:12px' },
     h('button', {
-      class: 'btn btn-ghost btn-sm', text: '＋ 添加' + opt.name,
+      class: 'btn btn-ghost btn-sm', text: '添加' + opt.name,
       onclick: function () {
         var r = { __id: 'l' + (--subUid), __pending: serverMode };
         opt.columns.forEach(function (c) { r[c.key] = ''; });
@@ -3367,7 +3403,7 @@ function openGradeRuleManager() {
     body: h('div', {},
       h('div', { text: '规则按分数从高到低依次判断;例如 "分数 ≥ 90 时评为 优秀"。', style: 'color:var(--c-sub, #66788c);font-size:13px;margin-bottom:12px' }),
       rulesBox,
-      h('button', { class: 'btn btn-ghost', text: '＋ 添加规则', onclick: function () {
+        h('button', { class: 'btn btn-ghost', text: '添加规则', onclick: function () {
         rules.push({ label: '及格', op: '>=', min: 60 });
         renderRules();
       } })),
@@ -3509,12 +3545,12 @@ function openBodyStdManager() {
       table.appendChild(tb);
       gridBox.appendChild(h('div', { class: 'table-wrap', style: 'max-height:62vh' }, table));
       gridBox.appendChild(h('div', { style: 'display:flex;gap:12px;margin-top:12px;flex-wrap:wrap' },
-        h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加身高行', onclick: function () {
+        h('button', { class: 'btn btn-ghost btn-sm', text: '添加身高行', onclick: function () {
           var last = side.rows.length ? side.rows[side.rows.length - 1].h : 1.4;
           side.rows.push({ h: Math.round((last + 0.01) * 100) / 100, w: new Array(data.ages.length).fill(null) });
           renderGrid();
         } }),
-        h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 添加年龄组', onclick: function () {
+        h('button', { class: 'btn btn-ghost btn-sm', text: '添加年龄组', onclick: function () {
           var n = prompt('年龄组名称(如 31-35岁):', '');
           if (n && n.trim()) {
             data.ages.push(n.trim());
@@ -3741,7 +3777,7 @@ function openFitnessStdManager() {
   // 新增项目(带保存按钮)
   addBox.appendChild(h('div', { style: 'font-size:12px;color:var(--c-muted, #8a97a8);margin-bottom:8px', text: '新增考核项目:' }));
   addBox.appendChild(h('button', {
-    class: 'btn btn-primary btn-sm', text: '＋ 新建项目',
+    class: 'btn btn-primary btn-sm', text: '新建项目',
     style: 'width:100%',
     onclick: function () { openNewProjectDialog(); }
   }));
@@ -3816,8 +3852,8 @@ function openFitnessStdManager() {
       h('strong', { style: 'font-size:15px;color:var(--pri-dark, #16437e)', text: currentItem }),
       h('span', { style: 'color:#a6b3c4;font-size:12px', text: '单元格直接输入,失焦保存;表头点击编辑年龄/分数;× 删除列' }),
       h('div', { style: 'flex:1' }),
-      h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 年龄段', onclick: promptAgeGroup }),
-      h('button', { class: 'btn btn-ghost btn-sm', text: '＋ 分数行', onclick: promptScoreRow }));
+      h('button', { class: 'btn btn-ghost btn-sm', text: '添加年龄段', onclick: promptAgeGroup }),
+      h('button', { class: 'btn btn-ghost btn-sm', text: '添加分数行', onclick: promptScoreRow }));
     right.appendChild(rightHead);
 
     // 单位提示条:自动检测数据类型并显示
@@ -4194,16 +4230,19 @@ var personnelCfg = {
     if (!idEl) { return; }
     function autoFill() {
       var v = String(idEl.value || '').trim().toUpperCase();
-      if (!v) { if (aEl) { aEl.value = ''; } idEl.classList.remove('bad'); idEl.title = ''; return; }
+      if (!v) { if (aEl) { aEl.value = ''; } idEl.classList.remove('bad'); idEl.title = ''; hideFieldBubble(idEl); return; }
       var info = validateIdCard(v);
       if (!info) {
+        var msg = v.length === 18 ? '身份证校验码不正确,请核对' : '身份证号应为18位';
         idEl.classList.add('bad');
-        idEl.title = v.length === 18 ? '身份证校验码不正确,请核对' : '身份证号应为18位';
+        idEl.title = msg;
+        showFieldBubble(idEl, msg);
         if (aEl) { aEl.value = ''; }
         return;
       }
       idEl.classList.remove('bad');
       idEl.title = '校验通过';
+      hideFieldBubble(idEl);
       if (gEl) { gEl.value = info.gender; }
       if (bEl) { bEl.value = info.birthday; }
       if (aEl) { aEl.value = String(calcAgeFrom(info.birthday)); }
@@ -5094,7 +5133,7 @@ function departmentView() {
     root.appendChild(statsEl);
     root.appendChild(h('div', { class: 'panel', style: 'margin-top:16px' },
       h('div', { class: 'dept-toolbar' },
-        h('button', { class: 'btn btn-primary', text: '＋ 新增部门', onclick: function () { openForm(null, null); } }),
+        h('button', { class: 'btn btn-primary', text: '新增部门', onclick: function () { openForm(null, null); } }),
         h('button', {
           class: 'btn btn-ghost', text: '全部展开', style: 'margin-left:8px',
           onclick: function () { walk(Ctx.deptTree, function (n) { n._open = true; }); renderTree(); }
@@ -5235,7 +5274,7 @@ function dictView() {
           '<td>' + (d.enabled === false ? '<span class="badge gray">停用</span>' : '<span class="badge green">启用</span>') + '</td>' +
           '<td>' + esc(d.remark) + '</td>' +
           '<td class="actions" style="width:140px;white-space:nowrap">' +
-          (isChild ? '' : '<button class="btn-link" data-sub="' + d.id + '">＋下级</button>') +
+          (isChild ? '' : '<button class="btn-link" data-sub="' + d.id + '">添加下级</button>') +
           '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
       }).join('') : '<tr><td colspan="5" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
@@ -5279,7 +5318,7 @@ function dictView() {
       h('div', { class: 'toolbar' },
         h('strong', { text: (g.name || currentType) + '(' + currentType + ')' }),
         h('div', { class: 'spacer' }),
-        h('button', { class: 'btn btn-primary', text: '＋ 新增选项', onclick: function () { openForm(null); } })),
+        h('button', { class: 'btn btn-primary', text: '新增选项', onclick: function () { openForm(null); } })),
       h('div', { class: 'table-wrap' }, table)));
   }
 
@@ -5960,7 +5999,7 @@ function dashboardView() {
           var added = isAdded(k, kd);
           btns.appendChild(h('button', {
             type: 'button', class: 'pick-kind-btn' + (added ? ' on' : ''),
-            text: (added ? '✓ ' : '＋ ') + DASH_KINDS[kd], title: added ? '已添加' : '以' + DASH_KINDS[kd] + '展示' + dim.label,
+            text: (added ? '✓ ' : '') + DASH_KINDS[kd], title: added ? '已添加' : '以' + DASH_KINDS[kd] + '展示' + dim.label,
             onclick: function () {
               widgets.push({ dim: k, kind: kd, size: 'm' });
               saveWidgets();
@@ -6098,7 +6137,7 @@ function dashboardView() {
       h('div', { class: 'dash-left' },
         h('div', { class: 'dash-toolbar' },
           h('button', { class: 'btn btn-ghost', text: '统计卡', title: '配置顶部统计卡片', onclick: openStatCardPicker }),
-          h('button', { class: 'btn btn-primary', text: '＋ 添加图表', onclick: openPicker }),
+          h('button', { class: 'btn btn-primary', text: '添加图表', onclick: openPicker }),
           h('button', {
             class: 'btn btn-ghost', text: '恢复默认',
             onclick: function () {

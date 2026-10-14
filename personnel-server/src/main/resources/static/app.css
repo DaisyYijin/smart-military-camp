@@ -238,6 +238,29 @@ table.grid td.empty-row { text-align: center; }
 .toast.err { background: #d9463e; }
 .toast.info { background: var(--pri, #2f6fd6); }
 
+/* ---------- 字段校验气泡(红框旁的浮层说明) ---------- */
+.field-bubble {
+  position: fixed; z-index: 400;
+  background: #d9463e; color: #fff;
+  padding: 7px 12px; border-radius: 6px;
+  font-size: 13px; line-height: 1.4;
+  max-width: 300px; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(217, 70, 62, .35);
+  animation: bubble-in .18s ease-out;
+}
+.field-bubble.above::after {
+  content: ''; position: absolute; left: 18px; bottom: -5px;
+  border: 5px solid transparent; border-top-color: #d9463e; border-bottom: none;
+}
+.field-bubble.below::before {
+  content: ''; position: absolute; left: 18px; top: -5px;
+  border: 5px solid transparent; border-bottom-color: #d9463e; border-top: none;
+}
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ---------- 部门树 ---------- */
 .dept-toolbar { padding: 16px 16px; border-bottom: 1px solid #edf1f6; }
 .dept-tree { padding: 12px 8px; }
