@@ -3993,9 +3993,10 @@ var personnelCfg = {
   form: [
     { section: '基本信息' },
     { key: 'name', label: '姓名', required: true },
+    { key: 'idCard', label: '身份证号', hint: '输入后自动校验并带出性别/出生日期/年龄' },
     { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
-    { key: 'idCard', label: '身份证号' },
     { key: 'birthday', label: '出生日期', type: 'date' },
+    { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
     { key: 'phone', label: '手机号' },
     { key: 'departmentId', label: '部门', type: 'dept' },
     { key: 'category', label: '人员类别', type: 'select', options: function () { return dictLabels('personnel_category'); } },
@@ -4041,6 +4042,49 @@ var personnelCfg = {
     { section: '私家车' },
     { section: '住房情况' }
   ],
+  formSetup: function (form, row) {
+    var idEl = form.inputs['idCard'];
+    var gEl = form.inputs['gender'];
+    var bEl = form.inputs['birthday'];
+    var aEl = form.inputs['age'];
+    if (!idEl) { return; }
+    function autoFill() {
+      var v = String(idEl.value || '').trim().toUpperCase();
+      if (!v) { if (aEl) { aEl.value = ''; } idEl.classList.remove('bad'); idEl.title = ''; return; }
+      var info = validateIdCard(v);
+      if (!info) {
+        idEl.classList.add('bad');
+        idEl.title = v.length === 18 ? '身份证校验码不正确,请核对' : '身份证号应为18位';
+        if (aEl) { aEl.value = ''; }
+        return;
+      }
+      idEl.classList.remove('bad');
+      idEl.title = '校验通过';
+      if (gEl) { gEl.value = info.gender; }
+      if (bEl) { bEl.value = info.birthday; }
+      if (aEl) { aEl.value = String(calcAgeFrom(info.birthday)); }
+    }
+    idEl.addEventListener('change', autoFill);
+    idEl.addEventListener('input', function () {
+      clearTimeout(idEl._t);
+      idEl._t = setTimeout(function () {
+        if (String(idEl.value || '').trim().length === 18) { autoFill(); }
+      }, 400);
+    });
+    if (String(idEl.value || '').trim().length === 18) { setTimeout(autoFill, 60); }
+    if (bEl && aEl) {
+      bEl.addEventListener('change', function () { aEl.value = String(calcAgeFrom(bEl.value)); });
+    }
+  },
+  beforeSave: function (data) {
+    delete data.age;
+    var v = String(data.idCard || '').trim();
+    if (v && !validateIdCard(v)) {
+      toast('身份证号校验不通过,请核对后重试', 'err');
+      return null;
+    }
+    return data;
+  },
   subPanels: function (row) {
     var fitnessOpt = {};
     var fk;
