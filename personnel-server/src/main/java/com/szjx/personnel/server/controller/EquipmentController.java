@@ -43,11 +43,14 @@ public class EquipmentController {
                              @RequestParam(required = false) String buyDateStart,
                              @RequestParam(required = false) String buyDateEnd,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "50") int size) {
+                             @RequestParam(defaultValue = "20") int size) {
         if (page < 1) page = 1;
-        if (size < 1 || size > 200) size = 50;
+        if (size < 1 || size > 200) size = 20;
         StringBuilder sql = new StringBuilder(
-            "SELECT e.*, p.name AS keeperName FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
+            "SELECT e.id, e.name, e.code, e.category, e.model, e.status, e.keeper_id AS keeperId, " +
+            "p.name AS keeperName, p.id_card AS keeperIdCard, e.location, e.buy_date AS buyDate, " +
+            "e.equip_date AS equipDate, e.remark, e.created_at AS createdAt, e.updated_at AS updatedAt " +
+            "FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
@@ -87,7 +90,7 @@ public class EquipmentController {
         }
         Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
         sql.append(" ORDER BY e.updated_at DESC, e.id DESC LIMIT ? OFFSET ?");
-        args.add(size); args.add((page - 1) * size);
+        args.add(size); args.add((long) (page - 1) * size);
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }

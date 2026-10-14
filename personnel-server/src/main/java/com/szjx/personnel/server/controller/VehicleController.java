@@ -42,14 +42,14 @@ public class VehicleController {
                              @RequestParam(required = false) String model,
                              @RequestParam(required = false) String driverName,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "50") int size) {
+                             @RequestParam(defaultValue = "20") int size) {
         if (page < 1) page = 1;
-        if (size < 1 || size > 200) size = 50;
+        if (size < 1 || size > 200) size = 20;
         StringBuilder sql = new StringBuilder(
             "SELECT v.id, v.plate_no AS plateNo, v.vin, v.engine_no AS engineNo, v.brand, v.model, v.type, v.color, " +
             "v.fuel_type AS fuelType, v.status, v.driver_id AS driverId, p.name AS driverName, " +
             "p.id_card AS driverIdCard, v.seats, v.mileage, v.purchase_date AS purchaseDate, " +
-            "v.insurance_expiry AS insuranceExpiry, v.inspection_expiry AS inspectionExpiry, " +
+            "v.insurance_expiry AS insuranceExpiry, v.inspection_expiry AS inspectionExpiry, v.equip_date AS equipDate, " +
             "v.remark, v.created_at AS createdAt, v.updated_at AS updatedAt " +
             "FROM vehicle v LEFT JOIN personnel p ON v.driver_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
@@ -86,7 +86,7 @@ public class VehicleController {
         }
         Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
         sql.append(" ORDER BY v.updated_at DESC, v.id DESC LIMIT ? OFFSET ?");
-        args.add(size); args.add((page - 1) * size);
+        args.add(size); args.add((long) (page - 1) * size);
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
