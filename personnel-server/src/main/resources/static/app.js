@@ -6592,6 +6592,78 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   }
 
   var listTable = h('table', { class: 'grid' });
+  var selectedBackups = {};
+  var batchDlBtn = h('button', {
+    class: 'btn btn-ghost', text: '批量下载', disabled: true, title: '下载勾选的备份文件',
+    onclick: function () {
+      var names = Object.keys(selectedBackups);
+      if (!names.length) return;
+      toast('开始下载 ' + names.length + ' 个备份文件', 'info');
+      // 间隔触发,避免浏览器拦截多文件连续下载
+      names.forEach(function (name, i) {
+        setTimeout(function () {
+          apiBlob('/api/backup/download?name=' + encodeURIComponent(name))
+            .then(function (r) { downloadBlob(r.blob, r.filename); })
+            .catch(function (e) { toast('下载 ' + name + ' 失败:' + e.message, 'err'); });
+        }, i * 700);
+      });
+    }
+  });
+  var batchDelBtn = h('button', {
+    class: 'btn btn-ghost', text: '批量删除', disabled: true, title: '删除勾选的备份文件',
+    onclick: function () {
+      var names = Object.keys(selectedBackups);
+      if (!names.length) return;
+      confirmBox('确定删除选中的 ' + names.length + ' 个备份文件吗?删除后不可恢复。', true).then(function (yes) {
+        if (!yes) return;
+        var okCount = 0, failCount = 0;
+        var chain = Promise.resolve();
+        names.forEach(function (name) {
+          chain = chain.then(function () {
+            return POST('/api/backup/delete', { name: name })
+              .then(function () { okCount++; })
+              .catch(function () { failCount++; });
+          });
+        });
+        chain.then(function () {
+          selectedBackups = {};
+          toast('批量删除完成:成功 ' + okCount + ' 个' + (failCount ? ',失败 ' + failCount + ' 个' : ''),
+            failCount ? 'info' : 'ok');
+          loadList();
+        });
+      });
+    }
+  });
+  function syncBatchBtns() {
+    var n = Object.keys(selectedBackups).length;
+    batchDlBtn.disabled = n === 0;
+    batchDelBtn.disabled = n === 0;
+    batchDlBtn.textContent = n ? '批量下载(' + n + ')' : '批量下载';
+    batchDelBtn.textContent = n ? '批量删除(' + n + ')' : '批量删除';
+    // 全选框半选态
+    var cbAll = listTable.querySelector('.cb-all');
+    if (cbAll) {
+      var rows = $all('.cb-row', listTable);
+      var nChecked = rows.filter(function (b) { return b.checked; }).length;
+      cbAll.checked = rows.length > 0 && nChecked === rows.length;
+      cbAll.indeterminate = nChecked > 0 && nChecked < rows.length;
+    }
+  }
+  listTable.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.classList.contains('cb-row')) {
+      var name = t.getAttribute('data-name');
+      if (t.checked) selectedBackups[name] = true; else delete selectedBackups[name];
+      syncBatchBtns();
+    } else if (t.classList.contains('cb-all')) {
+      $all('.cb-row', listTable).forEach(function (b) {
+        var bn = b.getAttribute('data-name');
+        b.checked = t.checked;
+        if (t.checked) selectedBackups[bn] = true; else delete selectedBackups[bn];
+      });
+      syncBatchBtns();
+    }
+  });
   listTable.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-act]');
     if (!b) return;
@@ -6618,9 +6690,15 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   function loadList() {
     GET('/api/backup/list').then(function (list) {
       lastList = list || [];
-      listTable.innerHTML = '<thead><tr><th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th style="width:170px">操作</th></tr></thead><tbody>' +
+      // 清掉已不存在的勾选,避免误删
+      var alive = {};
+      lastList.forEach(function (bk) { alive[bk.name] = true; });
+      Object.keys(selectedBackups).forEach(function (k) { if (!alive[k]) delete selectedBackups[k]; });
+      listTable.innerHTML = '<thead><tr>' +
+        '<th class="cb-cell"><input type="checkbox" class="cb-all" title="全选本页"/></th>' +
+        '<th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th style="width:170px">操作</th></tr></thead><tbody>' +
         (lastList.length ? lastList.map(function (bk) {
-          return '<tr><td>' + esc(bk.createdText) + '</td>' +
+          return '<tr><td class="cb-cell"><input type="checkbox" class="cb-row" data-name="' + esc(bk.name) + '"' + (selectedBackups[bk.name] ? ' checked' : '') + '/></td><td>' + esc(bk.createdText) + '</td>' +
             '<td>' + (bk.auto ? '<span class="badge green">自动</span>' : '<span class="badge blue">手动</span>') + '</td>' +
             '<td>' + moduleBadges(bk.modules) + '</td>' +
             '<td>' + fmtSize(bk.size) + '</td>' +
@@ -6630,7 +6708,16 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             '<button class="btn-link" data-act="download" data-name="' + esc(bk.name) + '">下载</button>' +
             '<button class="btn-link danger" data-act="delete" data-name="' + esc(bk.name) + '">删除</button>' +
             '</td></tr>';
-        }).join('') : '<tr><td colspan="6" class="empty-row">暂无备份</td></tr>') + '</tbody>';
+        }).join('') : '<tr><td colspan="7" class="empty-row">暂无备份</td></tr>') + '</tbody>';
+      // 全选框状态同步(含半选)
+      var cbAll = listTable.querySelector('.cb-all');
+      if (cbAll) {
+        var rows = $all('.cb-row', listTable);
+        var nChecked = rows.filter(function (b) { return b.checked; }).length;
+        cbAll.checked = rows.length > 0 && nChecked === rows.length;
+        cbAll.indeterminate = nChecked > 0 && nChecked < rows.length;
+      }
+      syncBatchBtns();
     }).catch(function (e) {
       toast(e.message, 'err');
     });
@@ -7016,6 +7103,11 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         root.appendChild(autoCard);
         root.appendChild(manualCard);
         listCard.insertBefore(h('h3', { style: 'padding:16px 20px 0;margin-bottom:12px', text: '备份文件' }), listCard.firstChild);
+        listCard.insertBefore(h('div', { style: 'display:flex;align-items:center;gap:12px;padding:0 20px 12px' },
+          h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '勾选文件后可批量操作' }),
+          h('div', { style: 'flex:1' }),
+          batchDlBtn,
+          batchDelBtn), listCard.firstChild.nextSibling);
         root.appendChild(listCard);
         }
         loadList();
