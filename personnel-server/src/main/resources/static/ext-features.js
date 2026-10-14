@@ -117,23 +117,59 @@
     return (age >= 0 && age < 130) ? String(age) : '';
   }
 
-  /** 点名册:竖向 A4,按部门分组,含签到/备注空栏 */
+  /** 点名册:竖向 A4。表头=大单位/小单位;正文=按分队分组的在位人员;底部=不在位人员及原因,均标注人数 */
   function rollCallHtml(rows) {
-    var groups = groupByDepartment(rows);
+    var PRESENT = ['在位', '在职']; // 视为在位的状态;其余(休假/住院/培训/借调等)归入不在位
+    var present = rows.filter(function (r) { return PRESENT.indexOf(r.status) >= 0; });
+    var absent = rows.filter(function (r) { return PRESENT.indexOf(r.status) < 0; });
+
+    // 大单位=系统设置的单位名称;小单位=本次人员同属一个部门时自动带出,否则留空手填
+    var deptNames = [];
+    rows.forEach(function (r) {
+      var d = r.departmentName || '';
+      if (d && deptNames.indexOf(d) < 0) deptNames.push(d);
+    });
+    var smallUnit = deptNames.length === 1 ? deptNames[0] : '';
+
     var no = 0;
-    var body = groups.map(function (g) {
+    var presentGroups = groupByDepartment(present).map(function (g) {
       var trs = g.rows.map(function (r) {
         no++;
-        return '<tr><td>' + no + '</td><td>' + esc(r.departmentName || '') + '</td><td><b>' + esc(r.name || '') + '</b></td>' +
+        return '<tr><td>' + no + '</td><td><b>' + esc(r.name || '') + '</b></td>' +
           '<td>' + esc(r.post || '') + '</td><td>' + esc(r.rank || '') + '</td><td class="sign"></td><td></td></tr>';
       }).join('');
-      return '<tr class="grp"><td colspan="7">' + esc(g.name) + '(' + g.rows.length + '人)</td></tr>' + trs;
+      return '<tr class="grp"><td colspan="6">' + esc(g.name) + '(在位' + g.rows.length + '人)</td></tr>' + trs;
     }).join('');
-    var male = rows.filter(function (r) { return r.gender === '男'; }).length;
-    return '<h1>' + esc(SITE.name) + '人员点名册</h1>' +
-      '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank"></span></span><span>应到:' + rows.length + '人(男' + male + '/女' + (rows.length - male) + ')</span></div>' +
-      '<table><thead><tr><th style="width:34px">序号</th><th style="width:16%">部门</th><th style="width:12%">姓名</th><th style="width:16%">职务</th><th style="width:12%">军衔/职级</th><th style="width:11%">签到</th><th>备注</th></tr></thead><tbody>' + body + '</tbody></table>' +
-      '<div class="foot"><span>实到:<span class="blank" style="min-width:60px"></span>人</span><span>未到:<span class="blank" style="min-width:60px"></span>人</span><span>点名人:<span class="blank" style="min-width:80px"></span></span></div>';
+
+    // 不在位原因汇总(标注人数),如:休假2人、住院1人
+    var reasons = [];
+    absent.forEach(function (r) {
+      var s = r.status || '其他';
+      var found = null;
+      for (var i = 0; i < reasons.length; i++) { if (reasons[i][0] === s) { found = reasons[i]; break; } }
+      if (found) { found[1]++; } else { reasons.push([s, 1]); }
+    });
+    var reasonText = reasons.map(function (x) { return esc(x[0]) + x[1] + '人'; }).join('、');
+    var ano = 0;
+    var absentRows = absent.map(function (r) {
+      ano++;
+      return '<tr><td>' + ano + '</td><td><b>' + esc(r.name || '') + '</b></td><td>' + esc(r.departmentName || '') + '</td>' +
+        '<td>' + esc(r.post || '') + '</td><td>' + esc(r.rank || '') + '</td><td>' + esc(r.status || '') + '</td><td></td></tr>';
+    }).join('');
+    var absentBlock = '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
+      '<table><thead><tr><th style="width:34px">序号</th><th style="width:12%">姓名</th><th style="width:15%">分队</th><th style="width:15%">职务</th><th style="width:13%">军衔/职级</th><th style="width:12%">原因</th><th>备注</th></tr></thead><tbody>' +
+      (absentRows || '<tr><td colspan="7" class="none">无</td></tr>') + '</tbody></table>';
+
+    return '<h1>' + esc(SITE.name) + '</h1>' +
+      '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
+      '<div class="docname">人员点名册</div>' +
+      '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank" style="min-width:110px"></span></span></div>' +
+      '<h2>在位人员(共' + present.length + '人)</h2>' +
+      '<table><thead><tr><th style="width:34px">序号</th><th style="width:12%">姓名</th><th style="width:16%">职务</th><th style="width:12%">军衔/职级</th><th style="width:11%">签到</th><th>备注</th></tr></thead><tbody>' +
+      (presentGroups || '<tr><td colspan="6" class="none">无</td></tr>') + '</tbody></table>' +
+      absentBlock +
+      '<div class="foot"><span>应到:' + rows.length + '人</span><span>在位:' + present.length + '人</span><span>不在位:' + absent.length + '人</span>' +
+      '<span>实到:<span class="blank" style="min-width:50px"></span>人</span><span>点名人:<span class="blank" style="min-width:70px"></span></span></div>';
   }
 
   /** 花名册:横向 A4,按部门分组,含基本情况和联系方式 */
@@ -170,7 +206,11 @@
       '@page{size:A4 ' + (landscape ? 'landscape' : 'portrait') + ';margin:10mm 9mm;}' +
       '*{box-sizing:border-box;}' +
       'body{margin:0;font-family:"Microsoft YaHei","PingFang SC","SimSun",sans-serif;color:#111;font-size:12px;}' +
-      'h1{margin:0 0 6px;text-align:center;font-size:19px;letter-spacing:3px;}' +
+      'h1{margin:0 0 2px;text-align:center;font-size:19px;letter-spacing:3px;}' +
+      'h2{margin:12px 0 5px;font-size:13.5px;letter-spacing:1px;page-break-after:avoid;}' +
+      'h2.unit{margin:0 0 2px;text-align:center;font-size:16px;letter-spacing:2px;font-weight:600;}' +
+      '.docname{text-align:center;font-size:15px;font-weight:600;letter-spacing:8px;margin:2px 0 8px;}' +
+      'td.none{text-align:center;color:#666;}'
       '.sub{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}' +
       'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
       'th,td{border:1px solid #333;padding:4px 3px;text-align:center;word-break:break-all;}' +
