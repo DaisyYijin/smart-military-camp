@@ -77,7 +77,7 @@ public class ModuleExcelService {
     private static final Map<String, Map<String, String>> DICT_COLS = new java.util.HashMap<String, Map<String, String>>();
     static {
         Map<String, String> m = new java.util.HashMap<String, String>();
-        m.put("brand", "vehicle_brand"); m.put("type", "vehicle_type");
+        m.put("brand", "vehicle_brand"); m.put("model", "vehicle_model"); m.put("type", "vehicle_type");
         m.put("status", "vehicle_status"); m.put("fuelType", "vehicle_fuel");
         DICT_COLS.put("vehicle", m);
         m = new java.util.HashMap<String, String>();
@@ -194,11 +194,29 @@ public class ModuleExcelService {
                         new Col("分数", "points", "number", true),
                         new Col("评定等级", "grade", "text", true)),
                 ""));
+        MODULES.put("military", new ModuleDef("military", "军事考核", "military_assessment", "军事考核",
+                Arrays.asList(
+                        new Col("姓名", "personnelId", "ref-personnel"),
+                        new Col("考核类别", "category", "text"),
+                        new Col("考核项目", "item", "text"),
+                        new Col("成绩", "score", "text"),
+                        new Col("分数", "points", "number"),
+                        new Col("评定等级", "grade", "text"),
+                        new Col("考核日期", "testDate", "text"),
+                        new Col("备注", "remark", "text")),
+                ""));
+        Map<String, String> militaryDict = new java.util.HashMap<String, String>();
+        militaryDict.put("category", "military_type");
+        DICT_COLS.put("military", militaryDict);
     }
 
     private final JdbcTemplate jdbc;
     private final PersonnelService personnelService;
     private final DepartmentDaoBridge departmentDaoBridge;
+    private LeaveService leaveService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLeaveService(LeaveService leaveService) { this.leaveService = leaveService; }
 
     /** 部门名解析桥:避免直接依赖 DepartmentDao 造成循环,取人员导出所需 */
     @Service
@@ -287,7 +305,7 @@ public class ModuleExcelService {
         }
         if ("personnel".equals(moduleKey)) {
             List<com.szjx.personnel.server.model.Personnel> all =
-                    personnelService.query(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1, 100000);
+                    personnelService.query(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1, 100000);
             List<com.szjx.personnel.server.model.Personnel> selected =
                     new ArrayList<com.szjx.personnel.server.model.Personnel>();
             for (com.szjx.personnel.server.model.Personnel p : all) {
@@ -400,495 +418,253 @@ public class ModuleExcelService {
 
     /* ================= 导入 ================= */
 
-    @SuppressWarnings("unchecked")
     public Map<String, Object> importExcel(String moduleKey, InputStream in) {
+        if ("personnel".equals(moduleKey)) return new PersonnelFullExcel(jdbc).importAll(in);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        int added = 0, updated = 0, failed = 0;
         List<String> errors = new ArrayList<String>();
-        try {
-            if ("personnel".equals(moduleKey)) {
-                List<com.szjx.personnel.server.model.Personnel> rows;
-                try {
-                    rows = ExcelUtils.importXlsx(in);
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("文件解析失败,请使用系统导出的模板(.xlsx)");
-                }
-                int[] r = personnelService.importRows(rows);
-                result.put("added", r[0]);
-                result.put("updated", r[1]);
-                result.put("failed", r[2]);
-                return result;
-            }
-
-            Workbook wb = new XSSFWorkbook(in);
+        int added = 0, updated = 0, failed = 0;
+        try (Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(in)) {
+            if (wb.getNumberOfSheets() == 0) throw new IllegalArgumentException("文件没有工作表");
             Sheet sheet = wb.getSheetAt(0);
             DataFormatter fmt = new DataFormatter();
-            Row headRow = sheet.getRow(0);
-            if (headRow == null) {
-                throw new IllegalArgumentException("文件没有列头(第一行应为中文列头,建议用系统导出的模板)");
-            }
-            Map<String, Integer> headerIndex = new HashMap<String, Integer>();
-            for (int i = 0; i < headRow.getLastCellNum(); i++) {
-                String h = fmt.formatCellValue(headRow.getCell(i)).trim();
-                if (!h.isEmpty()) {
-                    headerIndex.put(h, i);
-                }
-            }
-
-            if ("dict".equals(moduleKey)) {
-                for (int r = 1; r <= sheet.getLastRowNum(); r++) {
-                    Row row = sheet.getRow(r);
-                    if (row == null) {
-                        continue;
-                    }
-                    String type = cell(row, headerIndex, "字典类型", fmt);
-                    String label = cell(row, headerIndex, "选项内容", fmt);
-                    if (type.isEmpty() || label.isEmpty()) {
-                        failed++;
-                        addError(errors, r, "字典类型/选项内容为空");
-                        continue;
-                    }
-                    String sortStr = cell(row, headerIndex, "排序", fmt);
-                    String enabledStr = cell(row, headerIndex, "状态", fmt);
-                    String remark = cell(row, headerIndex, "备注", fmt);
-                    Integer existing = jdbc.queryForObject(
-                            "SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=?",
-                            Integer.class, type, label);
-                    int sort = sortStr.isEmpty() ? 0 : (int) Double.parseDouble(sortStr);
-                    int enabled = "停用".equals(enabledStr) ? 0 : 1;
-                    if (existing != null && existing > 0) {
-                        jdbc.update("UPDATE sys_dict SET sort=?, enabled=?, remark=?, "
-                                        + "updated_at=datetime('now','localtime') WHERE id=?",
-                                sort, enabled, remark, existing);
-                        updated++;
-                    } else {
-                        jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark) "
-                                        + "VALUES(?,?,?,?,?)",
-                                type, label, sort, enabled, remark);
-                        added++;
-                    }
-                }
-            } else {
-                ModuleDef def = MODULES.get(moduleKey);
-                if (def == null) {
-                    throw new IllegalArgumentException("不支持的模块: " + moduleKey);
-                }
-                Map<String, Long> personIds = personIdMap();
-                Map<String, Long> cardMap = new java.util.HashMap<String, Long>();
-                for (Map<String, Object> pr : jdbc.queryForList(
-                        "SELECT id, id_card FROM personnel WHERE id_card IS NOT NULL AND id_card != ''")) {
-                    cardMap.put(String.valueOf(pr.get("id_card")).trim().toUpperCase(),
-                            ((Number) pr.get("id")).longValue());
-                }
-                // 字典下拉项预载:导入值必须命中,防止手填错别字批量入库
-                Map<String, String> dm = DICT_COLS.get(moduleKey);
-                Map<String, java.util.Set<String>> dictSets = dm == null
-                        ? java.util.Collections.emptyMap()
-                        : loadDictSets(dm.values());
-                for (int r = 1; r <= sheet.getLastRowNum(); r++) {
-                    Row row = sheet.getRow(r);
-                    if (row == null) {
-                        continue;
-                    }
-                    Map<String, Object> vals = new LinkedHashMap<String, Object>();
-                    boolean rowOk = true;
-                    for (Col col : def.cols) {
-                        String raw = cell(row, headerIndex, col.header, fmt);
-                        if ("ref-personnel".equals(col.type)) {
-                            if (raw.isEmpty()) {
-                                vals.put(col.key, 0L);
-                            } else if (personIds.containsKey(raw)) {
-                                vals.put(col.key, personIds.get(raw));
-                            } else {
-                                failed++;
-                                addError(errors, r, "人员不存在:" + raw);
-                                rowOk = false;
-                                break;
+            Map<String, Integer> headers = Integrity.headers(sheet, fmt);
+            ModuleDef def = MODULES.get(moduleKey);
+            if (!"dict".equals(moduleKey) && def == null) throw new IllegalArgumentException("不支持的模块:" + moduleKey);
+            List<Integer> rows = new ArrayList<Integer>();
+            for (int r = 1; r <= sheet.getLastRowNum(); r++) if (!Integrity.blank(sheet.getRow(r), fmt)) rows.add(r);
+            if ("dict".equals(moduleKey)) rows.sort((a, b) -> Integer.compare(cell(sheet.getRow(a), headers, "父级路径", fmt).split("/", -1).length, cell(sheet.getRow(b), headers, "父级路径", fmt).split("/", -1).length));
+            for (int r : rows) {
+                try {
+                    boolean changed = Integrity.transaction(jdbc, () -> {
+                        Row row = sheet.getRow(r);
+                        if ("dict".equals(moduleKey)) return importDictRow(row, headers, fmt);
+                        Map<String, Object> vals = new LinkedHashMap<String, Object>();
+                        for (Col col : def.cols) {
+                            if (col.computed) continue;
+                            String raw = cell(row, headers, col.header, fmt);
+                            if ("ref-personnel".equals(col.type)) {
+                                String card = cell(row, headers, col.header + "身份证号", fmt);
+                                if (card.isEmpty()) card = cell(row, headers, "身份证号码", fmt);
+                                if (card.isEmpty()) card = cell(row, headers, "身份证号", fmt);
+                                if (!raw.isEmpty() || !card.isEmpty()) vals.put(snake(col.key), Integrity.person(jdbc, card, raw));
+                                else if (headers.containsKey(col.header)) vals.put(snake(col.key), null);
+                            } else if (headers.containsKey(col.header)) {
+                                if ("number".equals(col.type) || "int".equals(col.type)) {
+                                    if (raw.isEmpty()) vals.put(snake(col.key), null);
+                                    else {
+                                        double n = FitnessScoringService.number(raw, col.header);
+                                        if ("int".equals(col.type) && (n != Math.rint(n) || n > Integer.MAX_VALUE)) throw new IllegalArgumentException(col.header + "必须为非负整数");
+                                        vals.put(snake(col.key), "int".equals(col.type) ? (Object)(int)n : n);
+                                    }
+                                } else {
+                                    if (Integrity.dateKey(snake(col.key)) && !raw.isEmpty()) raw = Integrity.dateCell(row.getCell(headers.get(col.header)), raw, col.header);
+                                    vals.put(snake(col.key), raw);
+                                }
                             }
-                        } else if ("number".equals(col.type)) {
-                            vals.put(col.key, raw.isEmpty() ? null : Double.valueOf(raw));
-                        } else if ("int".equals(col.type)) {
-                            vals.put(col.key, raw.isEmpty() ? null : (int) Double.parseDouble(raw));
-                        } else if (dm != null && dm.containsKey(col.key) && !raw.isEmpty()
-                                && !dictSets.get(dm.get(col.key)).contains(raw)) {
-                            failed++;
-                            addError(errors, r, col.header + "「" + raw + "」不在下拉选项中,请先在数据字典中维护后再导入");
-                            rowOk = false;
-                            break;
-                        } else {
-                            vals.put(col.key, raw);
                         }
-                    }
-                    if (!rowOk) {
-                        continue;
-                    }
-                    if ("fitness".equals(moduleKey)) {
-                        String err = prepareFitnessRow(vals, cardMap, personIds);
-                        if (err != null) {
-                            failed++;
-                            addError(errors, r, err);
-                            continue;
+                        if ("fitness".equals(moduleKey)) vals.put("personnel_id", Integrity.person(jdbc, str(vals.remove("id_card")), str(vals.remove("person_name"))));
+                        Long id = Integrity.existing(jdbc, def.table, vals, businessKeys(def, vals));
+                        Map<String, Object> merged = new LinkedHashMap<String, Object>();
+                        if (id != null) merged.putAll(jdbc.queryForMap("SELECT * FROM " + def.table + " WHERE id=?", id));
+                        merged.putAll(vals); requireModule(def.key, merged);
+                        Map<String, String> dict = DICT_COLS.get(def.key);
+                        if (dict != null) for (Map.Entry<String, String> entry : dict.entrySet()) Integrity.dict(jdbc, entry.getValue(), str(merged.get(snake(entry.getKey()))));
+                        if ("vehicle".equals(moduleKey)) Integrity.cascade(jdbc, "vehicle_brand", str(merged.get("brand")), "vehicle_model", str(merged.get("model")));
+                        if ("fitness".equals(moduleKey)) {
+                            com.szjx.personnel.server.model.FitnessRecord record = new com.szjx.personnel.server.model.FitnessRecord();
+                            record.setPersonnelId(((Number)merged.get("personnel_id")).longValue()); record.setItem(str(merged.get("item"))); record.setScore(str(merged.get("score"))); record.setTestDate(str(merged.get("test_date")));
+                            new FitnessScoringService(jdbc).score(record); vals.put("points", record.getPoints()); vals.put("grade", record.getGrade());
                         }
-                    }
-                    // 必填与业务键
-                    String nameVal = String.valueOf(vals.get(def.cols.get(0).key));
-                    if (nameVal == null || nameVal.isEmpty() || "null".equals(nameVal)) {
-                        failed++;
-                        addError(errors, r, def.cols.get(0).header + "为空");
-                        continue;
-                    }
-                    upsert(def, vals);
-                    if (rowUpdated) {
-                        updated++;
-                    } else {
-                        added++;
-                    }
-                }
+                        if ("leave".equals(moduleKey)) {
+                            if (leaveService == null) throw new IllegalStateException("休假服务未配置");
+                            com.szjx.personnel.server.model.LeaveRecord record = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(camelMap(merged), com.szjx.personnel.server.model.LeaveRecord.class);
+                            if (id == null) leaveService.create(record); else leaveService.update(id, record);
+                        } else Integrity.save(jdbc, def.table, vals, id);
+                        if ("phone".equals(moduleKey)) Integrity.syncPhone(jdbc, ((Number)merged.get("personnel_id")).longValue());
+                        return id != null;
+                    });
+                    if (changed) updated++; else added++;
+                } catch (Exception e) { failed++; errors.add("第" + (r + 1) + "行:" + Integrity.message(e)); }
             }
-            wb.close();
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalArgumentException("文件解析失败:" + e.getMessage()
-                    + "(请使用系统导出的 .xlsx 模板)");
-        }
-        result.put("added", added);
-        result.put("updated", updated);
-        result.put("failed", failed);
-        if (!errors.isEmpty()) {
-            result.put("errors", errors);
-        }
+        } catch (Exception e) { result.put("error", "文件解析失败:" + Integrity.message(e)); }
+        result.put("added", added); result.put("updated", updated); result.put("failed", failed); result.put("errors", errors);
         return result;
     }
 
-    private boolean rowUpdated;
-
-    /* ================= 体能导入:按体能标准矩阵与评定标准自动计算 ================= */
-
-    /** 体能行准备:匹配人员 → 校验项目与体能标准一致 → 算分数 → 评定;返回错误信息或 null */
-    private String prepareFitnessRow(Map<String, Object> vals, Map<String, Long> cardMap, Map<String, Long> nameMap) {
-        String card = str(vals.get("idCard"));
-        String name = str(vals.get("personName"));
-        Long pid = null;
-        if (!card.isEmpty()) {
-            pid = cardMap.get(card.trim().toUpperCase());
+    private Map<String, Object> camelMap(Map<String, Object> db) {
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        for (String key : Arrays.asList("personnel_id", "year", "leave_type", "start_date", "end_date", "days", "travel_days", "holiday_days", "holiday_name", "reason", "remark")) {
+            StringBuilder name = new StringBuilder(); boolean upper = false;
+            for (char c : key.toCharArray()) { if (c == '_') upper = true; else { name.append(upper ? Character.toUpperCase(c) : c); upper = false; } }
+            result.put(name.toString(), db.get(key));
         }
-        if (pid == null && !name.isEmpty()) {
-            pid = nameMap.get(name.trim());
+        return result;
+    }
+    private String[] businessKeys(ModuleDef def, Map<String, Object> vals) {
+        if ("material".equals(def.key)) return new String[]{"name", "category", "spec", "unit", "location", "detail_location"};
+        if ("leave".equals(def.key)) return new String[]{"personnel_id", "start_date", "end_date", "leave_type"};
+        if ("fitness".equals(def.key)) return new String[]{"personnel_id", "test_date", "item"};
+        if ("phone".equals(def.key)) {
+            for (String key : Arrays.asList("serial_no", "imei1", "imei2")) if (!str(vals.get(key)).isEmpty()) return new String[]{"personnel_id", key};
+            throw new IllegalArgumentException("设备幂等业务键需要序列号或IMEI，不能按姓名/品牌猜测设备");
         }
-        if (pid == null || pid == 0) {
-            return "人员不存在(按身份证号/姓名均未匹配)";
+        return new String[]{snake(def.importKey)};
+    }
+    private void requireModule(String key, Map<String, Object> vals) {
+        String[] required;
+        if ("equipment".equals(key)) required = new String[]{"name", "code"};
+        else if ("material".equals(key)) required = new String[]{"name", "quantity"};
+        else if ("vehicle".equals(key)) required = new String[]{"plate_no"};
+        else if ("phone".equals(key)) required = new String[]{"personnel_id", "device_type", "brand"};
+        else if ("leave".equals(key)) required = new String[]{"personnel_id", "leave_type", "start_date", "end_date", "days"};
+        else required = new String[]{"personnel_id", "test_date", "item", "score"};
+        for (String field : required) Integrity.required(vals, field);
+        if ("leave".equals(key) && str(vals.get("start_date")).compareTo(str(vals.get("end_date"))) > 0) throw new IllegalArgumentException("结束日期早于开始日期");
+    }
+    private boolean importDictRow(Row row, Map<String, Integer> headers, DataFormatter fmt) {
+        String type = cell(row, headers, "字典类型", fmt), label = cell(row, headers, "选项内容", fmt);
+        if (type.isEmpty() || label.isEmpty()) throw new IllegalArgumentException("字典类型/选项内容为空");
+        String parentType = cell(row, headers, "父级类型", fmt), path = cell(row, headers, "父级路径", fmt);
+        Long parent = 0L;
+        if (!path.isEmpty()) parent = Integrity.dictPath(jdbc, parentType, path, false);
+        else if (!cell(row, headers, "父级内容", fmt).isEmpty()) parent = Integrity.dictId(jdbc, parentType, cell(row, headers, "父级内容", fmt), null, false);
+        String expected = Integrity.parentType(type);
+        if (!expected.isEmpty() && !"rank".equals(type) && (parent == 0 || !expected.equals(parentType))) throw new IllegalArgumentException("该字典需有效父级类型/路径:" + expected);
+        Map<String, Object> vals = new LinkedHashMap<String, Object>(); vals.put("dict_type", type); vals.put("dict_label", label);
+        if (headers.containsKey("父级路径") || headers.containsKey("父级内容") || headers.containsKey("父级类型")) vals.put("parent_id", parent);
+        Long id = Integrity.existing(jdbc, "sys_dict", vals, vals.containsKey("parent_id") ? new String[]{"dict_type", "dict_label", "parent_id"} : new String[]{"dict_type", "dict_label"});
+        if (headers.containsKey("排序")) {
+            String sort = cell(row, headers, "排序", fmt); double n = sort.isEmpty() ? 0 : FitnessScoringService.number(sort, "排序");
+            if (n != Math.rint(n) || n > Integer.MAX_VALUE) throw new IllegalArgumentException("排序必须为非负整数"); vals.put("sort", (int)n);
         }
-        String item = str(vals.get("item"));
-        if (item.isEmpty()) {
-            return "考核项目为空";
+        if (headers.containsKey("状态")) {
+            String enabled = cell(row, headers, "状态", fmt);
+            if (!Arrays.asList("", "启用", "停用", "1", "0").contains(enabled)) throw new IllegalArgumentException("状态应为启用/停用");
+            vals.put("enabled", "停用".equals(enabled) || "0".equals(enabled) ? 0 : 1);
         }
-        // BMI:按性别合格区间评分(身高体重指数),不走评分矩阵
-        // 体重标准(身高×年龄交叉表):成绩填体重kg,按该人身高行+年龄列查合格区间
-        if ("BMI".equals(item) || "体重".equals(item)) {
-            Double weight = null;
-            java.util.regex.Matcher wm = java.util.regex.Pattern.compile("([0-9]+(?:[.][0-9]+)?)").matcher(str(vals.get("score")));
-            if (wm.find()) { weight = Double.parseDouble(wm.group(1)); }
-            if (weight == null || weight < 25 || weight > 200) {
-                return "体重成绩应为25~200之间的数值(kg)";
-            }
-            List<Map<String, Object>> g = jdbc.queryForList("SELECT gender, height, birthday FROM personnel WHERE id=?", pid);
-            String gender = "";
-            Double heightCm = null;
-            Integer age = null;
-            if (!g.isEmpty()) {
-                Map<String, Object> pp = g.get(0);
-                if (pp.get("gender") != null) { gender = String.valueOf(pp.get("gender")); }
-                if (pp.get("height") != null) { heightCm = ((Number) pp.get("height")).doubleValue(); }
-                age = ageAt(String.valueOf(pp.get("birthday") == null ? "" : pp.get("birthday")), null);
-            }
-            if (heightCm == null || heightCm < 140 || heightCm > 210) {
-                return "该人员未维护身高(或超出140~210cm),无法按体重标准判定";
-            }
-            double heightM = Math.round(heightCm) / 100.0 * 100 / 100.0;
-            heightM = Math.round(heightCm) / 100.0;
-            heightM = Math.round(heightCm * 1.0) / 100.0;
-            heightM = Math.floor(heightCm + 0.5) / 100.0;
-            double[] range = weightRange(gender, heightCm, age);
-            if (range == null) {
-                return "体重标准中没有身高 " + String.format("%.2f", heightM) + "m 的行,请先在[体能标准-BMI标准]中维护";
-            }
-            boolean pass = weight >= range[0] && weight <= range[1];
-            vals.put("personnelId", pid);
-            vals.put("points", pass ? 100.0 : 0.0);
-            vals.put("grade", pass ? "及格" : "不及格");
-            return null;
-        }
-        java.util.Set<String> items = new java.util.HashSet<String>();
-        for (Map<String, Object> r : jdbc.queryForList("SELECT DISTINCT item FROM fitness_matrix")) {
-            items.add(String.valueOf(r.get("item")));
-        }
-        if (!items.contains(item)) {
-            return "考核项目「" + item + "」与体能标准不一致,请先在[体能标准]中维护该项目";
-        }
-        String testDate = str(vals.get("testDate"));
-        String birthday = birthdayOf(pid);
-        Integer age = ageAt(birthday, testDate);
-        Double pts = calcFitnessPoints(item, str(vals.get("score")), age);
-        if (pts == null) {
-            return "无法按体能标准计算分数(检查成绩格式,及该项目年龄段是否覆盖考核者年龄)";
-        }
-        vals.put("personnelId", pid);
-        vals.put("points", pts);
-        vals.put("grade", gradeForPoints(pts));
-        // idCard/personName 保留在 vals(必填检查用),入库时由 UPSERT_SKIP 排除
-        return null;
+        if (headers.containsKey("备注")) vals.put("remark", cell(row, headers, "备注", fmt));
+        Integrity.save(jdbc, "sys_dict", vals, id); return id != null;
+    }
+    private String cell(Row row, Map<String, Integer> headers, String header, DataFormatter fmt) {
+        Integer index = headers.get(header); return index == null || row.getCell(index) == null ? "" : fmt.formatCellValue(row.getCell(index)).trim();
+    }
+    private Map<Long, String> personNameMap() {
+        Map<Long, String> result = new HashMap<Long, String>();
+        for (Map<String, Object> row : jdbc.queryForList("SELECT id, name FROM personnel")) result.put(((Number)row.get("id")).longValue(), str(row.get("name")));
+        return result;
     }
 
-    /**
-     * 体重合格区间:身高(米,四舍五入到cm)行 × 年龄段列。
-     * 格式 {"ages":["24岁以下","25-29岁",...], "male":{"rows":[{"h":1.6,"w":[[47.4,66.3],[48,68],...]},...]}, "female":{...}}
-     */
-    private double[] weightRange(String gender, Double heightCm, Integer age) {
-        boolean female = "女".equals(gender);
-        try {
-            String v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='bmi_standard'", String.class);
-            if (v == null) { return null; }
-            com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(v);
-            com.fasterxml.jackson.databind.JsonNode side = node.get(female ? "female" : "male");
-            com.fasterxml.jackson.databind.JsonNode ages = node.get("ages");
-            if (side == null || ages == null || !ages.isArray() || ages.size() == 0) { return null; }
-            com.fasterxml.jackson.databind.JsonNode rows = side.get("rows");
-            if (rows == null || !rows.isArray()) { return null; }
-            double hm = Math.round(heightCm + 0.5) / 100.0;
-            com.fasterxml.jackson.databind.JsonNode hit = null;
-            double bestDiff = Double.MAX_VALUE;
-            for (int i = 0; i < rows.size(); i++) {
-                com.fasterxml.jackson.databind.JsonNode r = rows.get(i);
-                double h = r.get("h").asDouble();
-                double diff = Math.abs(h - hm);
-                if (diff < bestDiff - 0.0001) { bestDiff = diff; hit = r; }
+    /** Shared import primitives; writes and derived state are committed per row. */
+    static final class Integrity {
+        static <T> T transaction(JdbcTemplate jdbc, java.util.function.Supplier<T> work) {
+            org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+            tx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            return tx.execute(status -> work.get());
+        }
+        static String text(Object value) { return value == null ? "" : String.valueOf(value).trim(); }
+        static String message(Exception e) { return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage(); }
+        static void required(Map<String, ?> values, String key) { if (text(values.get(key)).isEmpty()) throw new IllegalArgumentException("必填字段为空:" + key); }
+        static boolean blank(Row row, DataFormatter fmt) {
+            if (row == null) return true;
+            for (Cell cell : row) if (!fmt.formatCellValue(cell).trim().isEmpty()) return false;
+            return true;
+        }
+        static Map<String, Integer> headers(Sheet sheet, DataFormatter fmt) {
+            Row row = sheet.getRow(0); if (row == null) throw new IllegalArgumentException("文件没有列头");
+            Map<String, Integer> result = new LinkedHashMap<String, Integer>();
+            for (Cell cell : row) {
+                String name = fmt.formatCellValue(cell).trim();
+                if (!name.isEmpty() && result.put(name, cell.getColumnIndex()) != null) throw new IllegalArgumentException("重复列头:" + name);
             }
-            if (hit == null || bestDiff > 0.011) { return null; }   // 没有这一身高行
-            com.fasterxml.jackson.databind.JsonNode cells = hit.get("w");
-            if (cells == null || !cells.isArray() || cells.size() != ages.size()) { return null; }
-            int col = -1;
-            for (int i = 0; i < ages.size(); i++) {
-                if (ageInGroup(ages.get(i).asText(""), age)) { col = i; break; }
+            return result;
+        }
+        static boolean dateKey(String key) { return "birthday".equals(key) || key.endsWith("_date") || key.endsWith("_expiry"); }
+        static String dateCell(Cell cell, String value, String label) {
+            if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC && org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+            return FitnessScoringService.date(value, label).toString();
+        }
+        static Long person(JdbcTemplate jdbc, String card, String name) {
+            card = text(card).toUpperCase(java.util.Locale.ROOT); name = text(name);
+            List<Long> ids;
+            if (!card.isEmpty()) ids = jdbc.queryForList("SELECT id FROM personnel WHERE UPPER(TRIM(id_card))=?", Long.class, card);
+            else {
+                if (name.isEmpty()) throw new IllegalArgumentException("人员姓名/身份证号为空");
+                ids = jdbc.queryForList("SELECT id FROM personnel WHERE TRIM(name)=?", Long.class, name);
             }
-            if (col < 0) { return null; }
-            com.fasterxml.jackson.databind.JsonNode pair = cells.get(col);
-            if (pair == null || !pair.isArray() || pair.size() != 2) { return null; }
-            return new double[]{pair.get(0).asDouble(), pair.get(1).asDouble()};
-        } catch (Exception e) {
-            return null;
+            if (ids.size() != 1) throw new IllegalArgumentException(ids.isEmpty() ? "人员不存在:" + (card.isEmpty() ? name : card) : "人员不唯一，请使用身份证号:" + name);
+            return ids.get(0);
         }
-    }
-
-    /** 年龄是否落在年龄段标签内(如 "24岁以下"/"25-29岁"/"40-49岁"/"50岁以上") */
-    private static boolean ageInGroup(String label, Integer age) {
-        if (age == null) { return false; }
-        java.util.regex.Matcher mm = java.util.regex.Pattern.compile("[0-9]+").matcher(label);
-        List<Integer> nums = new ArrayList<Integer>();
-        while (mm.find()) { nums.add(Integer.parseInt(mm.group())); }
-        if (label.contains("以下") || label.contains("≤") || label.contains("<=")) {
-            return nums.isEmpty() || age <= nums.get(0);
-        }
-        if (label.contains("以上") || label.contains("≥") || label.contains(">=")) {
-            return nums.isEmpty() || age >= nums.get(0);
-        }
-        if (nums.size() >= 2) {
-            return age >= nums.get(0) && age <= nums.get(1);
-        }
-        return false;
-    }
-
-    private String birthdayOf(Long pid) {
-        List<Map<String, Object>> r = jdbc.queryForList("SELECT birthday FROM personnel WHERE id=?", pid);
-        return r.isEmpty() || r.get(0).get("birthday") == null ? "" : String.valueOf(r.get(0).get("birthday"));
-    }
-
-    private static Integer ageAt(String birthday, String date) {
-        if (birthday == null || birthday.length() < 10) { return null; }
-        try {
-            java.time.LocalDate b = java.time.LocalDate.of(Integer.parseInt(birthday.substring(0, 4)),
-                    Integer.parseInt(birthday.substring(5, 7)), Integer.parseInt(birthday.substring(8, 10)));
-            java.time.LocalDate d = java.time.LocalDate.now();
-            if (date != null && date.length() >= 10) {
-                d = java.time.LocalDate.of(Integer.parseInt(date.substring(0, 4)),
-                        Integer.parseInt(date.substring(5, 7)), Integer.parseInt(date.substring(8, 10)));
+        static Long existing(JdbcTemplate jdbc, String table, Map<String, ?> values, String[] keys) {
+            StringBuilder where = new StringBuilder(); List<Object> args = new ArrayList<Object>();
+            for (String key : keys) {
+                if (!values.containsKey(key)) {
+                    if ("material".equals(table)) args.add("");
+                    else throw new IllegalArgumentException("缺少业务键列:" + key);
+                } else args.add(values.get(key));
+                if (where.length() > 0) where.append(" AND ");
+                if ("parent_id".equals(key)) where.append("COALESCE(parent_id,0)=?");
+                else where.append("COALESCE(").append(key).append(",'')=COALESCE(?,'')");
             }
-            return java.time.Period.between(b, d).getYears();
-        } catch (Exception e) {
-            return null;
+            if (args.stream().allMatch(v -> text(v).isEmpty())) throw new IllegalArgumentException("业务键为空");
+            if (!"material".equals(table)) for (int i = 0; i < keys.length; i++) if (text(args.get(i)).isEmpty() && !"parent_id".equals(keys[i])) throw new IllegalArgumentException("业务键为空:" + keys[i]);
+            List<Long> ids = jdbc.queryForList("SELECT id FROM " + table + " WHERE " + where, Long.class, args.toArray());
+            if (ids.size() > 1) throw new IllegalArgumentException("业务键匹配多条记录，拒绝任选:" + table);
+            return ids.isEmpty() ? null : ids.get(0);
         }
-    }
-
-    /** 年龄 → 年龄段标签(与前端 matchAgeGroup 一致) */
-    private static String matchAgeGroupJava(java.util.List<String> groups, int age) {
-        for (String label : groups) {
-            java.util.regex.Matcher mm = java.util.regex.Pattern.compile("\\d+").matcher(label);
-            if (!mm.find()) { continue; }
-            int a = Integer.parseInt(mm.group());
-            int b = a;
-            if (mm.find()) { b = Integer.parseInt(mm.group()); }
-            boolean hit;
-            if (label.contains("以下")) { hit = age <= a; }
-            else if (label.contains("以上")) { hit = age >= a; }
-            else { hit = age >= a && age <= b; }
-            if (hit) { return label; }
-        }
-        return null;
-    }
-
-    /** 按矩阵计算分数(与前端 calcFitnessGrade 一致);无法计算返回 null */
-    private Double calcFitnessPoints(String item, String scoreText, Integer age) {
-        List<Map<String, Object>> matrix = jdbc.queryForList(
-                "SELECT age_group, score, value FROM fitness_matrix WHERE item=? ORDER BY CAST(score AS REAL) DESC", item);
-        if (matrix.isEmpty() || age == null) { return null; }
-        double maxV = 0;
-        for (Map<String, Object> r : matrix) { maxV = Math.max(maxV, asDouble(r.get("value"))); }
-        boolean isTime = maxV > 300;
-        String text = scoreText == null ? "" : scoreText.trim();
-        if (text.isEmpty()) { return null; }
-        Double perf = null;
-        java.util.regex.Matcher m;
-        if (isTime) {
-            m = java.util.regex.Pattern.compile("(\\d+)['\\u2032:](\\d+)").matcher(text);
-            if (m.find()) { perf = Integer.parseInt(m.group(1)) * 60.0 + Integer.parseInt(m.group(2)); }
-            if (perf == null) {
-                m = java.util.regex.Pattern.compile("(\\d+)\\s*秒").matcher(text);
-                if (m.find()) { perf = Double.parseDouble(m.group(1)); }
+        static long save(JdbcTemplate jdbc, String table, Map<String, ?> vals, Long id) {
+            StringBuilder columns = new StringBuilder(), marks = new StringBuilder(), set = new StringBuilder(); List<Object> args = new ArrayList<Object>();
+            for (Map.Entry<String, ?> entry : vals.entrySet()) {
+                if (columns.length() > 0) { columns.append(','); marks.append(','); set.append(','); }
+                columns.append(entry.getKey()); marks.append('?'); set.append(entry.getKey()).append("=?"); args.add(entry.getValue());
             }
-            if (perf == null) {
-                m = java.util.regex.Pattern.compile("(\\d+(?:\\.\\d+)?)").matcher(text);
-                if (m.find()) { perf = Double.parseDouble(m.group(1)); }
+            if (id == null) {
+                jdbc.update("INSERT INTO " + table + "(" + columns + ") VALUES(" + marks + ")", args.toArray());
+                return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
             }
-        } else {
-            m = java.util.regex.Pattern.compile("(\\d+)").matcher(text);
-            if (m.find()) { perf = Double.parseDouble(m.group(1)); }
+            args.add(id); jdbc.update("UPDATE " + table + " SET " + set + ",updated_at=datetime('now','localtime') WHERE id=?", args.toArray()); return id;
         }
-        if (perf == null) { return null; }
-        java.util.List<String> groups = new java.util.ArrayList<String>();
-        for (Map<String, Object> r : matrix) {
-            if (!groups.contains(String.valueOf(r.get("age_group")))) { groups.add(String.valueOf(r.get("age_group"))); }
+        static void syncPhone(JdbcTemplate jdbc, Long pid) {
+            List<String> phones = jdbc.queryForList("SELECT phone_number FROM phone_device WHERE personnel_id=? AND TRIM(COALESCE(phone_number,''))!='' ORDER BY id DESC LIMIT 1", String.class, pid);
+            jdbc.update("UPDATE personnel SET phone=? WHERE id=?", phones.isEmpty() ? "" : text(phones.get(0)), pid);
         }
-        String myGroup = matchAgeGroupJava(groups, age);
-        if (myGroup == null) { return null; }
-        for (Map<String, Object> r : matrix) {
-            if (!myGroup.equals(String.valueOf(r.get("age_group")))) { continue; }
-            double need = asDouble(r.get("value"));
-            if (isTime ? perf <= need : perf >= need) { return asDouble(r.get("score")); }
-        }
-        return 55.0;
-    }
-
-    private static double asDouble(Object v) {
-        if (v == null) { return 0; }
-        try { return Double.parseDouble(String.valueOf(v).trim()); } catch (Exception e) { return 0; }
-    }
-
-    /** 按评定标准(sys_setting)给分数定级 */
-    private String gradeForPoints(double pts) {
-        try {
-            String json = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='fitness_grade_rule'", String.class);
-            com.fasterxml.jackson.databind.JsonNode arr = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
-            java.util.List<com.fasterxml.jackson.databind.JsonNode> rule = new java.util.ArrayList<com.fasterxml.jackson.databind.JsonNode>();
-            if (arr != null && arr.isArray()) {
-                for (com.fasterxml.jackson.databind.JsonNode n : arr) { rule.add(n); }
-            }
-            rule.sort((x, y) -> Double.compare(y.path("min").asDouble(0), x.path("min").asDouble(0)));
-            for (com.fasterxml.jackson.databind.JsonNode n : rule) {
-                double min = n.path("min").asDouble(0);
-                boolean gt = ">".equals(n.path("op").asText(">="));
-                if (gt ? pts > min : pts >= min) { return n.path("label").asText("及格"); }
-            }
-            return "不及格";
-        } catch (Exception e) {
-            if (pts >= 90) { return "优秀"; }
-            if (pts >= 80) { return "良好"; }
-            if (pts >= 60) { return "及格"; }
-            return "不及格";
-        }
-    }
-
-    /** 仅用于人员匹配/展示、不作为入库列的 key */
-    private static final java.util.Set<String> UPSERT_SKIP = new java.util.HashSet<String>(
-            java.util.Arrays.asList("idCard", "personName"));
-
-    private void upsert(ModuleDef def, Map<String, Object> vals) {
-        rowUpdated = false;
-        // 入库列 = 定义列(去掉展示列) + vals 中的额外键(如体能导入的 personnelId)
-        List<String> colKeys = new ArrayList<String>();
-        for (Col col : def.cols) {
-            if (!UPSERT_SKIP.contains(col.key)) { colKeys.add(col.key); }
-        }
-        for (String k : vals.keySet()) {
-            if (!colKeys.contains(k) && !UPSERT_SKIP.contains(k)) { colKeys.add(k); }
-        }
-        StringBuilder cols = new StringBuilder();
-        StringBuilder marks = new StringBuilder();
-        List<Object> args = new ArrayList<Object>();
-        for (String ck : colKeys) {
-            if (cols.length() > 0) {
-                cols.append(",");
-                marks.append(",");
-            }
-            cols.append(snake(ck));
-            marks.append("?");
-            args.add(vals.get(ck));
-        }
-        if (def.importKey != null && !def.importKey.isEmpty()) {
-            Object keyVal = vals.get(def.importKey);
-            List<Long> existing = jdbc.queryForList(
-                    "SELECT id FROM " + def.table + " WHERE " + snake(def.importKey) + "=?",
-                    Long.class, keyVal);
-            if (!existing.isEmpty()) {
-                StringBuilder set = new StringBuilder();
-                List<Object> setArgs = new ArrayList<Object>();
-                for (String ck : colKeys) {
-                    if (set.length() > 0) {
-                        set.append(",");
-                    }
-                    set.append(snake(ck)).append("=?");
-                    setArgs.add(vals.get(ck));
-                }
-                setArgs.add(existing.get(0));
-                jdbc.update("UPDATE " + def.table + " SET " + set
-                        + ", updated_at=datetime('now','localtime') WHERE id=?", setArgs.toArray());
-                rowUpdated = true;
-                return;
-            }
-        }
-        jdbc.update("INSERT INTO " + def.table + "(" + cols + ") VALUES(" + marks + ")", args.toArray());
-    }
-
-    /* ================= 工具 ================= */
-
-    private String cell(Row row, Map<String, Integer> headerIndex, String header, DataFormatter fmt) {
-        Integer idx = headerIndex.get(header);
-        if (idx == null) {
+        static String parentType(String type) {
+            if ("region_city".equals(type)) return "region_province";
+            if ("region_district".equals(type)) return "region_city";
+            if ("vehicle_model".equals(type)) return "vehicle_brand";
+            if ("rank".equals(type)) return "personnel_category";
             return "";
         }
-        Cell c = row.getCell(idx);
-        return c == null ? "" : fmt.formatCellValue(c).trim();
-    }
-
-    private void addError(List<String> errors, int rowIndex, String msg) {
-        if (errors.size() < 50) {
-            errors.add("第" + (rowIndex + 1) + "行:" + msg);
+        static Long dictId(JdbcTemplate jdbc, String type, String label, Long parent, boolean enabled) {
+            if (type.isEmpty() || label.isEmpty()) throw new IllegalArgumentException("字典类型/内容为空");
+            String sql = "SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=?" + (enabled ? " AND enabled=1" : "");
+            List<Object> args = new ArrayList<Object>(Arrays.asList(type, label));
+            if (parent != null) { sql += " AND COALESCE(parent_id,0)=?"; args.add(parent); }
+            List<Long> ids = jdbc.queryForList(sql, Long.class, args.toArray());
+            if (ids.size() != 1) throw new IllegalArgumentException("字典不存在、停用或父级不明确:" + type + "「" + label + "」");
+            return ids.get(0);
         }
-    }
-
-    private Map<Long, String> personNameMap() {
-        Map<Long, String> map = new HashMap<Long, String>();
-        for (Map<String, Object> m : jdbc.queryForList("SELECT id, name FROM personnel")) {
-            map.put(((Number) m.get("id")).longValue(), str(m.get("name")));
+        static void dict(JdbcTemplate jdbc, String type, String label) {
+            if (!label.isEmpty() && jdbc.queryForList("SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=? AND enabled=1", Long.class, type, label).isEmpty()) throw new IllegalArgumentException("不在启用下拉选项中:" + type + "「" + label + "」");
         }
-        return map;
-    }
-
-    private Map<String, Long> personIdMap() {
-        Map<String, Long> map = new HashMap<String, Long>();
-        for (Map<String, Object> m : jdbc.queryForList("SELECT id, name FROM personnel")) {
-            map.put(str(m.get("name")), ((Number) m.get("id")).longValue());
+        static void cascade(JdbcTemplate jdbc, String parentType, String parent, String childType, String child) {
+            if (child.isEmpty()) return;
+            if (parent.isEmpty()) throw new IllegalArgumentException("下级选项缺少上级:" + childType);
+            Long id = dictId(jdbc, parentType, parent, null, true); dictId(jdbc, childType, child, id, true);
         }
-        return map;
+        static Long dictPath(JdbcTemplate jdbc, String leafType, String path, boolean enabled) {
+            String parent = parentType(leafType); int slash = path.lastIndexOf('/'); Long parentId = 0L; String label = path;
+            if (slash >= 0) {
+                if (parent.isEmpty()) throw new IllegalArgumentException("父级路径层级错误");
+                parentId = dictPath(jdbc, parent, path.substring(0, slash), enabled); label = path.substring(slash + 1);
+            } else if (!parent.isEmpty()) throw new IllegalArgumentException("父级路径不完整:" + path);
+            return dictId(jdbc, leafType, label, parentId, enabled);
+        }
+        static void region(JdbcTemplate jdbc, String value) {
+            if (value.isEmpty()) return;
+            String[] parts = value.split("/", -1); if (parts.length > 3) throw new IllegalArgumentException("行政区划应为省/市/区县");
+            String[] types = {"region_province", "region_city", "region_district"}; Long parent = 0L;
+            for (int i = 0; i < parts.length; i++) parent = dictId(jdbc, types[i], parts[i].trim(), parent, true);
+        }
     }
 
     /** camelCase → snake_case */

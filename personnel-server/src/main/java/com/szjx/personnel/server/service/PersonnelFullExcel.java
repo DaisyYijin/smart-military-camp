@@ -83,13 +83,18 @@ public class PersonnelFullExcel {
 
     /* ================= 导出 ================= */
 
+    private static final String[] EXTRA_HEADERS = {"配偶姓名", "配偶工作单位", "配偶电话", "配偶身份证号", "配偶职业", "党团备注", "婚姻备注", "备注", "照片文件名", "导出人员编号"};
+    private static final String[] EXTRA_KEYS = {"spouse_name", "spouse_work", "spouse_phone", "spouse_id_card", "spouse_job", "party_remark", "marriage_remark", "remark", "photo", "__source_id"};
+
     public byte[] export(List<Long> ids) throws Exception {
+        if (ids == null || ids.isEmpty()) throw new IllegalArgumentException("请先勾选要导出的数据");
         Workbook wb = new XSSFWorkbook();
         CellStyle head = headStyle(wb);
 
         // Sheet 1: 人员主表
         Sheet main = wb.createSheet("人员信息");
         writeHeader(main, MAIN_HEADERS, head);
+        for (int i = 0; i < EXTRA_HEADERS.length; i++) main.getRow(0).createCell(MAIN_HEADERS.length + i).setCellValue(EXTRA_HEADERS[i]);
         StringBuilder ph = new StringBuilder();
         for (int i = 0; i < ids.size(); i++) {
             ph.append(i > 0 ? ",?" : "?");
@@ -108,6 +113,8 @@ public class PersonnelFullExcel {
                 row.createCell(c).setCellValue(v == null ? "" : String.valueOf(v));
             }
             Long pidKey = ((Number) p.get("id")).longValue();
+            for (int c = 0; c < EXTRA_KEYS.length; c++) row.createCell(MAIN_KEYS.length + c).setCellValue(
+                    "__source_id".equals(EXTRA_KEYS[c]) ? "export-" + pidKey : ModuleExcelService.Integrity.text(p.get(EXTRA_KEYS[c])));
             idCardMap.put(pidKey,
                     String.valueOf(p.get("id_card") == null ? "" : p.get("id_card")));
             nameMap.put(pidKey,
@@ -162,12 +169,10 @@ public class PersonnelFullExcel {
         writeHeader(main, MAIN_HEADERS, head);
         // 示例行
         Row example = main.createRow(1);
-        String[] ex = {"张三", "男", "330102199001011234", "1990-01-01", "13800000001", "XX部队XX营",
-                "上尉", "参谋", "在职", "2010-06-01", "汉族", "浙江杭州", "A", "党员",
-                "2012-06-01", "XX部队党委", "支部委员",
-                "2011-03-01", "2011-12-01", "2012-06-01", "2013-06-01",
-                "已婚", "2015-01-01", "", "", "",
-                "本科", "否", "175", "70", "杭州市XX路XX号"};
+        String[] ex = {"张三", "男", "330102199001011234", "1990-01-01", "", "XX部队XX营",
+                "军官", "上尉", "参谋", "在职", "2010-06-01", "汉族", "浙江省/杭州市/上城区", "浙江省/杭州市/上城区", "A", "党员",
+                "2012-06-01", "XX部队党委", "支部委员", "2011-03-01", "2011-12-01", "2012-06-01", "2013-06-01",
+                "已婚", "2015-01-01", "", "", "", "本科", "否", "175", "70", "杭州市XX路XX号"};
         for (int i = 0; i < ex.length; i++) {
             example.createCell(i).setCellValue(ex[i]);
         }
