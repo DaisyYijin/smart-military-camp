@@ -154,6 +154,14 @@ public class SchemaInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        // 所有字典种子/清理之前建表;旧库先升级 parent_id 和唯一约束。
+        jdbc.execute("CREATE TABLE IF NOT EXISTS sys_dict (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT,dict_type TEXT NOT NULL,dict_label TEXT NOT NULL," +
+                "sort INTEGER DEFAULT 0,enabled INTEGER DEFAULT 1,remark TEXT DEFAULT ''," +
+                "parent_id INTEGER DEFAULT 0,created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime')),UNIQUE(dict_type,dict_label,parent_id))");
+        ensureColumn("sys_dict", "parent_id", "parent_id INTEGER DEFAULT 0");
+        migrateDictUnique();
         jdbc.execute("CREATE TABLE IF NOT EXISTS department (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
@@ -241,9 +249,21 @@ public class SchemaInitializer implements CommandLineRunner {
         ensureColumn("personnel", "height", "height REAL");
         ensureColumn("personnel", "weight", "weight REAL");
         ensureColumn("personnel", "auto_leave", "auto_leave INTEGER DEFAULT 0");
+        ensureColumn("personnel", "auto_leave_previous_status", "auto_leave_previous_status TEXT DEFAULT ''");
+        ensureColumn("personnel", "location_point", "location_point TEXT DEFAULT ''");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_dept ON personnel(department_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_name ON personnel(name)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_idcard ON personnel(id_card)");
+        // 人员删除撤回:删除前打包人员及全部级联数据的快照
+        jdbc.execute("CREATE TABLE IF NOT EXISTS delete_undo (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "name TEXT DEFAULT ''," +
+                "summary TEXT DEFAULT ''," +
+                "payload TEXT NOT NULL," +
+                "photo_trash TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS leave_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -273,6 +293,25 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_fitness_personnel ON fitness_record(personnel_id)");
+
+        // 军事考核(理论/射击/战术等,按分数评定)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS military_assessment (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER DEFAULT 0," +
+                "category TEXT DEFAULT ''," +
+                "item TEXT DEFAULT ''," +
+                "score TEXT DEFAULT ''," +
+                "points REAL DEFAULT 0," +
+                "grade TEXT DEFAULT ''," +
+                "test_date TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_military_personnel ON military_assessment(personnel_id)");
+        addDict("military_type", new String[]{"理论考核", "射击考核", "战术考核", "共同科目", "专业科目", "其他"});
+        addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
+        addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
 
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
@@ -456,18 +495,17 @@ public class SchemaInitializer implements CommandLineRunner {
         }
 
         // 体能评分矩阵:项目 x 年龄段 x 分数 → 达标值(用户可自行维护)
-        try {
-            jdbc.execute("ALTER TABLE fitness_matrix ADD COLUMN unit TEXT DEFAULT ''");
-        } catch (Exception ignore) { }
         jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_matrix (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "item TEXT NOT NULL," +
                 "age_group TEXT NOT NULL," +
                 "score INTEGER NOT NULL," +
                 "value REAL DEFAULT 0," +
+                "unit TEXT DEFAULT 'count'," +
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
+        ensureColumn("fitness_matrix", "unit", "unit TEXT DEFAULT 'count'");
         // 种子:引体向上示例(用户可自行调整)
         Long fmCount = jdbc.queryForObject("SELECT COUNT(*) FROM fitness_matrix", Long.class);
         if (fmCount == null || fmCount == 0) {
@@ -539,22 +577,6 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_oplog_time ON op_log(created_at)");
-
-        jdbc.execute("CREATE TABLE IF NOT EXISTS sys_dict (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "dict_type TEXT NOT NULL," +
-                "dict_label TEXT NOT NULL," +
-                "sort INTEGER DEFAULT 0," +
-                "enabled INTEGER DEFAULT 1," +
-                "remark TEXT DEFAULT ''," +
-                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
-                "updated_at TEXT DEFAULT (datetime('now','localtime'))," +
-                "UNIQUE(dict_type, dict_label)" +
-                ")");
-        // 字典下级(级联选择:如 车辆品牌→型号),0=顶级
-        try { jdbc.execute("ALTER TABLE sys_dict ADD COLUMN parent_id INTEGER DEFAULT 0"); } catch (Exception ignore) {}
-        // 唯一约束升级:type+label → type+label+parent_id(区县同名在不同城市下合法,如"鼓楼区")
-        migrateDictUnique();
 
         // 人员类别(军衔按类别级联挂接在 initDefaultDict 中执行)
         try { jdbc.execute("ALTER TABLE personnel ADD COLUMN category TEXT DEFAULT ''"); } catch (Exception ignore) {}
