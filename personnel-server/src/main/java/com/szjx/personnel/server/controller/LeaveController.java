@@ -40,10 +40,11 @@ public class LeaveController {
                              @RequestParam(required = false) String leaveType,
                              @RequestParam(required = false) String startDate,
                              @RequestParam(required = false) String endDate,
+                             @RequestParam(required = false) Long personnelId,
                              @RequestParam(defaultValue = "1") int page,
-                             @RequestParam(defaultValue = "50") int size) {
+                             @RequestParam(defaultValue = "20") int size) {
         if (page < 1) page = 1;
-        if (size < 1 || size > 200) size = 50;
+        if (size < 1 || size > 200) size = 20;
         StringBuilder sql = new StringBuilder(
             "SELECT l.id, l.personnel_id AS personnelId, p.name AS personnelName, p.id_card AS idCard, " +
             "l.year, l.leave_type AS leaveType, l.start_date AS startDate, l.end_date AS endDate, l.days, " +
@@ -55,6 +56,10 @@ public class LeaveController {
             "SELECT COUNT(*) FROM leave_record l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         java.util.List<Object> cargs = new java.util.ArrayList<Object>();
+        if (personnelId != null) {
+            sql.append(" AND l.personnel_id = ?"); args.add(personnelId);
+            csql.append(" AND l.personnel_id = ?"); cargs.add(personnelId);
+        }
         if (personnelName != null && !personnelName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
             csql.append(" AND p.name LIKE ?"); cargs.add("%" + personnelName.trim() + "%");
@@ -81,7 +86,7 @@ public class LeaveController {
         }
         Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
         sql.append(" ORDER BY l.start_date DESC, l.id DESC LIMIT ? OFFSET ?");
-        args.add(size); args.add((page - 1) * size);
+        args.add(size); args.add((long) (page - 1) * size);
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }

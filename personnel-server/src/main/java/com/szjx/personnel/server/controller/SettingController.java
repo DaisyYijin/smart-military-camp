@@ -25,7 +25,7 @@ public class SettingController {
 
     /** 免登录读取的界面配置(登录页也要显示标题/LOGO) */
     public static final String[] PUBLIC_KEYS = {"siteName", "siteTitle", "siteSubtitle",
-            "siteLogo", "siteFavicon", "themeColor"};
+            "siteLogo", "siteFavicon", "themeColor", "pageSize"};
 
     private final JdbcTemplate jdbc;
 

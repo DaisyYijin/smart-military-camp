@@ -65,21 +65,31 @@ public class LeaveStatusSyncService {
         }
     }
 
-    /** 执行一次同步;返回 [本次进入休假人数, 本次恢复在职人数] */
+    /** 执行一次同步；启动/定时自调用也由 TransactionTemplate 保证原子性。 */
     public synchronized int[] sync() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        return tx.execute(ignored -> syncWithinTransaction());
+    }
+
+    private int[] syncWithinTransaction() {
         String today = java.time.LocalDate.now().toString();
+        // 人工切换培训/借调/离职等状态，取消自动标记，不得自动覆盖。
+        jdbc.update("UPDATE personnel SET auto_leave=0, auto_leave_previous_status='' " +
+                "WHERE auto_leave=1 AND IFNULL(status,'')<>'休假'");
         int goOn = jdbc.update(
-                "UPDATE personnel SET status='休假', auto_leave=1, updated_at=datetime('now','localtime') " +
-                "WHERE auto_leave=0 AND id IN (" +
-                "SELECT personnel_id FROM leave_record WHERE start_date <= ? AND end_date >= ?)",
+                "UPDATE personnel SET auto_leave_previous_status=status, status='休假', auto_leave=1, updated_at=datetime('now','localtime') " +
+                "WHERE IFNULL(auto_leave,0)=0 AND status IN ('在职','在位') AND EXISTS (" +
+                "SELECT 1 FROM leave_record l WHERE l.personnel_id=personnel.id AND l.start_date <= ? AND l.end_date >= ?)",
                 today, today);
         int back = jdbc.update(
-                "UPDATE personnel SET status='在职', auto_leave=0, updated_at=datetime('now','localtime') " +
-                "WHERE auto_leave=1 AND id NOT IN (" +
-                "SELECT personnel_id FROM leave_record WHERE start_date <= ? AND end_date >= ?)",
+                "UPDATE personnel SET status=CASE WHEN auto_leave_previous_status IN ('在职','在位') " +
+                "THEN auto_leave_previous_status ELSE '在职' END, auto_leave=0, auto_leave_previous_status='', updated_at=datetime('now','localtime') " +
+                "WHERE auto_leave=1 AND status='休假' AND NOT EXISTS (" +
+                "SELECT 1 FROM leave_record l WHERE l.personnel_id=personnel.id AND l.start_date <= ? AND l.end_date >= ?)",
                 today, today);
         if (goOn > 0 || back > 0) {
-            log.info("休假状态联动:{} 人进入休假,{} 人恢复在职", goOn, back);
+            log.info("休假状态联动:{} 人进入休假,{} 人恢复在职/在位", goOn, back);
         }
         return new int[]{goOn, back};
     }
