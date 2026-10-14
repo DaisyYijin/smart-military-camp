@@ -118,8 +118,12 @@ textarea { resize: vertical; }
   transition: transform .2s ease; flex: none;
 }
 .menu-item.group.open .ga { transform: rotate(90deg); }
-.menu-sub { display: none; }
-.menu-sub.open { display: block; }
+/* 子菜单高度动画:配合 ext-features.js 的展开/收起控制 */
+.menu-sub {
+  height: 0; opacity: 0; overflow: hidden;
+  transition: height .22s cubic-bezier(.4,0,.2,1), opacity .18s ease;
+}
+.menu-sub.open { opacity: 1; }
 .menu-item.sub {
   padding: 9px 20px 9px 46px; gap: 8px; font-size: 13px;
 }
@@ -146,6 +150,7 @@ body.side-mini .main { margin-left: 64px; }
   display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
   padding: 16px 16px; border-bottom: 1px solid #edf1f6;
 }
+.toolbar-left { display: flex; align-items: center; gap: 8px; }
 .toolbar .spacer { flex: 1; }
 .toolbar .field-inline { display: flex; align-items: center; gap: 8px; }
 .toolbar .field-inline label { color: #66788c; font-size: 13px; }
