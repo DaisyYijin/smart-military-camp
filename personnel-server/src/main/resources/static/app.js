@@ -1539,7 +1539,7 @@ function crudView(cfg) {
         }
         return '<td title="' + esc(raw) + '">' + inner + '</td>';
       }).join('');
-      return '<tr><td class="cb-cell"><input type="checkbox" class="cb-row" data-id="' + row.id + '"'
+      return '<tr data-vrow="1"><td class="cb-cell"><input type="checkbox" class="cb-row" data-id="' + row.id + '"'
         + (state.selected[row.id] ? ' checked' : '') + '></td>' + tds +
         '<td class="actions">' +
         '<button class="btn-link" data-act="edit" data-id="' + row.id + '">编辑</button>' +

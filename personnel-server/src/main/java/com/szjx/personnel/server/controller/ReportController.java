@@ -30,56 +30,18 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/report")
-public class ReportController {
+public class ReportController extends com.szjx.personnel.server.service.ReportService {
 
     /** 合法表名白名单(防SQL注入) */
-    private static final java.util.Set<String> SAFE_TABLES = new java.util.HashSet<String>(java.util.Arrays.asList(
-            "personnel", "department", "equipment", "material", "vehicle",
-            "leave_record", "fitness_record", "position_history", "reward_punish",
-            "child_info", "family_member", "driver_license", "personal_card",
-            "private_vehicle", "housing_info"));
 
-    /** 校验表名安全(防注入) */
-    private static String safeTable(String t) {
-        if (t == null || !SAFE_TABLES.contains(t)) {
-            throw new IllegalArgumentException("非法表名: " + t);
-        }
-        return t;
-    }
-
-    /** 合法表名白名单(防SQL注入) */
-    private static final String[] SUB_TABLES = {
-            "position_history", "reward_punish", "child_info", "family_member",
-            "driver_license", "personal_card", "private_vehicle", "housing_info"};
-
-    private final JdbcTemplate jdbc;
     private final org.springframework.transaction.support.TransactionTemplate txTpl;
-    private final ObjectMapper mapper = new ObjectMapper();
 
     public ReportController(JdbcTemplate jdbc, org.springframework.transaction.PlatformTransactionManager txManager) {
-        this.jdbc = jdbc;
+        super(jdbc);
         this.txTpl = new org.springframework.transaction.support.TransactionTemplate(txManager);
     }
 
     /* ================= 导入进度(前端轮询) ================= */
-    private static final java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>> PROGRESS =
-            new java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>>();
-
-    @GetMapping("/progress")
-    public ApiResponse progress(@RequestParam String id) {
-        Map<String, Object> m = PROGRESS.get(id);
-        return ApiResponse.ok(m == null ? new LinkedHashMap<String, Object>() : m);
-    }
-
-    private void prog(String pid, int pct, String stage, String detail) {
-        if (pid == null) { return; }
-        Map<String, Object> m = new LinkedHashMap<String, Object>();
-        m.put("pct", pct);
-        m.put("stage", stage);
-        m.put("detail", detail == null ? "" : detail);
-        PROGRESS.put(pid, m);
-    }
-
     /* ================= 下级导出 ================= */
 
     @GetMapping("/export")
@@ -371,7 +333,7 @@ public class ReportController {
                 insCols.add(c);
                 insArgs.add(c.equals("department_id") ? targetDept : p.get(c));
             }
-            jdbc.update("INSERT INTO personnel(" + join(insCols) + ") VALUES(" + marks(insCols.size()) + ")", insArgs.toArray());
+            jdbc.update("INSERT INTO personnel(" + joinList(insCols) + ") VALUES(" + marks(insCols.size()) + ")", insArgs.toArray());
             Long newId = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
             localPidByCard.put(String.valueOf(p.get("id_card")).trim().toUpperCase(), newId);
             added++;
@@ -412,7 +374,7 @@ public class ReportController {
                     subRows++;
                 }
                 if (!ins.isEmpty()) {
-                    jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
+                    jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + joinList(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
                 }
             }
         }
@@ -501,28 +463,9 @@ public class ReportController {
             n++;
         }
         if (!ins.isEmpty()) {
-            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + join(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
+            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(personnel_id," + joinList(insCols) + ") VALUES(?," + marks(insCols.size()) + ")", ins);
         }
         return n;
-    }
-
-    private static String key(Object... parts) {
-        StringBuilder sb = new StringBuilder();
-        for (Object p : parts) {
-            if (sb.length() > 0) { sb.append('|'); }
-            sb.append(p == null ? "" : String.valueOf(p));
-        }
-        return sb.toString();
-    }
-
-    private static String tableLabel(String table) {
-        String[][] zh = {{"position_history", "任职经历"}, {"reward_punish", "奖惩情况"}, {"child_info", "子女信息"},
-                {"family_member", "家庭成员"}, {"driver_license", "驾驶证"}, {"personal_card", "个人卡号"},
-                {"private_vehicle", "私家车"}, {"housing_info", "住房情况"}, {"equipment", "装备"}, {"material", "物资"}, {"vehicle", "车辆"}};
-        for (String[] z : zh) {
-            if (z[0].equals(table)) { return z[1]; }
-        }
-        return table;
     }
 
     /** 资产表合并:预载业务键表,批量更新/插入 */
@@ -576,7 +519,7 @@ public class ReportController {
             }
         }
         if (!ins.isEmpty()) {
-            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(" + join(cols0) + ") VALUES(" + marks(cols0.size()) + ")", ins);
+            jdbc.batchUpdate("INSERT INTO " + safeTable(table) + "(" + joinList(cols0) + ") VALUES(" + marks(cols0.size()) + ")", ins);
         }
         if (!upd.isEmpty()) {
             StringBuilder sql = new StringBuilder("UPDATE " + safeTable(table) + " SET ");
@@ -588,45 +531,6 @@ public class ReportController {
             jdbc.batchUpdate(sql.toString(), upd);
         }
         return out;
-    }
-
-    private static Long pidOfCard(Object card, Map<String, Long> pidByCard) {
-        if (card == null) {
-            return null;
-        }
-        return pidByCard.get(String.valueOf(card).trim().toUpperCase());
-    }
-
-    private static List<String> colsOf(Map<String, Object> row) {
-        List<String> out = new ArrayList<String>();
-        for (String k : row.keySet()) {
-            if (!k.startsWith("_")) {
-                out.add(k);
-            }
-        }
-        return out;
-    }
-
-    private static String join(List<String> cols) {
-        StringBuilder sb = new StringBuilder();
-        for (String c : cols) {
-            if (sb.length() > 0) {
-                sb.append(",");
-            }
-            sb.append(c);
-        }
-        return sb.toString();
-    }
-
-    private static String marks(int n) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < n; i++) {
-            if (i > 0) {
-                sb.append(",");
-            }
-            sb.append("?");
-        }
-        return sb.toString();
     }
 
     private static Object[] append(Long head, List<Object> tail) {
