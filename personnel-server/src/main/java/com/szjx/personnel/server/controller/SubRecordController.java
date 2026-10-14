@@ -70,9 +70,11 @@ public class SubRecordController {
     }
 
     private final SubRecordDao dao;
+    private final com.szjx.personnel.server.service.FitnessService fitnessService;
 
-    public SubRecordController(SubRecordDao dao) {
+    public SubRecordController(SubRecordDao dao, com.szjx.personnel.server.service.FitnessService fitnessService) {
         this.dao = dao;
+        this.fitnessService = fitnessService;
     }
 
     @GetMapping("/{kind}")
@@ -87,6 +89,9 @@ public class SubRecordController {
         Long personnelId = asLong(body.get("personnelId"));
         if (personnelId == null || !dao.personExists(personnelId)) {
             return ApiResponse.error("所属人员不存在,请先保存人员");
+        }
+        if ("fitness".equals(kind)) {
+            return ApiResponse.ok(fitnessService.create(fitnessRecord(personnelId, body)));
         }
         Map<String, String> fields = fields(kind, body);
         String err = validate(kind, fields, true);
@@ -103,6 +108,16 @@ public class SubRecordController {
         if (dao.findById(table, id) == null) {
             return ApiResponse.error("记录不存在");
         }
+        if ("fitness".equals(kind)) {
+            Long pid = asLong(body.get("personnelId"));
+            if (pid == null) {
+                Map<String, Object> old = dao.findById(table, id);
+                pid = asLong(old.get("personnel_id"));
+            }
+            if (pid == null) { return ApiResponse.error("所属人员缺失"); }
+            com.szjx.personnel.server.model.FitnessRecord r = fitnessRecord(pid, body);
+            return ApiResponse.ok(fitnessService.update(id, r));
+        }
         Map<String, String> fields = fields(kind, body);
         String err = validate(kind, fields, false);
         if (err != null) {
@@ -110,6 +125,21 @@ public class SubRecordController {
         }
         dao.update(table, id, fields, Arrays.asList(COLS.get(kind)));
         return ApiResponse.ok(dao.findById(table, id));
+    }
+
+    /** 子表体能字段 → 体能记录(走统一评分) */
+    private com.szjx.personnel.server.model.FitnessRecord fitnessRecord(Long personnelId, Map<String, Object> body) {
+        com.szjx.personnel.server.model.FitnessRecord r = new com.szjx.personnel.server.model.FitnessRecord();
+        r.setPersonnelId(personnelId);
+        r.setItem(subStr(body.get("item")));
+        r.setScore(subStr(body.get("score")));
+        r.setTestDate(subStr(body.get("test_date")));
+        r.setRemark(subStr(body.get("remark")));
+        return r;
+    }
+
+    private String subStr(Object o) {
+        return o == null ? "" : String.valueOf(o).trim();
     }
 
     @DeleteMapping("/{kind}/{id}")

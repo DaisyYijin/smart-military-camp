@@ -18,7 +18,7 @@ import java.util.*;
  * 体能标准(评分矩阵)与体重标准(BMI/身高×年龄表)的 Excel 模板下载与导入。
  *
  * 评分矩阵模板:每个项目一个 Sheet,Sheet 名=项目名;
- *   首列"分数",其后各列为年龄段;行=分数,单元格=达标值;unit 在 Sheet 名后括号或默认 count。
+ *   首列"分数",其后各列为年龄段;行=分数,单元格=达标值;计分方式列输出中文(次数/时间),导入中英文均可。
  * 体重标准模板:一个 Sheet"体重标准";
  *   首列"身高(米)",其后各列为年龄段;行=身高,单元格=下限~上限;男女各一个 Sheet(男标准/女标准)。
  */
@@ -42,6 +42,7 @@ public class FitnessStdExcelController {
         Workbook wb = new XSSFWorkbook();
         try {
             CellStyle head = headStyle(wb);
+            writeGuideSheet(wb, head);
             if (items.isEmpty()) {
                 items = Collections.singletonList("示例项目(引体向上)");
             }
@@ -67,18 +68,30 @@ public class FitnessStdExcelController {
                     c.setCellStyle(head);
                 }
                 Cell uc = hr.createCell(ages.size() + 1);
-                uc.setCellValue("单位(" + unit + ")");
+                uc.setCellValue("计分方式(" + unitZh(unit) + ")");
                 uc.setCellStyle(head);
-                // 数据行
-                int rIdx = 1;
+                // 数据行:按分数档透视,每档一行(行=分数,列=年龄段),与界面矩阵及导入格式一致
+                java.util.Map<Integer, java.util.Map<String, Double>> byScore = new java.util.LinkedHashMap<Integer, java.util.Map<String, Double>>();
                 for (Map<String, Object> r : rows) {
-                    Row xr = sh.createRow(rIdx++);
-                    xr.createCell(0).setCellValue(((Number) r.get("score")).intValue());
-                    int col = ageSet.size() > 0 ? ages.indexOf(String.valueOf(r.get("age_group"))) : -1;
-                    if (col >= 0) {
-                        xr.createCell(col + 1).setCellValue(((Number) r.get("value")).doubleValue());
+                    Integer sc = Integer.valueOf(((Number) r.get("score")).intValue());
+                    java.util.Map<String, Double> line = byScore.get(sc);
+                    if (line == null) {
+                        line = new java.util.LinkedHashMap<String, Double>();
+                        byScore.put(sc, line);
                     }
-                    xr.createCell(ages.size() + 1).setCellValue(unit);
+                    line.put(String.valueOf(r.get("age_group")), ((Number) r.get("value")).doubleValue());
+                }
+                int rIdx = 1;
+                for (java.util.Map.Entry<Integer, java.util.Map<String, Double>> e : byScore.entrySet()) {
+                    Row xr = sh.createRow(rIdx++);
+                    xr.createCell(0).setCellValue(e.getKey().intValue());
+                    for (int ai = 0; ai < ages.size(); ai++) {
+                        Double v = e.getValue().get(ages.get(ai));
+                        if (v != null) {
+                            xr.createCell(ai + 1).setCellValue(v);
+                        }
+                    }
+                    xr.createCell(ages.size() + 1).setCellValue(unitZh(unit));
                 }
                 sh.setColumnWidth(0, 10 * 256);
                 for (int i = 1; i <= ages.size() + 1; i++) {
@@ -103,22 +116,24 @@ public class FitnessStdExcelController {
             for (int s = 0; s < wb.getNumberOfSheets(); s++) {
                 Sheet sh = wb.getSheetAt(s);
                 String raw = sh.getSheetName();
-                // sheet 名支持 "项目名" 或 "项目名(count)"
-                String item = raw, unit = "count";
+                if (raw.contains("填写说明")) { continue; }   // 说明页不参与导入
+                // sheet 名支持 "项目名" 或 "项目名(次数)/(count)"
+                String item = raw, unit = null;
                 int p = raw.indexOf('(');
                 if (p > 0 && raw.endsWith(")")) {
                     item = raw.substring(0, p).trim();
-                    unit = raw.substring(p + 1, raw.length() - 1).trim();
+                    unit = parseUnit(raw.substring(p + 1, raw.length() - 1));
                 }
-                if (!"count".equals(unit) && !"time".equals(unit)) { unit = "count"; }
+                if (unit == null) { unit = "count"; }
                 Row hr = sh.getRow(0);
                 if (hr == null) { continue; }
-                // 表头:0=分数,1..n-1=年龄段,末尾可能是单位列(跳过)
+                // 表头:0=分数,1..n-1=年龄段,末尾可能是计分方式列(跳过,按行读取)
                 List<String> ages = new ArrayList<String>();
+                int unitCol = -1;
                 for (int c = 1; c < hr.getLastCellNum(); c++) {
                     String h = cellText(hr.getCell(c));
                     if (h.isEmpty()) { continue; }
-                    if (h.startsWith("单位")) { break; }
+                    if (h.startsWith("单位") || h.startsWith("计分方式")) { unitCol = c; break; }
                     ages.add(h);
                 }
                 if (ages.isEmpty() || item.isEmpty()) {
@@ -127,6 +142,11 @@ public class FitnessStdExcelController {
                 for (int r = 1; r <= sh.getLastRowNum(); r++) {
                     Row row = sh.getRow(r);
                     if (row == null) { continue; }
+                    // 计分方式列:中英文均可,取首次有效值作为该项目计分方式
+                    if (unitCol >= 0) {
+                        String ru = parseUnit(cellText(row.getCell(unitCol)));
+                        if (ru != null) { unit = ru; }
+                    }
                     String scoreStr = cellText(row.getCell(0));
                     if (scoreStr.isEmpty()) { continue; }
                     int score;
@@ -369,6 +389,47 @@ public class FitnessStdExcelController {
     /* ================= 公共 ================= */
 
     /** 按单元格类型直接取文本(数值/字符串/公式结果), 避开 DataFormatter 的格式解析 */
+    /** 填写说明页(导入时按名称跳过),含次数型/时间型示例 */
+    private void writeGuideSheet(Workbook wb, CellStyle head) {
+        Sheet sh = wb.createSheet("填写说明");
+        String[] lines = {
+                "体能评分标准模板 · 填写说明(本页不会被导入,可整页删除)",
+                "",
+                "1. 每个 Sheet 代表一个考核项目,Sheet 名就是项目名;想指定计分方式可在名称后加(次数)或(时间),如:3000米跑(时间)。",
+                "2. 第一列填分数档(100、90、60…不必填满,只留需要的档位);中间各列是年龄段,表头可自行修改,如 0-24、25-27、60以上。",
+                "3. 最后一列是计分方式:填「次数」或「时间」,整列一致即可。",
+                "4. 次数型(越多越好):达标值直接填个数或米数,支持小数。示例:俯卧撑 100分=60、90分=50、60分=40;立定跳远 100分=2.5。",
+                "5. 时间型(越少越好):达标值一律填秒数。示例:3000米跑 100分=720(即12分00秒)、90分=780(13分00秒)、60分=960(16分00秒)。",
+                "6. 录入考核成绩时:次数型填数字;时间型可填「12分30秒」这样的文字,也可直接填秒数 750。",
+                "7. 全部达不到最低档时按最低档计分;删掉不用的分数档不影响评分。",
+                "",
+                "时间型示例(可复制本表到新 Sheet 后改名为实际项目):"
+        };
+        int r = 0;
+        for (String line : lines) {
+            sh.createRow(r++).createCell(0).setCellValue(line);
+        }
+        Row hr = sh.createRow(r++);
+        String[] headers = {"分数", "0-24", "25-29", "计分方式"};
+        for (int i = 0; i < headers.length; i++) {
+            Cell c = hr.createCell(i);
+            c.setCellValue(headers[i]);
+            c.setCellStyle(head);
+        }
+        Object[][] demo = {{"100", 720, 780, "时间"}, {"90", 780, 840, "时间"}, {"60", 960, 1020, "时间"}};
+        for (Object[] row : demo) {
+            Row xr = sh.createRow(r++);
+            xr.createCell(0).setCellValue((String) row[0]);
+            xr.createCell(1).setCellValue(((Number) row[1]).intValue());
+            xr.createCell(2).setCellValue(((Number) row[2]).intValue());
+            xr.createCell(3).setCellValue((String) row[3]);
+        }
+        sh.setColumnWidth(0, 22 * 256);
+        sh.setColumnWidth(1, 10 * 256);
+        sh.setColumnWidth(2, 10 * 256);
+        sh.setColumnWidth(3, 12 * 256);
+    }
+
     private static String cellText(Cell c) {
         if (c == null) { return ""; }
         switch (c.getCellType()) {
@@ -391,6 +452,21 @@ public class FitnessStdExcelController {
         // Excel sheet 名最长 31 字符,且不能含 : \ / ? * [ ]
         String s = item.replaceAll("[:\\\\/?*\\[\\]]", "_");
         return s.length() > 28 ? s.substring(0, 28) : s;
+    }
+
+    /** 计分方式内部代码 → 中文显示 */
+    private static String unitZh(String unit) {
+        return "time".equals(unit) ? "时间" : "次数";
+    }
+
+    /** 计分方式解析:次数/count/越多越好 → count;时间/time/越少越好 → time;无法识别返回 null */
+    private static String parseUnit(String raw) {
+        if (raw == null) { return null; }
+        String v = raw.trim();
+        if (v.isEmpty()) { return null; }
+        if ("time".equalsIgnoreCase(v) || v.contains("时间") || v.contains("越少")) { return "time"; }
+        if ("count".equalsIgnoreCase(v) || v.contains("次数") || v.contains("越多")) { return "count"; }
+        return null;
     }
 
     private static CellStyle headStyle(Workbook wb) {

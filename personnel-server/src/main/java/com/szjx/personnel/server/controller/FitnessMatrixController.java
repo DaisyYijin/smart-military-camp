@@ -96,6 +96,19 @@ public class FitnessMatrixController {
         return ApiResponse.ok(jdbc.queryForList("SELECT * FROM fitness_matrix WHERE item=? ORDER BY score DESC", item));
     }
 
+    /** 修改项目计分方式(count=次数型/time=时间型),达标值保持不变 */
+    @PostMapping("/unit")
+    public ApiResponse changeUnit(@RequestBody Map<String, Object> body) {
+        String item = str(body.get("item"));
+        String unit = str(body.get("unit"));
+        if (item.isEmpty()) { return ApiResponse.error("项目名称不能为空"); }
+        if (!"count".equals(unit) && !"time".equals(unit)) { return ApiResponse.error("计分方式无效"); }
+        int n = jdbc.update("UPDATE fitness_matrix SET unit=?, updated_at=datetime('now','localtime') WHERE item=?",
+                unit, item);
+        if (n == 0) { return ApiResponse.error("项目不存在"); }
+        return ApiResponse.ok();
+    }
+
     /** 复制项目(含全部矩阵数据) */
     @PostMapping("/copy")
     public ApiResponse copy(@RequestBody Map<String, Object> body) {

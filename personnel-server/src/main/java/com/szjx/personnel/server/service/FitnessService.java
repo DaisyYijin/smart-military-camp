@@ -17,12 +17,15 @@ public class FitnessService {
     private final FitnessDao fitnessDao;
     private final PersonnelDao personnelDao;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final FitnessScoringService scoringService;
 
     public FitnessService(FitnessDao fitnessDao, PersonnelDao personnelDao,
-                          org.springframework.jdbc.core.JdbcTemplate jdbc) {
+                          org.springframework.jdbc.core.JdbcTemplate jdbc,
+                          FitnessScoringService scoringService) {
         this.fitnessDao = fitnessDao;
         this.personnelDao = personnelDao;
         this.jdbc = jdbc;
+        this.scoringService = scoringService;
     }
 
     public List<FitnessRecord> query(String keyword, String item, int page, int size) {
@@ -35,6 +38,8 @@ public class FitnessService {
 
     public FitnessRecord create(FitnessRecord r) {
         validate(r);
+        // 服务端权威评分:按项目计分方式解析成绩并计算分数/评定(含标准与年龄校验)
+        scoringService.score(r);
         long id = fitnessDao.insert(r);
         return fitnessDao.findById(id);
     }
@@ -44,6 +49,7 @@ public class FitnessService {
             throw new IllegalArgumentException("记录不存在");
         }
         validate(r);
+        scoringService.score(r);
         r.setId(id);
         fitnessDao.update(r);
         return fitnessDao.findById(id);
@@ -71,25 +77,25 @@ public class FitnessService {
     public List<FitnessRecord> queryFiltered2(String personnelName, String idCard,
                                                String item, String grade, String startDate, String endDate,
                                                Long departmentId, String minScore, String maxScore,
-                                               int page, int size) {
+                                               int page, int size, Long personnelId) {
         StringBuilder sql = new StringBuilder(
             "SELECT f.*, p.name AS personnel_name, p.birthday, p.id_card FROM fitness_record f " +
             "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
-        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore);
+        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore, personnelId);
         sql.append(" ORDER BY f.test_date DESC, f.id DESC LIMIT ? OFFSET ?");
-        args.add(size); args.add((page - 1) * size);
+        args.add(size); args.add((long) (page - 1) * size);
         return jdbc.query(sql.toString(), new FitnessRowMapper(), args.toArray());
     }
 
     public long countFiltered2(String personnelName, String idCard,
                                 String item, String grade, String startDate, String endDate,
-                                Long departmentId, String minScore, String maxScore) {
+                                Long departmentId, String minScore, String maxScore, Long personnelId) {
         StringBuilder sql = new StringBuilder(
             "SELECT COUNT(*) FROM fitness_record f " +
             "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE 1=1");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
-        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore);
+        appendFilter2(sql, args, personnelName, idCard, item, grade, startDate, endDate, departmentId, minScore, maxScore, personnelId);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
         return n == null ? 0 : n;
     }
@@ -97,10 +103,14 @@ public class FitnessService {
     private void appendFilter2(StringBuilder sql, java.util.List<Object> args,
                                 String personnelName, String idCard,
                                 String item, String grade, String startDate, String endDate,
-                                Long departmentId, String minScore, String maxScore) {
+                                Long departmentId, String minScore, String maxScore,
+                                Long personnelId) {
         // 支持只填到月(2026-09):起始补-01,终止补-31(字符串比较安全)
         if (startDate != null && startDate.trim().length() == 7) { startDate = startDate.trim() + "-01"; }
         if (endDate != null && endDate.trim().length() == 7) { endDate = endDate.trim() + "-31"; }
+        if (personnelId != null && personnelId > 0) {
+            sql.append(" AND f.personnel_id = ?"); args.add(personnelId);
+        }
         if (personnelName != null && !personnelName.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ?"); args.add("%" + personnelName.trim() + "%");
         }
@@ -112,17 +122,18 @@ public class FitnessService {
         }
         if (grade != null && !grade.trim().isEmpty()) {
             String g = grade.trim();
+            // 分数条件按数字分列过滤;文字评定只做精确匹配,避免把"优秀/良好"当数字比较
             if (g.contains("分以上")) {
-                sql.append(" AND CAST(f.grade AS REAL) >= ").append(g.replace("分以上", ""));
+                sql.append(" AND f.points >= ").append(g.replace("分以上", ""));
             } else if (g.contains("分以下")) {
-                sql.append(" AND CAST(f.grade AS REAL) < ").append(g.replace("分以下", ""));
+                sql.append(" AND f.points < ").append(g.replace("分以下", ""));
             } else if (g.contains("-")) {
                 String[] parts = g.replace("分", "").split("-");
-                sql.append(" AND CAST(f.grade AS REAL) >= ? AND CAST(f.grade AS REAL) <= ?");
+                sql.append(" AND f.points >= ? AND f.points <= ?");
                 args.add(Double.parseDouble(parts[0]));
                 args.add(Double.parseDouble(parts[1]));
             } else if ("不及格".equals(g)) {
-                sql.append(" AND CAST(f.grade AS REAL) < 60");
+                sql.append(" AND (f.points IS NULL OR f.points < 60)");
             } else {
                 sql.append(" AND f.grade = ?"); args.add(g);
             }
@@ -137,10 +148,10 @@ public class FitnessService {
             sql.append(" AND p.department_id = ?"); args.add(departmentId);
         }
         if (minScore != null && !minScore.trim().isEmpty()) {
-            try { sql.append(" AND CAST(f.grade AS REAL) >= ?"); args.add(Double.parseDouble(minScore.trim())); } catch (NumberFormatException ignore) {}
+            try { sql.append(" AND f.points >= ?"); args.add(Double.parseDouble(minScore.trim())); } catch (NumberFormatException ignore) {}
         }
         if (maxScore != null && !maxScore.trim().isEmpty()) {
-            try { sql.append(" AND CAST(f.grade AS REAL) <= ?"); args.add(Double.parseDouble(maxScore.trim())); } catch (NumberFormatException ignore) {}
+            try { sql.append(" AND f.points <= ?"); args.add(Double.parseDouble(maxScore.trim())); } catch (NumberFormatException ignore) {}
         }
     }
 
