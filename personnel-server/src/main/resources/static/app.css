@@ -666,6 +666,9 @@ table.grid input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; 
 .dd-item.cur { color: var(--pri, #2f6fd6); font-weight: 600; background: #eef4ff; }
 .toolbar .dd { width: 150px; }
 .toolbar .dd-btn { height: 32px; }
+/* 导入导出合并下拉:宽度自适应,菜单右对齐避免溢出 */
+.toolbar .io-dd { width: auto; }
+.io-dd .dd-list { min-width: 132px; }
 
 /* ---------- 自绘日期组件 ---------- */
 .cal { position: relative; }

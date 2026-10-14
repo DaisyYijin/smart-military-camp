@@ -2038,38 +2038,55 @@ function crudView(cfg) {
         }
       }));
     }
-    toolbar.appendChild(h('button', {
-      class: 'btn btn-ghost', text: '导入 Excel',
-      title: '导入 Excel(第一行为列头,建议用导出的文件作模板)',
-      onclick: function () { importInput.click(); }
-    }));
-    // 导出:仅导出勾选的记录;未勾选时提示;带进度条
-    toolbar.appendChild(h('button', {
-      class: 'btn btn-ghost', text: '导出 Excel(含子表)',
-      onclick: function () {
-        var ids = Object.keys(state.selected);
-        if (!ids.length) {
-          toast('请先勾选要导出的数据(可点表格左上角全选本页)', 'err');
-          return;
-        }
-        var pm = showProgressModal('导出 Excel');
-        pm.setStatus('正在导出 ' + ids.length + ' 条数据…');
-        apiBlobWithProgress(cfg.endpoint + '/export?ids=' + ids.join(','),
-          function (pct) {
-            pm.setProgress(pct * 0.9); // 留 10% 给处理
-            pm.setStatus('正在下载… ' + pct + '%');
-          }
-        ).then(function (r) {
-          pm.setProgress(100);
-          pm.setStatus('导出完成');
-          downloadBlob(r.blob, r.filename);
-          setTimeout(function () { pm.close(); }, 600);
-        }).catch(function (e) {
-          pm.close();
-          toast(e.message, 'err');
-        });
+    // 导入导出合并按钮:下拉菜单选择操作
+    function doExport() {
+      var ids = Object.keys(state.selected);
+      if (!ids.length) {
+        toast('请先勾选要导出的数据(可点表格左上角全选本页)', 'err');
+        return;
       }
-    }));
+      var pm = showProgressModal('导出 Excel');
+      pm.setStatus('正在导出 ' + ids.length + ' 条数据…');
+      apiBlobWithProgress(cfg.endpoint + '/export?ids=' + ids.join(','),
+        function (pct) {
+          pm.setProgress(pct * 0.9); // 留 10% 给处理
+          pm.setStatus('正在下载… ' + pct + '%');
+        }
+      ).then(function (r) {
+        pm.setProgress(100);
+        pm.setStatus('导出完成');
+        downloadBlob(r.blob, r.filename);
+        setTimeout(function () { pm.close(); }, 600);
+      }).catch(function (e) {
+        pm.close();
+        toast(e.message, 'err');
+      });
+    }
+    var ioMenu = h('div', { class: 'dd-list io-menu' },
+      h('div', {
+        class: 'dd-item', text: '导入 Excel',
+        title: '导入 Excel(第一行为列头,建议用导出的文件作模板)',
+        onclick: function () { ioWrap.classList.remove('open'); importInput.click(); }
+      }),
+      h('div', {
+        class: 'dd-item', text: '导出 Excel',
+        title: '导出勾选的记录' + (cfg.key === 'personnel' ? '(含任职经历/奖惩等子表)' : ''),
+        onclick: function () { ioWrap.classList.remove('open'); doExport(); }
+      }));
+    var ioBtn = h('button', {
+      type: 'button', class: 'btn btn-ghost dd-btn io-btn',
+      title: '导入 / 导出 Excel'
+    }, h('span', { class: 'txt', text: '导入导出' }), h('span', { class: 'dd-arrow', text: '▾' }));
+    var ioWrap = h('div', { class: 'dd io-dd' }, ioBtn, ioMenu);
+    ioBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var opening = !ioWrap.classList.contains('open');
+      $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
+      ioWrap.classList.toggle('open', opening);
+    });
+    ioMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+    ioMenu.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    toolbar.appendChild(ioWrap);
     var actions = {
       load: load,
       openNew: function () { openForm(null); },
