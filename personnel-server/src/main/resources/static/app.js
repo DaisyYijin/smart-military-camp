@@ -53,9 +53,14 @@ function openModal(opt) {
   var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') + (opt.xwide ? ' xwide' : '') + (opt.xxwide ? ' xxwide' : '') }, head, body);
   if (opt.footer) dlg.appendChild(h('div', { class: 'dialog-foot' }, opt.footer));
   mask.appendChild(dlg);
+  document.querySelectorAll('.scroll-btns').forEach(function (b) { b.style.display = 'none'; });
   mask.addEventListener('mousedown', function (e) { if (e.target === mask) close(); });
   document.body.appendChild(mask);
-  function close() { mask.remove(); if (opt.onClose) opt.onClose(); }
+  function close() {
+    mask.remove();
+    document.querySelectorAll('.scroll-btns').forEach(function (b) { b.style.display = ''; });
+    if (opt.onClose) opt.onClose();
+  }
   return { close: close, body: body, dialog: dlg };
 }
 
@@ -628,7 +633,7 @@ function iconSvg(key) {
 }
 
 /* ================= 站点外观/主题(系统设置) ================= */
-var SITE = { name: '数智军营', title: '数智军营人员管理系统', subtitle: '人员管理系统', logo: '', favicon: '', theme: 'var(--pri, #2f6fd6)', pageSize: 20 };
+var SITE = { name: '数智军营', title: '数智军营人员管理系统', subtitle: '人员管理系统', logo: '', favicon: '', theme: '#2f6fd6', pageSize: 20 };
 
 /** 当前主题色(读 CSS 变量,图表绘制用) */
 function PRI() {
@@ -5867,7 +5872,7 @@ function dashboardView() {
               renderCharts();
             }
           }),
-          h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '卡片可拖动排序,小/中/大可切,布局保存在本机' })),
+          h('span', { title: '卡片可拖动排序,小/中/大可切,布局保存在本机', style: 'width:18px;height:18px;border:1px solid var(--c-border, #c5cdd8);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:var(--c-muted, #8a97a8);cursor:help;flex:none', text: '?' })),
         chartsGrid),
       h('div', { class: 'dash-right' },
         h('div', { class: 'dash-events' },
@@ -5954,7 +5959,7 @@ function logView() {
           onclick: function () { state.keyword = kw.value.trim(); state.page = 1; load(); }
         }),
         h('div', { class: 'spacer' }),
-        h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:13px', text: '自动记录:登录/登出/增删改/导入导出/备份' })),
+        h('span', { title: '自动记录:登录/登出/增删改/导入导出/备份', style: 'width:18px;height:18px;border:1px solid var(--c-border, #c5cdd8);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:var(--c-muted, #8a97a8);cursor:help;flex:none', text: '?' })),
       h('div', { class: 'table-wrap' }, table),
       pagerBox));
     container.appendChild(root);
@@ -6753,7 +6758,7 @@ function renderLogin(msg) {
         h('label', { class: 'login-remember', for: 'remember-me' },
           rememberCb,
           h('span', { text: '保持登录(记住我)' }),
-          h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录' })),
+          h('span', { class: 'hint', text: '不勾选则关闭浏览器后需重新登录', style: 'display:block;margin-top:2px' })),
         errBox,
         btn),
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
