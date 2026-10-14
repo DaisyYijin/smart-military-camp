@@ -217,6 +217,20 @@ public class PersonnelFullExcel {
             for (Map<String, Object> d : jdbc.queryForList("SELECT id, name FROM department")) {
                 deptMap.put(String.valueOf(d.get("name")).trim(), ((Number) d.get("id")).longValue());
             }
+            // 字典下拉项预载:导入值必须命中,防止手填错别字批量入库
+            Map<String, java.util.Set<String>> dictSets = new HashMap<String, java.util.Set<String>>();
+            for (String dt : DICT_FIELDS.values()) {
+                java.util.Set<String> s = new java.util.HashSet<String>();
+                for (Map<String, Object> dr : jdbc.queryForList(
+                        "SELECT dict_label FROM sys_dict WHERE dict_type=? AND enabled=1", dt)) {
+                    String lb = String.valueOf(dr.get("dict_label")).trim();
+                    if (!lb.isEmpty()) { s.add(lb); }
+                }
+                dictSets.put(dt, s);
+            }
+            // 列key → 中文列名(报错指明是哪一列)
+            Map<String, String> colNames = new HashMap<String, String>();
+            for (int i = 0; i < MAIN_KEYS.length; i++) { colNames.put(camelToSnake(MAIN_KEYS[i]), MAIN_HEADERS[i]); }
             int pAdded = 0, pUpdated = 0, pFailed = 0, cardWarn = 0;
             for (int r = 1; r <= mainSheet.getLastRowNum(); r++) {
                 Row row = mainSheet.getRow(r);
@@ -226,10 +240,22 @@ public class PersonnelFullExcel {
                     for (Map.Entry<Integer, String> e : colMap.entrySet()) {
                         vals.put(e.getValue(), getCell(row, e.getKey(), fmt));
                     }
-                    // 字典字段自动登记新值(民族/军衔/类别等不在字典中时收编)
-                    for (String dk : DICT_FIELDS.keySet()) {
-                        ensureDictValue(dk, vals.get(dk));
+                    // 字典字段严格校验:不在下拉选项中的值该行拒入
+                    boolean dictBad = false;
+                    for (Map.Entry<String, String> de : DICT_FIELDS.entrySet()) {
+                        String dv = vals.get(de.getKey());
+                        if (dv == null || dv.trim().isEmpty()) { continue; }
+                        if (!dictSets.get(de.getValue()).contains(dv.trim())) {
+                            pFailed++;
+                            if (errors.size() < 50) {
+                                errors.add("人员Sheet 第" + (r + 1) + "行: "
+                                        + colNames.get(de.getKey()) + "「" + dv.trim() + "」不在下拉选项中,请先在数据字典中维护后再导入");
+                            }
+                            dictBad = true;
+                            break;
+                        }
                     }
+                    if (dictBad) { continue; }
                     String name = vals.get("name");
                     if (name == null || name.trim().isEmpty()) { continue; }
                     String card = vals.get("id_card") == null ? "" : vals.get("id_card").trim().toUpperCase();
@@ -294,7 +320,7 @@ public class PersonnelFullExcel {
                     }
                 } catch (Exception e) {
                     pFailed++;
-                    if (errors.size() < 10) { errors.add("\u4eba\u5458Sheet \u7b2c" + (r + 1) + "\u884c: " + simplifyError(e.getMessage())); }
+                    if (errors.size() < 50) { errors.add("\u4eba\u5458Sheet \u7b2c" + (r + 1) + "\u884c: " + simplifyError(e.getMessage())); }
                 }
             }
             if (cardWarn > 0) {
@@ -331,7 +357,7 @@ public class PersonnelFullExcel {
                         Long pid = cardMap.get(card.toUpperCase());
                         if (pid == null) {
                             subFailed++;
-                            if (errors.size() < 10) {
+                            if (errors.size() < 50) {
                                 errors.add(sheetName + " \u7b2c" + (r + 1) + "\u884c: \u8eab\u4efd\u8bc1\u53f7\u300c" + card + "\u300d\u672a\u627e\u5230\u5bf9\u5e94\u4eba\u5458");
                             }
                             continue;
@@ -355,7 +381,7 @@ public class PersonnelFullExcel {
                         count++;
                     } catch (Exception e) {
                         subFailed++;
-                        if (errors.size() < 10) { errors.add(sheetName + " \u7b2c" + (r + 1) + "\u884c: " + simplifyError(e.getMessage())); }
+                        if (errors.size() < 50) { errors.add(sheetName + " \u7b2c" + (r + 1) + "\u884c: " + simplifyError(e.getMessage())); }
                     }
                 }
                 result.put(sheetName, count);
@@ -424,17 +450,7 @@ public class PersonnelFullExcel {
         DICT_FIELDS.put("follow_army_status", "follow_army_status");
     }
 
-    private void ensureDictValue(String key, String val) {
-        String t = DICT_FIELDS.get(key);
-        if (t == null || val == null || val.trim().isEmpty()) {
-            return;
-        }
-        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
-                "VALUES(?,?,90,1,'',0)", t, val.trim());
-    }
-
     private void setField(com.szjx.personnel.server.model.Personnel p, String key, String val) {
-        ensureDictValue(key, val);
         if (val == null || val.isEmpty()) {
             return;
         }

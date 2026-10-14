@@ -1237,6 +1237,48 @@ function buildForm(fields, values, extraPanels) {
   };
 }
 
+/**
+ * 导入结果摘要(人员多Sheet / 普通模块 两种返回结构)
+ */
+function importResultSummary(r) {
+  var msg;
+  if (r.subTotal !== undefined) {
+    msg = '导入完成:人员 ' + ((r.added || 0) + (r.updated || 0)) + ' 条(新增 ' + (r.added || 0) + ',更新 ' + (r.updated || 0) + '),子记录 ' + r.subTotal + ' 条';
+    var parts = [];
+    for (var k in r) {
+      if (k !== 'mainCount' && k !== 'subTotal' && k !== 'errors' && k !== 'error' && k !== 'failed' && k !== 'subFailed' && k !== 'cardWarn'
+          && k !== 'added' && k !== 'updated' && r[k] > 0) {
+        parts.push(k + ' ' + r[k] + '条');
+      }
+    }
+    if (parts.length) { msg += '(' + parts.join(',') + ')'; }
+    if ((r.failed || 0) > 0) { msg += ';人员失败 ' + r.failed + ' 条'; }
+    if (r.subFailed > 0) { msg += ';子记录失败 ' + r.subFailed + ' 条'; }
+    if (r.cardWarn > 0) { msg += ';注意:' + r.cardWarn + ' 条身份证号不是18位,请核对'; }
+  } else {
+    msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
+  }
+  return msg;
+}
+
+/**
+ * 导入失败明细弹窗:汇总一行 + 逐条失败原因(行号+原因),滚动由弹窗体承担
+ */
+function openImportResultModal(summary, errors) {
+  var list = h('div', { class: 'import-err-list' });
+  errors.forEach(function (e) {
+    list.appendChild(h('div', { class: 'import-err-row', text: String(e) }));
+  });
+  var m = openModal({
+    title: '导入结果',
+    body: h('div', {},
+      h('div', { style: 'margin-bottom:12px;font-size:14px;color:#26313d', text: summary }),
+      h('div', { style: 'font-size:13px;color:#d9463e;font-weight:600;margin-bottom:8px', text: '以下 ' + errors.length + ' 条未导入:' }),
+      list),
+    footer: [h('button', { class: 'btn btn-primary', text: '知道了', onclick: function () { m.close(); } })]
+  });
+}
+
 /* ================= 分页 ================= */
 
 function renderPager(state, onChange) {
@@ -1959,30 +2001,15 @@ function crudView(cfg) {
       ).then(function (r) {
         pm.setProgress(80);
         pm.setStatus('正在处理数据…');
-        var msg;
-        if (r.subTotal !== undefined) {
-          msg = '导入完成:人员 ' + r.mainCount + ' 条,子记录 ' + r.subTotal + ' 条';
-          var parts = [];
-          for (var k in r) {
-            if (k !== 'mainCount' && k !== 'subTotal' && r[k] > 0) {
-              parts.push(k + ' ' + r[k] + '条');
-            }
-          }
-          if (parts.length) { msg += '(' + parts.join(',') + ')'; }
-          if (r.cardWarn > 0) { msg += ';注意:' + r.cardWarn + ' 条身份证号不是18位,请核对'; }
-        } else {
-          msg = '导入完成:新增 ' + r.added + ' 条,更新 ' + r.updated + ' 条,失败 ' + r.failed + ' 条';
-          if (r.dictAdded > 0) {
-            msg += ',自动新增字典项 ' + r.dictAdded + ' 个';
-          }
-          if (r.errors && r.errors.length) {
-            msg += ';失败明细:' + r.errors.join('、');
-          }
-        }
+        var msg = importResultSummary(r);
         pm.setProgress(100);
         pm.setStatus('导入完成');
         pm.close();
-        toast(msg, r.failed ? 'info' : 'ok');
+        if (r.errors && r.errors.length) {
+          openImportResultModal(msg, r.errors);
+        } else {
+          toast(msg, r.failed ? 'info' : 'ok');
+        }
         load();
       }).catch(function (e) {
         pm.close();

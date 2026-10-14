@@ -261,6 +261,14 @@ table.grid td.empty-row { text-align: center; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- 导入失败明细列表 ---------- */
+.import-err-list { border: 1px solid #f3d6d4; border-radius: 8px; background: #fdf6f5; }
+.import-err-row {
+  padding: 8px 12px; font-size: 13px; color: #8a3a35; line-height: 1.5;
+  border-bottom: 1px dashed #f0d9d7; word-break: break-all;
+}
+.import-err-row:last-child { border-bottom: none; }
+
 /* ---------- 部门树 ---------- */
 .dept-toolbar { padding: 16px 16px; border-bottom: 1px solid #edf1f6; }
 .dept-tree { padding: 12px 8px; }
