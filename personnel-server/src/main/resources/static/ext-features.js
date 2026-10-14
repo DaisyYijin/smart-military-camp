@@ -8,9 +8,13 @@
  *   1) 侧栏分组子菜单展开/收起动画(高度+透明度过渡,配合 app.css 的 .menu-sub 规则)
  *   2) 人员管理工具栏左上角:点名册打印 / 花名册打印
  *      (按当前筛选条件分页拉取全部人员,生成 A4 打印文档,经隐藏 iframe 调起浏览器打印)
+ *   3) 按名称隐藏分组子菜单(如「装备管理」下的「全部装备」);要恢复删掉对应名称即可
  */
 (function () {
   'use strict';
+
+  /** 需要隐藏的侧栏分组子菜单名称(精确匹配菜单文字) */
+  var HIDDEN_SUBMENUS = ['全部装备'];
 
   /* ================= 1. 侧栏分组子菜单动画 ================= */
 
@@ -33,7 +37,8 @@
     el.style.height = '0px';
   }
 
-  // 菜单由 app.js 在登录后动态渲染:新增 .menu-sub 节点时,已展开的直接置为 auto(不播动画)
+  // 菜单由 app.js 在登录后动态渲染:新增 .menu-sub 节点时,已展开的直接置为 auto(不播动画);
+  // 同时按 HIDDEN_SUBMENUS 移除需要隐藏的子菜单项(在渲染后、绘制前执行,用户不可见)
   new MutationObserver(function (muts) {
     for (var i = 0; i < muts.length; i++) {
       var added = muts[i].addedNodes;
@@ -44,6 +49,13 @@
           (n.querySelectorAll ? n.querySelectorAll('.menu-sub') : []);
         for (var k = 0; k < subs.length; k++) {
           if (subs[k].classList.contains('open')) subs[k].style.height = 'auto';
+          var items = subs[k].querySelectorAll('.menu-item.sub');
+          for (var m = 0; m < items.length; m++) {
+            var txt = items[m].querySelector('.txt');
+            if (txt && HIDDEN_SUBMENUS.indexOf(String(txt.textContent || '').trim()) >= 0) {
+              items[m].remove();
+            }
+          }
         }
       }
     }
