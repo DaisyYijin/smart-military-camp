@@ -52,6 +52,7 @@ public class PersonnelDao {
             p.setOnlyChild(rs.getString("only_child"));
             p.setNativePlace(rs.getString("native_place"));
             p.setEnlistPlace(rs.getString("enlist_place"));
+            p.setLocationPoint(rs.getString("location_point"));
             p.setSpouseName(rs.getString("spouse_name"));
             p.setSpouseWork(rs.getString("spouse_work"));
             p.setSpousePhone(rs.getString("spouse_phone"));
@@ -86,23 +87,23 @@ public class PersonnelDao {
      */
     public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status,
                                  String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education,
-                                 String maritalStatus, String nation, String bloodType, String onlyChild,
+                                 String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint,
                                  String entryDateStart, String entryDateEnd,
                                  int page, int size) {
         StringBuilder sql = new StringBuilder(BASE_SELECT).append(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd);
         sql.append(" ORDER BY p.updated_at DESC, p.id DESC LIMIT ? OFFSET ? ");
         args.add(size);
-        args.add((page - 1) * size);
+        args.add((long) (page - 1) * size);
         return jdbc.query(sql.toString(), MAPPER, args.toArray());
     }
 
-    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String entryDateStart, String entryDateEnd) {
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM personnel p WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
-        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        appendFilter(sql, args, keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
         return n == null ? 0 : n;
     }
@@ -110,7 +111,7 @@ public class PersonnelDao {
     private void appendFilter(StringBuilder sql, List<Object> args,
                               String keyword, String name, String idCard, Long departmentId, String status,
                               String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education,
-                              String maritalStatus, String nation, String bloodType, String onlyChild,
+                              String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint,
                               String entryDateStart, String entryDateEnd) {
         if (keyword != null && !keyword.trim().isEmpty()) {
             String kw = "%" + keyword.trim() + "%";
@@ -184,6 +185,10 @@ public class PersonnelDao {
             sql.append(" AND p.enlist_place LIKE ? ");
             args.add("%" + enlistPlace.trim() + "%");
         }
+        if (locationPoint != null && !locationPoint.trim().isEmpty()) {
+            sql.append(" AND p.location_point = ? ");
+            args.add(locationPoint.trim());
+        }
         if (education != null && !education.trim().isEmpty()) {
             sql.append(" AND p.education = ? ");
             args.add(education.trim());
@@ -204,15 +209,34 @@ public class PersonnelDao {
         if (idCard == null || idCard.trim().isEmpty()) {
             return null;
         }
-        List<Personnel> list = jdbc.query(BASE_SELECT + " WHERE p.id_card = ?", MAPPER, idCard.trim());
+        List<Personnel> list = jdbc.query(BASE_SELECT + " WHERE UPPER(TRIM(p.id_card)) = ?", MAPPER,
+                idCard.trim().toUpperCase(java.util.Locale.ROOT));
         return list.isEmpty() ? null : list.get(0);
+    }
+
+    /** 空身份证不参与唯一性检查，兼容旧值大小写和两端空格。 */
+    public boolean existsOtherIdCard(String idCard, Long excludeId) {
+        if (idCard == null || idCard.trim().isEmpty()) {
+            return false;
+        }
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM personnel WHERE UPPER(TRIM(id_card))=? " +
+                        "AND (? IS NULL OR id<>?)", Long.class,
+                idCard.trim().toUpperCase(java.util.Locale.ROOT), excludeId, excludeId);
+        return count != null && count > 0;
+    }
+
+    /** 手机设备为人员电话的唯一来源。 */
+    public String devicePhone(Long id) {
+        List<String> phones = jdbc.queryForList("SELECT TRIM(phone_number) FROM phone_device WHERE personnel_id=? " +
+                "AND TRIM(IFNULL(phone_number,''))<>'' ORDER BY id DESC LIMIT 1", String.class, id);
+        return phones.isEmpty() ? "" : phones.get(0);
     }
 
     public long insert(Personnel p) {
         return jdbc.queryForObject(
                 "INSERT INTO personnel(name, gender, id_card, birthday, phone, department_id, category, rank, post, status, entry_date, address, photo, remark, " +
-                "blood_type, nation, political_status, party_join_date, marital_status, education, only_child, native_place, enlist_place, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark, party_apply_date, party_activist_date, party_candidate_date, party_full_date, follow_army_date, follow_army_status) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "blood_type, nation, political_status, party_join_date, marital_status, education, only_child, native_place, enlist_place, location_point, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark, party_apply_date, party_activist_date, party_candidate_date, party_full_date, follow_army_date, follow_army_status) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getCategory()), nvl(p.getRank()), nvl(p.getPost()),
@@ -221,7 +245,7 @@ public class PersonnelDao {
                 nvl(p.getBloodType()), nvl(p.getNation()), nvl(p.getPoliticalStatus()),
                 nvl(p.getPartyJoinDate()),
                 nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getOnlyChild()),
-                nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), p.getHeight(), p.getWeight(),
+                nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), nvl(p.getLocationPoint()), p.getHeight(), p.getWeight(),
                 nvl(p.getSpouseName()), nvl(p.getSpouseWork()), nvl(p.getSpousePhone()),
                 nvl(p.getSpouseIdCard()), nvl(p.getSpouseJob()), nvl(p.getMarriageDate()),
                 nvl(p.getPartyOrgLocation()), nvl(p.getPartyPost()), nvl(p.getPartyRemark()),
@@ -235,7 +259,7 @@ public class PersonnelDao {
                 "UPDATE personnel SET name=?, gender=?, id_card=?, birthday=?, phone=?, department_id=?, " +
                 "category=?, rank=?, post=?, status=?, entry_date=?, address=?, photo=?, remark=?, " +
                 "blood_type=?, nation=?, political_status=?, party_join_date=?, marital_status=?, education=?, only_child=?, " +
-                "native_place=?, enlist_place=?, height=?, weight=?, spouse_name=?, spouse_work=?, spouse_phone=?, spouse_id_card=?, spouse_job=?, marriage_date=?, party_org_location=?, party_post=?, party_remark=?, divorce_date=?, marriage_remark=?, party_apply_date=?, party_activist_date=?, party_candidate_date=?, party_full_date=?, follow_army_date=?, follow_army_status=?, updated_at=datetime('now','localtime') " +
+                "native_place=?, enlist_place=?, location_point=?, height=?, weight=?, spouse_name=?, spouse_work=?, spouse_phone=?, spouse_id_card=?, spouse_job=?, marriage_date=?, party_org_location=?, party_post=?, party_remark=?, divorce_date=?, marriage_remark=?, party_apply_date=?, party_activist_date=?, party_candidate_date=?, party_full_date=?, follow_army_date=?, follow_army_status=?, updated_at=datetime('now','localtime') " +
                 "WHERE id=?",
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getCategory()), nvl(p.getRank()), nvl(p.getPost()),
@@ -244,7 +268,7 @@ public class PersonnelDao {
                 nvl(p.getBloodType()), nvl(p.getNation()), nvl(p.getPoliticalStatus()),
                 nvl(p.getPartyJoinDate()),
                 nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getOnlyChild()),
-                nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), p.getHeight(), p.getWeight(),
+                nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), nvl(p.getLocationPoint()), p.getHeight(), p.getWeight(),
                 nvl(p.getSpouseName()), nvl(p.getSpouseWork()), nvl(p.getSpousePhone()),
                 nvl(p.getSpouseIdCard()), nvl(p.getSpouseJob()), nvl(p.getMarriageDate()),
                 nvl(p.getPartyOrgLocation()), nvl(p.getPartyPost()), nvl(p.getPartyRemark()),

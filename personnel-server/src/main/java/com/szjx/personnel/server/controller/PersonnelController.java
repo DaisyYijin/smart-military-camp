@@ -68,10 +68,13 @@ public class PersonnelController {
     /** 按身份证号精确查找人员(各模块表单自动带出姓名用),找不到返回 null */
     @GetMapping("/by-idcard")
     public ApiResponse findByIdCard(@RequestParam String idCard) {
+        if (idCard == null || idCard.trim().isEmpty()) {
+            return ApiResponse.ok(null);
+        }
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(
             "SELECT p.id, p.name, p.id_card AS idCard, d.name AS departmentName FROM personnel p " +
-            "LEFT JOIN department d ON p.department_id = d.id WHERE p.id_card = ? COLLATE NOCASE LIMIT 1",
-            idCard == null ? "" : idCard.trim());
+            "LEFT JOIN department d ON p.department_id = d.id WHERE UPPER(TRIM(p.id_card)) = ? LIMIT 1",
+            idCard.trim().toUpperCase(java.util.Locale.ROOT));
         return ApiResponse.ok(list.isEmpty() ? null : list.get(0));
     }
 
@@ -93,6 +96,7 @@ public class PersonnelController {
                              @RequestParam(required = false) String nation,
                              @RequestParam(required = false) String bloodType,
                              @RequestParam(required = false) String onlyChild,
+                             @RequestParam(required = false) String locationPoint,
                              @RequestParam(required = false) String entryDateStart,
                              @RequestParam(required = false) String entryDateEnd,
                              @RequestParam(defaultValue = "1") int page,
@@ -103,8 +107,8 @@ public class PersonnelController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd, page, size);
-        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, entryDateStart, entryDateEnd);
+        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size);
+        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd);
         return ApiResponse.ok(new PageResult<Personnel>(total, list));
     }
 
@@ -158,6 +162,24 @@ public class PersonnelController {
     @DeleteMapping("/{id:\\d+}")
     public ApiResponse delete(@PathVariable Long id) {
         personnelService.delete(id);
+        return ApiResponse.ok();
+    }
+
+    /* ================= 删除撤回 ================= */
+
+    @GetMapping("/undo-list")
+    public ApiResponse undoList() {
+        return ApiResponse.ok(personnelService.undoList());
+    }
+
+    @PostMapping("/undo/{undoId:\\d+}")
+    public ApiResponse undo(@PathVariable Long undoId) {
+        return ApiResponse.ok(personnelService.undoDelete(undoId));
+    }
+
+    @PostMapping("/undo-discard/{undoId:\\d+}")
+    public ApiResponse undoDiscard(@PathVariable Long undoId) {
+        personnelService.discardUndo(undoId);
         return ApiResponse.ok();
     }
 
