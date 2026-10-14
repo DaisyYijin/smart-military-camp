@@ -135,10 +135,9 @@
     var presentGroups = groupByDepartment(present).map(function (g) {
       var trs = g.rows.map(function (r) {
         no++;
-        return '<tr><td>' + no + '</td><td><b>' + esc(r.name || '') + '</b></td>' +
-          '<td>' + esc(r.post || '') + '</td><td>' + esc(r.rank || '') + '</td><td class="sign"></td><td></td></tr>';
+        return '<tr><td>' + no + '</td><td class="nm"><b>' + esc(r.name || '') + '</b></td><td class="sign"></td><td></td></tr>';
       }).join('');
-      return '<tr class="grp"><td colspan="6">' + esc(g.name) + '(在位' + g.rows.length + '人)</td></tr>' + trs;
+      return '<tr class="grp"><td colspan="4">' + esc(g.name) + '(在位' + g.rows.length + '人)</td></tr>' + trs;
     }).join('');
 
     // 不在位原因汇总(标注人数),如:休假2人、住院1人
@@ -153,20 +152,20 @@
     var ano = 0;
     var absentRows = absent.map(function (r) {
       ano++;
-      return '<tr><td>' + ano + '</td><td><b>' + esc(r.name || '') + '</b></td><td>' + esc(r.departmentName || '') + '</td>' +
-        '<td>' + esc(r.post || '') + '</td><td>' + esc(r.rank || '') + '</td><td>' + esc(r.status || '') + '</td><td></td></tr>';
+      return '<tr><td>' + ano + '</td><td class="nm"><b>' + esc(r.name || '') + '</b></td>' +
+        '<td>' + esc(r.status || '') + '</td><td></td></tr>';
     }).join('');
     var absentBlock = '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
-      '<table><thead><tr><th style="width:34px">序号</th><th style="width:12%">姓名</th><th style="width:15%">分队</th><th style="width:15%">职务</th><th style="width:13%">军衔/职级</th><th style="width:12%">原因</th><th>备注</th></tr></thead><tbody>' +
-      (absentRows || '<tr><td colspan="7" class="none">无</td></tr>') + '</tbody></table>';
+      '<table><thead><tr><th style="width:34px">序号</th><th style="width:30%">姓名</th><th style="width:22%">原因</th><th>备注</th></tr></thead><tbody>' +
+      (absentRows || '<tr><td colspan="4" class="none">无</td></tr>') + '</tbody></table>';
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
       '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
       '<div class="docname">人员点名册</div>' +
       '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank" style="min-width:110px"></span></span></div>' +
       '<h2>在位人员(共' + present.length + '人)</h2>' +
-      '<table><thead><tr><th style="width:34px">序号</th><th style="width:12%">姓名</th><th style="width:16%">职务</th><th style="width:12%">军衔/职级</th><th style="width:11%">签到</th><th>备注</th></tr></thead><tbody>' +
-      (presentGroups || '<tr><td colspan="6" class="none">无</td></tr>') + '</tbody></table>' +
+      '<table><thead><tr><th style="width:34px">序号</th><th style="width:30%">姓名</th><th style="width:22%">签到</th><th>备注</th></tr></thead><tbody>' +
+      (presentGroups || '<tr><td colspan="4" class="none">无</td></tr>') + '</tbody></table>' +
       absentBlock +
       '<div class="foot"><span>应到:' + rows.length + '人</span><span>在位:' + present.length + '人</span><span>不在位:' + absent.length + '人</span>' +
       '<span>实到:<span class="blank" style="min-width:50px"></span>人</span><span>点名人:<span class="blank" style="min-width:70px"></span></span></div>';
@@ -210,7 +209,7 @@
       'h2{margin:12px 0 5px;font-size:13.5px;letter-spacing:1px;page-break-after:avoid;}' +
       'h2.unit{margin:0 0 2px;text-align:center;font-size:16px;letter-spacing:2px;font-weight:600;}' +
       '.docname{text-align:center;font-size:15px;font-weight:600;letter-spacing:8px;margin:2px 0 8px;}' +
-      'td.none{text-align:center;color:#666;}'
+      'td.none{text-align:center;color:#666;}' +
       '.sub{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}' +
       'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
       'th,td{border:1px solid #333;padding:4px 3px;text-align:center;word-break:break-all;}' +
@@ -218,6 +217,7 @@
       'tr{page-break-inside:avoid;}' +
       '.grp td{background:#e8eef7;font-weight:600;text-align:left;padding-left:8px;}' +
       '.sign{height:26px;}' +
+      'td.nm{font-size:13px;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
     var doc = frame.contentWindow.document;
