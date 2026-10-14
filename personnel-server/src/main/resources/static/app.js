@@ -680,6 +680,30 @@ function loadSiteSettings() {
   }).catch(function () { applyBranding(); });
 }
 
+/** 18位身份证号校验(GB11643): 校验位加权算法,返回生日/性别或null */
+function validateIdCard(id) {
+  var s = String(id || '').trim().toUpperCase();
+  if (!/^\d{17}[\dX]$/.test(s)) { return null; }
+  var W = [7,9,10,5,8,4,2,1,6,3,7,9,10,5,8,4,2];
+  var CODES = '10X98765432';
+  var sum = 0;
+  for (var i = 0; i < 17; i++) { sum += (+s[i]) * W[i]; }
+  if (CODES[sum % 11] !== s[17]) { return null; }
+  return {
+    birthday: s.slice(6, 10) + '-' + s.slice(10, 12) + '-' + s.slice(12, 14),
+    gender: (+s[16]) % 2 === 0 ? '女' : '男'
+  };
+}
+
+/** 按出生日期算年龄(以今天为基准) */
+function calcAgeFrom(bd) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(bd || '');
+  if (!m) { return ''; }
+  var t = new Date();
+  var age = t.getFullYear() - (+m[1]) - ((t.getMonth() + 1 < +m[2] || (t.getMonth() + 1 === +m[2] && t.getDate() < +m[3])) ? 1 : 0);
+  return (age >= 0 && age < 130) ? age : '';
+}
+
 /* ================= API 层 ================= */
 
 var TOKEN = sessionStorage.getItem('tk') || localStorage.getItem('tk') || '';
