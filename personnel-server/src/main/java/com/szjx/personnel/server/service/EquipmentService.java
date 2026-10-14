@@ -61,5 +61,8 @@ public class EquipmentService {
         if (!com.szjx.personnel.server.util.Dates.validOrEmpty(e.getBuyDate())) {
             throw new IllegalArgumentException("购置日期格式应为 yyyy-MM-dd");
         }
+        if (!com.szjx.personnel.server.util.Dates.validOrEmpty(e.getEquipDate())) {
+            throw new IllegalArgumentException("装备时间格式应为 yyyy-MM-dd");
+        }
     }
 }

@@ -61,6 +61,9 @@ public class VehicleService {
         if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getPurchaseDate())) {
             throw new IllegalArgumentException("购置日期格式应为 yyyy-MM-dd");
         }
+        if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getEquipDate())) {
+            throw new IllegalArgumentException("装备时间格式应为 yyyy-MM-dd");
+        }
         if (!com.szjx.personnel.server.util.Dates.validOrEmpty(v.getInsuranceExpiry())) {
             throw new IllegalArgumentException("保险到期日格式应为 yyyy-MM-dd");
         }

@@ -4438,7 +4438,8 @@ var equipmentCfg = {
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'keeperName', label: '保管人' },
     { key: 'location', label: '存放位置' },
-    { key: 'buyDate', label: '购置日期' }
+    { key: 'buyDate', label: '购置日期' },
+    { key: 'equipDate', label: '装备时间' }
   ],
   rowTitle: function (r) { return r.name; },
   form: [
@@ -4452,6 +4453,7 @@ var equipmentCfg = {
     { key: 'keeperId', type: 'hidden' },
     { key: 'location', label: '存放位置' },
     { key: 'buyDate', label: '购置日期', type: 'date' },
+    { key: 'equipDate', label: '装备时间', type: 'date', hint: '列装/配发到本单位的时间' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   beforeSave: function (data) {
@@ -4540,6 +4542,7 @@ var vehicleCfg = {
     { key: 'driverName', label: '驾驶员', render: function (r) { return r.driverName || '—'; } },
     { key: 'insuranceExpiry', label: '保险到期', render: function (r) { return r.insuranceExpiry || '—'; } },
     { key: 'inspectionExpiry', label: '年检到期', render: function (r) { return r.inspectionExpiry || '—'; } },
+    { key: 'equipDate', label: '装备时间', render: function (r) { return r.equipDate || '—'; } },
     { key: 'mileage', label: '里程(km)' }
   ],
   rowTitle: function (r) { return r.plateNo; },
@@ -4560,6 +4563,7 @@ var vehicleCfg = {
     { key: 'seats', label: '核定人数', type: 'number', step: '1' },
     { key: 'mileage', label: '里程(km)', type: 'number', step: '0.1' },
     { key: 'purchaseDate', label: '购置日期', type: 'date' },
+    { key: 'equipDate', label: '装备时间', type: 'date', hint: '列装/配发到本单位的时间' },
     { key: 'insuranceExpiry', label: '保险到期日', type: 'date' },
     { key: 'inspectionExpiry', label: '年检到期日', type: 'date' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }

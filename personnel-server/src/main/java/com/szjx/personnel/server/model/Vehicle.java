@@ -20,6 +20,7 @@ public class Vehicle {
     private Integer seats;       // 核定人数
     private Double mileage;      // 里程(公里)
     private String purchaseDate;      // 购置日期
+    private String equipDate;         // 装备时间(列装)
     private String insuranceExpiry;   // 保险到期日
     private String inspectionExpiry;  // 年检到期日
     private String remark;
@@ -80,6 +81,14 @@ public class Vehicle {
 
     public void setPurchaseDate(String purchaseDate) {
         this.purchaseDate = purchaseDate;
+    }
+
+    public String getEquipDate() {
+        return equipDate;
+    }
+
+    public void setEquipDate(String equipDate) {
+        this.equipDate = equipDate;
     }
 
     public String getInsuranceExpiry() {

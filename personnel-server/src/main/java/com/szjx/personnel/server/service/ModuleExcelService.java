@@ -120,6 +120,7 @@ public class ModuleExcelService {
                         new Col("保管人", "keeperId", "ref-personnel"),
                         new Col("存放位置", "location", "text"),
                         new Col("购置日期", "buyDate", "text"),
+                        new Col("装备时间", "equipDate", "text"),
                         new Col("备注", "remark", "text")),
                 "code"));
         MODULES.put("material", new ModuleDef("material", "物资", "material", "物资",
@@ -150,6 +151,7 @@ public class ModuleExcelService {
                         new Col("核定人数", "seats", "int"),
                         new Col("里程(公里)", "mileage", "number"),
                         new Col("购置日期", "purchaseDate", "text"),
+                        new Col("装备时间", "equipDate", "text"),
                         new Col("保险到期日", "insuranceExpiry", "text"),
                         new Col("年检到期日", "inspectionExpiry", "text"),
                         new Col("备注", "remark", "text")),

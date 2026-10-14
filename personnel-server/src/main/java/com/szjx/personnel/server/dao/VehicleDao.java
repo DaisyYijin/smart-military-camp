@@ -41,6 +41,7 @@ public class VehicleDao {
             v.setSeats(rs.getObject("seats") == null ? null : rs.getInt("seats"));
             v.setMileage(rs.getObject("mileage") == null ? null : rs.getDouble("mileage"));
             v.setPurchaseDate(rs.getString("purchase_date"));
+            v.setEquipDate(rs.getString("equip_date"));
             v.setInsuranceExpiry(rs.getString("insurance_expiry"));
             v.setInspectionExpiry(rs.getString("inspection_expiry"));
             v.setRemark(rs.getString("remark"));
@@ -95,25 +96,25 @@ public class VehicleDao {
     public long insert(Vehicle v) {
         return jdbc.queryForObject(
                 "INSERT INTO vehicle(plate_no, vin, engine_no, brand, model, type, color, fuel_type, status, driver_id, " +
-                "seats, mileage, purchase_date, insurance_expiry, inspection_expiry, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "seats, mileage, purchase_date, equip_date, insurance_expiry, inspection_expiry, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
                 nvl(v.getBrand()), nvl(v.getModel()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
                 v.getDriverId(), v.getSeats(), v.getMileage(),
-                nvl(v.getPurchaseDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
+                nvl(v.getPurchaseDate()), nvl(v.getEquipDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
                 nvl(v.getRemark()));
     }
 
     public void update(Vehicle v) {
         jdbc.update(
                 "UPDATE vehicle SET plate_no=?, vin=?, engine_no=?, brand=?, model=?, type=?, color=?, fuel_type=?, " +
-                "status=?, driver_id=?, seats=?, mileage=?, purchase_date=?, insurance_expiry=?, " +
+                "status=?, driver_id=?, seats=?, mileage=?, purchase_date=?, equip_date=?, insurance_expiry=?, " +
                 "inspection_expiry=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
                 nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
                 nvl(v.getBrand()), nvl(v.getModel()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
                 v.getDriverId(), v.getSeats(), v.getMileage(),
-                nvl(v.getPurchaseDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
+                nvl(v.getPurchaseDate()), nvl(v.getEquipDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
                 nvl(v.getRemark()), v.getId());
     }
 

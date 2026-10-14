@@ -15,6 +15,7 @@ public class Equipment {
     private String keeperName;   // 保管人姓名(查询时附带)
     private String location;     // 存放位置
     private String buyDate;      // 购置日期
+    private String equipDate;    // 装备时间(列装/配发)
     private String remark;
     private String createdAt;
     private String updatedAt;
@@ -97,6 +98,14 @@ public class Equipment {
 
     public void setBuyDate(String buyDate) {
         this.buyDate = buyDate;
+    }
+
+    public String getEquipDate() {
+        return equipDate;
+    }
+
+    public void setEquipDate(String equipDate) {
+        this.equipDate = equipDate;
     }
 
     public String getRemark() {

@@ -574,6 +574,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_equipment_keeper ON equipment(keeper_id)");
+        // 装备时间(列装/配发时间,区别于购置日期)
+        ensureColumn("equipment", "equip_date", "equip_date TEXT DEFAULT ''");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS material (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -617,6 +619,8 @@ public class SchemaInitializer implements CommandLineRunner {
         for (String col : vehicleCols) {
             try { jdbc.execute("ALTER TABLE vehicle ADD COLUMN " + col + " TEXT DEFAULT ''"); } catch (Exception ignore) {}
         }
+        // 装备时间(列装时间,区别于购置日期)
+        ensureColumn("vehicle", "equip_date", "equip_date TEXT DEFAULT ''");
 
         initDefaultDict();
         seedRegionDict();

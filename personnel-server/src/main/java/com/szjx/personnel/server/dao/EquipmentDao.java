@@ -36,6 +36,7 @@ public class EquipmentDao {
             e.setKeeperName(rs.getString("keeper_name"));
             e.setLocation(rs.getString("location"));
             e.setBuyDate(rs.getString("buy_date"));
+            e.setEquipDate(rs.getString("equip_date"));
             e.setRemark(rs.getString("remark"));
             e.setCreatedAt(rs.getString("created_at"));
             e.setUpdatedAt(rs.getString("updated_at"));
@@ -87,19 +88,19 @@ public class EquipmentDao {
 
     public long insert(Equipment e) {
         return jdbc.queryForObject(
-                "INSERT INTO equipment(name, code, category, model, status, keeper_id, location, buy_date, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO equipment(name, code, category, model, status, keeper_id, location, buy_date, equip_date, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(e.getName()), nvl(e.getCode()), nvl(e.getCategory()), nvl(e.getModel()),
-                nvl(e.getStatus()), e.getKeeperId(), nvl(e.getLocation()), nvl(e.getBuyDate()), nvl(e.getRemark()));
+                nvl(e.getStatus()), e.getKeeperId(), nvl(e.getLocation()), nvl(e.getBuyDate()), nvl(e.getEquipDate()), nvl(e.getRemark()));
     }
 
     public void update(Equipment e) {
         jdbc.update(
                 "UPDATE equipment SET name=?, code=?, category=?, model=?, status=?, keeper_id=?, location=?, " +
-                "buy_date=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                "buy_date=?, equip_date=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
                 nvl(e.getName()), nvl(e.getCode()), nvl(e.getCategory()), nvl(e.getModel()),
-                nvl(e.getStatus()), e.getKeeperId(), nvl(e.getLocation()), nvl(e.getBuyDate()),
+                nvl(e.getStatus()), e.getKeeperId(), nvl(e.getLocation()), nvl(e.getBuyDate()), nvl(e.getEquipDate()),
                 nvl(e.getRemark()), e.getId());
     }
 
