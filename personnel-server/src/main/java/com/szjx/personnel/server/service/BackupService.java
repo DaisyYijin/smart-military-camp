@@ -57,6 +57,7 @@ public class BackupService {
         MODULE_TABLES.put("vehicle", new String[]{"vehicle"});
         MODULE_TABLES.put("leave", new String[]{"leave_record"});
         MODULE_TABLES.put("fitness", new String[]{"fitness_record", "fitness_matrix", "fitness_standard"});
+        MODULE_TABLES.put("phone", new String[]{"phone_device"});
     }
 
     private final JdbcTemplate jdbc;

@@ -153,6 +153,28 @@ public class SchemaInitializer implements CommandLineRunner {
                 "remark TEXT DEFAULT ''" +
                 ")");
         ensureColumn("department", "leader_id", "leader_id INTEGER DEFAULT 0");
+        // 手机设备管理(手机/手表/手环)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS phone_device (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL DEFAULT 0," +
+                "device_type TEXT DEFAULT ''," +
+                "brand TEXT DEFAULT ''," +
+                "model TEXT DEFAULT ''," +
+                "serial_no TEXT DEFAULT ''," +
+                "imei1 TEXT DEFAULT ''," +
+                "imei2 TEXT DEFAULT ''," +
+                "phone_number TEXT DEFAULT ''," +
+                "purchase_date TEXT DEFAULT ''," +
+                "status TEXT DEFAULT '在用'," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_phone_personnel ON phone_device(personnel_id)");
+        addDict("device_type", new String[]{"军用手机", "地方手机", "智能手表", "智能手环", "其他终端"});
+        addDict("phone_brand", new String[]{"华为", "小米", "OPPO", "vivo", "荣耀", "苹果", "三星"});
+        addDict("device_status", new String[]{"在用", "停用", "维修", "报废"});
+
         // 休假计划模块已下线:清理旧数据(历史备份中仍可找回)
         jdbc.execute("DROP TABLE IF EXISTS leave_plan");
         jdbc.update("DELETE FROM sys_dict WHERE dict_type = 'leave_plan_status'");

@@ -110,7 +110,8 @@ var ICON_PATHS = {
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
   chevronL: '<polyline points="15 18 9 12 15 6"/>',
   chevronR: '<polyline points="9 18 15 12 9 6"/>',
-  schedule: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'
+  schedule: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  smartphone: '<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>'
 };
 
 /**
@@ -4575,6 +4576,54 @@ var leaveCfg = {
   }
 };
 
+var phoneCfg = {
+  key: 'phone', title: '手机管理', icon: 'smartphone', endpoint: '/api/phone',
+  clickKey: 'personnelName', addLabel: '新增设备',
+  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号' },
+    { key: 'deviceType', label: '设备类型', type: 'select', options: function () { return dictLabels('device_type'); } },
+    { key: 'brand', label: '品牌' }
+  ],
+  moreFilters: [
+    { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('device_status'); } }
+  ],
+  columns: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'deviceType', label: '设备类型' },
+    { key: 'brand', label: '品牌' },
+    { key: 'model', label: '型号' },
+    { key: 'phoneNumber', label: '手机号', render: function (r) { return r.phoneNumber || '—'; } },
+    { key: 'imei1', label: 'IMEI1', render: function (r) { return r.imei1 || '—'; } },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'purchaseDate', label: '购置日期', render: function (r) { return r.purchaseDate || '—'; } }
+  ],
+  rowTitle: function (r) { return r.personnelName + ' · ' + (r.brand || '') + ' ' + (r.model || ''); },
+  delTip: function (r) { return '确定删除「' + r.personnelName + '」的「' + (r.brand || '') + (r.model || '') + '」吗?'; },
+  form: [
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'deviceType', label: '设备类型', type: 'select', required: true, options: function () { return dictLabels('device_type'); } },
+    { key: 'brand', label: '品牌', type: 'select', required: true, options: function () { return dictLabels('phone_brand'); }, hint: '字典中不存在的品牌会自动登记' },
+    { key: 'model', label: '型号', placeholder: '如 小米17 Pro' },
+    { key: 'serialNo', label: '序列号', placeholder: '设备SN码' },
+    { key: 'imei1', label: 'IMEI1', placeholder: '15位国际移动设备识别码' },
+    { key: 'imei2', label: 'IMEI2', placeholder: '双卡设备的第二码' },
+    { key: 'phoneNumber', label: '手机号', placeholder: '该设备使用的号码' },
+    { key: 'purchaseDate', label: '购置日期', type: 'date' },
+    { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('device_status'); } },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ],
+  beforeSave: function (data) {
+    delete data.idCard;
+    delete data.personnelName;
+    return data;
+  }
+};
+
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
   clickKey: 'personnelName', addLabel: '新增考核记录',
@@ -6914,7 +6963,7 @@ function openChangePassword() {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, fitnessCfg];
+var MODULES = [personnelCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg];
 
 function renderShell() {
   if (!TOKEN) {

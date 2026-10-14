@@ -159,6 +159,20 @@ public class ModuleExcelService {
                         new Col("事由", "reason", "text"),
                         new Col("备注", "remark", "text")),
                 ""));
+        MODULES.put("phone", new ModuleDef("phone", "手机设备", "phone_device", "手机设备",
+                Arrays.asList(
+                        new Col("姓名", "personnelId", "ref-personnel"),
+                        new Col("设备类型", "deviceType", "text"),
+                        new Col("品牌", "brand", "text"),
+                        new Col("型号", "model", "text"),
+                        new Col("序列号", "serialNo", "text"),
+                        new Col("IMEI1", "imei1", "text"),
+                        new Col("IMEI2", "imei2", "text"),
+                        new Col("手机号", "phoneNumber", "text"),
+                        new Col("购置日期", "purchaseDate", "text"),
+                        new Col("状态", "status", "text"),
+                        new Col("备注", "remark", "text")),
+                ""));
         MODULES.put("fitness", new ModuleDef("fitness", "体能考核", "fitness_record", "体能考核",
                 Arrays.asList(
                         new Col("姓名", "personName", "text"),

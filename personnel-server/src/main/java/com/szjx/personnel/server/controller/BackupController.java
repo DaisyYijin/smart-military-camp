@@ -46,6 +46,7 @@ public class BackupController {
         labels.put("vehicle", "车辆管理");
         labels.put("leave", "休假管理");
         labels.put("fitness", "体能考核");
+        labels.put("phone", "手机设备");
         for (String key : BackupService.allModuleKeys()) {
             Map<String, Object> m = new HashMap<String, Object>();
             m.put("key", key);
