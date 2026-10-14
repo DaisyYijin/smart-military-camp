@@ -26,3 +26,4 @@ packaging/jres/
 # 开发工具元数据
 .reasonix/
 .uploads/
+.mimosa/
