@@ -643,6 +643,8 @@
       return;
     }
     menu.setAttribute('data-leavegrp', '1');
+    var dbg = (typeof toast === 'function');
+    if (dbg) { try { toast('休假菜单重组成功'); } catch (e) { } }
     var open = localStorage.getItem('menuGroup:leavegrp') !== '0';
     var iconHtml = '';
     var ic = leaveItem.querySelector('.ic');
@@ -686,8 +688,9 @@
     menu.insertBefore(sub, leaveItem);
     leaveItem.style.display = 'none'; // 隐藏原项但保留其导航行为供「休假登记」调用
     } catch (err) {
-      // 重组失败不影响其他功能
-      try { console.warn('休假菜单重组失败', err); } catch (e2) { /* 忽略 */ }
+      // 重组失败不影响其他功能,但给出可见提示便于排查
+      try { console.warn('休假菜单重组失败', err); } catch (e2) { }
+      try { if (typeof toast === 'function') { toast('休假菜单重组失败:' + (err && err.message ? err.message : err), 'err'); } } catch (e3) { }
     }
   }
 
@@ -947,7 +950,7 @@
     } catch (err) { /* 观察器异常不影响页面 */ }
   }).observe(document.body, { childList: true, subtree: true });
 
-  // 兑底:菜单若因时序未被重组,定时重试(最多约30秒)
+  // 兑底:菜单若因时序未被重组,定时重试;登录页无菜单时不计数(不会过期)
   var lpTries = 0;
   var lpMenuTimer = setInterval(function () {
     try {
@@ -955,7 +958,9 @@
       if (menuEl && !menuEl.getAttribute('data-leavegrp')) {
         tryRestructureLeaveMenu(menuEl);
       }
-      if ((menuEl && menuEl.getAttribute('data-leavegrp')) || ++lpTries > 60) {
+      if (menuEl && menuEl.getAttribute('data-leavegrp')) {
+        clearInterval(lpMenuTimer);
+      } else if (menuEl && ++lpTries > 120) {
         clearInterval(lpMenuTimer);
       }
     } catch (err) {
@@ -974,6 +979,13 @@
     var clicked = e.target && e.target.closest ? e.target.closest('.menu-item') : null;
     if (clicked && !clicked.hasAttribute('data-leavecustom')) {
       clearCustomActive();
+    }
+    // 点击任意菜单时兑底检查:分组未挂上则立即补挂
+    if (!clicked || !clicked.hasAttribute('data-leavecustom')) {
+      try {
+        var mEl = document.querySelector('.menu');
+        if (mEl && !mEl.getAttribute('data-leavegrp')) { tryRestructureLeaveMenu(mEl); }
+      } catch (err) { /* 忽略 */ }
     }
   }, true);
 
