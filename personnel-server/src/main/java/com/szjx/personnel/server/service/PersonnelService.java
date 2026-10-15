@@ -139,8 +139,7 @@ public class PersonnelService {
     private static final String[] CASCADE_TABLES = {
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info",
-            "phone_device", "leave_record", "fitness_record", "military_assessment",
-            "education_record"};
+            "phone_device", "leave_record", "fitness_record", "military_assessment"};
     /** 被解除的外键引用:表 → 引用列 */
     private static final String[][] DETACH_REFS = {
             {"department", "leader_id"}, {"equipment", "keeper_id"},
@@ -216,7 +215,6 @@ public class PersonnelService {
         if ("leave_record".equals(table)) { return "休假"; }
         if ("fitness_record".equals(table)) { return "体能"; }
         if ("military_assessment".equals(table)) { return "军事考核"; }
-        if ("education_record".equals(table)) { return "学历"; }
         if ("position_history".equals(table)) { return "任职经历"; }
         if ("reward_punish".equals(table)) { return "奖惩"; }
         if ("child_info".equals(table)) { return "子女"; }

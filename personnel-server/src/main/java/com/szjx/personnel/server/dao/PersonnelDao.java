@@ -49,6 +49,11 @@ public class PersonnelDao {
             p.setPartyJoinDate(rs.getString("party_join_date"));
             p.setMaritalStatus(rs.getString("marital_status"));
             p.setEducation(rs.getString("education"));
+            p.setEduEnrollDate(rs.getString("edu_enroll_date"));
+            p.setEduGraduateDate(rs.getString("edu_graduate_date"));
+            p.setEduSchool(rs.getString("edu_school"));
+            p.setEduMajor(rs.getString("edu_major"));
+            p.setEduDegree(rs.getString("edu_degree"));
             p.setOnlyChild(rs.getString("only_child"));
             p.setNativePlace(rs.getString("native_place"));
             p.setEnlistPlace(rs.getString("enlist_place"));
@@ -235,8 +240,8 @@ public class PersonnelDao {
     public long insert(Personnel p) {
         return jdbc.queryForObject(
                 "INSERT INTO personnel(name, gender, id_card, birthday, phone, department_id, category, rank, post, status, entry_date, address, photo, remark, " +
-                "blood_type, nation, political_status, party_join_date, marital_status, education, only_child, native_place, enlist_place, location_point, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark, party_apply_date, party_activist_date, party_candidate_date, party_full_date, follow_army_date, follow_army_status) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "blood_type, nation, political_status, party_join_date, marital_status, education, edu_enroll_date, edu_graduate_date, edu_school, edu_major, edu_degree, only_child, native_place, enlist_place, location_point, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark, party_apply_date, party_activist_date, party_candidate_date, party_full_date, follow_army_date, follow_army_status) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getCategory()), nvl(p.getRank()), nvl(p.getPost()),
@@ -244,7 +249,8 @@ public class PersonnelDao {
                 nvl(p.getRemark()),
                 nvl(p.getBloodType()), nvl(p.getNation()), nvl(p.getPoliticalStatus()),
                 nvl(p.getPartyJoinDate()),
-                nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getOnlyChild()),
+                nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getEduEnrollDate()), nvl(p.getEduGraduateDate()),
+                nvl(p.getEduSchool()), nvl(p.getEduMajor()), nvl(p.getEduDegree()), nvl(p.getOnlyChild()),
                 nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), nvl(p.getLocationPoint()), p.getHeight(), p.getWeight(),
                 nvl(p.getSpouseName()), nvl(p.getSpouseWork()), nvl(p.getSpousePhone()),
                 nvl(p.getSpouseIdCard()), nvl(p.getSpouseJob()), nvl(p.getMarriageDate()),
@@ -258,7 +264,7 @@ public class PersonnelDao {
         jdbc.update(
                 "UPDATE personnel SET name=?, gender=?, id_card=?, birthday=?, phone=?, department_id=?, " +
                 "category=?, rank=?, post=?, status=?, entry_date=?, address=?, photo=?, remark=?, " +
-                "blood_type=?, nation=?, political_status=?, party_join_date=?, marital_status=?, education=?, only_child=?, " +
+                "blood_type=?, nation=?, political_status=?, party_join_date=?, marital_status=?, education=?, edu_enroll_date=?, edu_graduate_date=?, edu_school=?, edu_major=?, edu_degree=?, only_child=?, " +
                 "native_place=?, enlist_place=?, location_point=?, height=?, weight=?, spouse_name=?, spouse_work=?, spouse_phone=?, spouse_id_card=?, spouse_job=?, marriage_date=?, party_org_location=?, party_post=?, party_remark=?, divorce_date=?, marriage_remark=?, party_apply_date=?, party_activist_date=?, party_candidate_date=?, party_full_date=?, follow_army_date=?, follow_army_status=?, updated_at=datetime('now','localtime') " +
                 "WHERE id=?",
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getBirthday()),
@@ -267,7 +273,8 @@ public class PersonnelDao {
                 nvl(p.getRemark()),
                 nvl(p.getBloodType()), nvl(p.getNation()), nvl(p.getPoliticalStatus()),
                 nvl(p.getPartyJoinDate()),
-                nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getOnlyChild()),
+                nvl(p.getMaritalStatus()), nvl(p.getEducation()), nvl(p.getEduEnrollDate()), nvl(p.getEduGraduateDate()),
+                nvl(p.getEduSchool()), nvl(p.getEduMajor()), nvl(p.getEduDegree()), nvl(p.getOnlyChild()),
                 nvl(p.getNativePlace()), nvl(p.getEnlistPlace()), nvl(p.getLocationPoint()), p.getHeight(), p.getWeight(),
                 nvl(p.getSpouseName()), nvl(p.getSpouseWork()), nvl(p.getSpousePhone()),
                 nvl(p.getSpouseIdCard()), nvl(p.getSpouseJob()), nvl(p.getMarriageDate()),

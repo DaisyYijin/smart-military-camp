@@ -65,7 +65,7 @@ public class PersonnelIntegrityTest {
         dao = new PersonnelDao(jdbc);
         photos = mock(PhotoService.class);
         service = transactional(new PersonnelService(dao, photos, new DepartmentDao(jdbc), jdbc), jdbc);
-        for (String table : new String[]{"leave_record", "fitness_record", "military_assessment", "education_record", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info"}) {
+        for (String table : new String[]{"leave_record", "fitness_record", "military_assessment", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info"}) {
             jdbc.execute("CREATE TABLE " + table + "(id INTEGER PRIMARY KEY, personnel_id INTEGER)");
         }
         jdbc.execute("CREATE TABLE equipment(id INTEGER PRIMARY KEY, keeper_id INTEGER)");

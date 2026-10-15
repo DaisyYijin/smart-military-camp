@@ -28,6 +28,11 @@ public class Personnel {
     private String partyJoinDate; // 党团时间(入党/入团日期)
     private String maritalStatus; // 婚姻状况
     private String education;     // 学历
+    private String eduEnrollDate;   // 入学时间
+    private String eduGraduateDate; // 毕业时间
+    private String eduSchool;       // 毕业院校
+    private String eduMajor;        // 所学专业
+    private String eduDegree;       // 学位
     private String onlyChild;     // 是否独生子女
     private String nativePlace;   // 籍贯所在地(省/市/区县)
     private String enlistPlace;   // 入伍所在地(省/市/区县)
@@ -252,6 +257,46 @@ public class Personnel {
 
     public void setEducation(String education) {
         this.education = education;
+    }
+
+    public String getEduEnrollDate() {
+        return eduEnrollDate;
+    }
+
+    public void setEduEnrollDate(String eduEnrollDate) {
+        this.eduEnrollDate = eduEnrollDate;
+    }
+
+    public String getEduGraduateDate() {
+        return eduGraduateDate;
+    }
+
+    public void setEduGraduateDate(String eduGraduateDate) {
+        this.eduGraduateDate = eduGraduateDate;
+    }
+
+    public String getEduSchool() {
+        return eduSchool;
+    }
+
+    public void setEduSchool(String eduSchool) {
+        this.eduSchool = eduSchool;
+    }
+
+    public String getEduMajor() {
+        return eduMajor;
+    }
+
+    public void setEduMajor(String eduMajor) {
+        this.eduMajor = eduMajor;
+    }
+
+    public String getEduDegree() {
+        return eduDegree;
+    }
+
+    public void setEduDegree(String eduDegree) {
+        this.eduDegree = eduDegree;
     }
 
     public String getOnlyChild() {

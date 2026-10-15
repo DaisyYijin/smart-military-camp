@@ -33,10 +33,6 @@ public class SubRecordController {
         ORDER.put("position-history", "start_date");
         COLS.put("position-history", new String[]{"start_date", "end_date", "place", "post", "remark"});
 
-        TABLES.put("education", "education_record");
-        ORDER.put("education", "graduate_date");
-        COLS.put("education", new String[]{"enroll_date", "graduate_date", "school", "major", "degree", "remark"});
-
         TABLES.put("reward-punish", "reward_punish");
         ORDER.put("reward-punish", "occur_date");
 

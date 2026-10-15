@@ -73,45 +73,36 @@
     if (sub.classList.contains('open')) openSub(sub); else closeSub(sub);
   });
 
-  /* ================= 3. 人员管理新增「学历情况」子表 ================= */
+  /* ================= 3. 人员管理新增「学历情况」表单字段 ================= */
 
-  /** 学历情况子表定义(与 app.js 中任职经历等子表同构;因 app.js 受写入通道限制,由本脚本注册) */
-  var EDU_SUB = {
-    name: '学历情况',
-    kind: 'education',
-    columns: [
-      { key: 'enroll_date', label: '入学时间', type: 'date', w: 105 },
-      { key: 'graduate_date', label: '毕业时间', type: 'date', w: 105 },
-      { key: 'school', label: '毕业院校', required: true },
-      { key: 'major', label: '所学专业' },
-      { key: 'degree', label: '学位' },
-      { key: 'remark', label: '备注', w: 130 }
-    ]
-  };
-
-  /** 在人员管理表单中注册学历分区与面板(分区插在「任职经历」之前) */
-  (function registerEduPanel() {
-    if (typeof personnelCfg === 'undefined' || !personnelCfg || !personnelCfg.form || typeof subRecordsPanel !== 'function') {
+  /** 学历情况为普通表单字段(每人一套,直接填写);因 app.js 受写入通道限制,由本脚本注入到人员表单 */
+  (function registerEduFields() {
+    if (typeof personnelCfg === 'undefined' || !personnelCfg || !personnelCfg.form) {
       return; // app.js 未加载或结构变化时静默跳过
     }
-    var idx = -1;
+    // 已注册过则跳过(避免重复)
     for (var i = 0; i < personnelCfg.form.length; i++) {
-      if (personnelCfg.form[i] && personnelCfg.form[i].section === '任职经历') { idx = i; break; }
-    }
-    var section = { section: '学历情况' };
-    if (idx >= 0) {
-      personnelCfg.form.splice(idx, 0, section);
-    } else {
-      personnelCfg.form.push(section);
-    }
-    var originalSubPanels = personnelCfg.subPanels;
-    personnelCfg.subPanels = function (row) {
-      var extra = originalSubPanels ? originalSubPanels(row) : { panels: {} };
-      if (extra && extra.panels) {
-        extra.panels['学历情况'] = subRecordsPanel(EDU_SUB.kind, row && row.id ? row.id : null, EDU_SUB);
+      if (personnelCfg.form[i] && personnelCfg.form[i].key === 'eduSchool') {
+        return;
       }
-      return extra;
-    };
+    }
+    var idx = -1;
+    for (var j = 0; j < personnelCfg.form.length; j++) {
+      if (personnelCfg.form[j] && personnelCfg.form[j].section === '任职经历') { idx = j; break; }
+    }
+    var fields = [
+      { section: '学历情况' },
+      { key: 'eduEnrollDate', label: '入学时间', type: 'date' },
+      { key: 'eduGraduateDate', label: '毕业时间', type: 'date' },
+      { key: 'eduSchool', label: '毕业院校' },
+      { key: 'eduMajor', label: '所学专业' },
+      { key: 'eduDegree', label: '学位' }
+    ];
+    if (idx >= 0) {
+      personnelCfg.form.splice.apply(personnelCfg.form, [idx, 0].concat(fields));
+    } else {
+      personnelCfg.form.push.apply(personnelCfg.form, fields);
+    }
   })();
 
   /* ================= 2. 点名册 / 花名册下载 ================= */

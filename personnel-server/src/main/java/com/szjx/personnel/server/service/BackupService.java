@@ -50,7 +50,7 @@ public class BackupService {
     public static final Map<String, String[]> MODULE_TABLES = new LinkedHashMap<String, String[]>();
 
     static {
-        MODULE_TABLES.put("personnel", new String[]{"personnel", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info", "education_record"});
+        MODULE_TABLES.put("personnel", new String[]{"personnel", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info"});
         MODULE_TABLES.put("department", new String[]{"department"});
         MODULE_TABLES.put("dict", new String[]{"sys_dict", "sys_setting", "holiday_calendar"});
         MODULE_TABLES.put("equipment", new String[]{"equipment"});

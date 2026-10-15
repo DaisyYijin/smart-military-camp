@@ -13,7 +13,6 @@ import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -62,10 +61,10 @@ public class RosterExcelService {
         FIELDS.put("partyOrgLocation", new String[]{"组织关系所在地", "18"});
         FIELDS.put("partyPost", new String[]{"党内职务", "12"});
         FIELDS.put("education", new String[]{"学历", "9"});
-        FIELDS.put("eduSchool", new String[]{"毕业院校(最新)", "20"});
-        FIELDS.put("eduMajor", new String[]{"所学专业(最新)", "16"});
-        FIELDS.put("eduDegree", new String[]{"学位(最新)", "10"});
-        FIELDS.put("eduGraduate", new String[]{"毕业时间(最新)", "14"});
+        FIELDS.put("eduSchool", new String[]{"毕业院校", "20"});
+        FIELDS.put("eduMajor", new String[]{"所学专业", "16"});
+        FIELDS.put("eduDegree", new String[]{"学位", "10"});
+        FIELDS.put("eduGraduate", new String[]{"毕业时间", "14"});
         FIELDS.put("maritalStatus", new String[]{"婚姻状况", "9"});
         FIELDS.put("marriageDate", new String[]{"结婚日期", "14"});
         FIELDS.put("spouseName", new String[]{"配偶姓名", "10"});
@@ -88,12 +87,10 @@ public class RosterExcelService {
 
     private final PersonnelService personnelService;
     private final DepartmentService departmentService;
-    private final JdbcTemplate jdbc;
 
-    public RosterExcelService(PersonnelService personnelService, DepartmentService departmentService, JdbcTemplate jdbc) {
+    public RosterExcelService(PersonnelService personnelService, DepartmentService departmentService) {
         this.personnelService = personnelService;
         this.departmentService = departmentService;
-        this.jdbc = jdbc;
     }
 
     public List<Map<String, String>> fieldOptions() {
@@ -169,17 +166,6 @@ public class RosterExcelService {
         List<Map.Entry<String, List<Personnel>>> ordered = new ArrayList<Map.Entry<String, List<Personnel>>>(groups.entrySet());
         ordered.sort((a, b) -> Integer.compare(groupSeq.get(a.getKey()), groupSeq.get(b.getKey())));
 
-        // 学历情况:每人取最新一条(按毕业时间排序,后写覆盖)
-        final Map<Long, Map<String, Object>> edu = new HashMap<Long, Map<String, Object>>();
-        for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT personnel_id, enroll_date, graduate_date, school, major, degree FROM education_record " +
-                        "ORDER BY IFNULL(graduate_date,''), id")) {
-            Object pid = r.get("personnel_id");
-            if (pid != null) {
-                edu.put(((Number) pid).longValue(), r);
-            }
-        }
-
         // ================= 工作簿 =================
         Workbook wb = new XSSFWorkbook();
         try {
@@ -243,7 +229,7 @@ public class RosterExcelService {
                     setCell(sh, r, 0, nameStyle, String.valueOf(no));
                     String[] d = p.getDepartmentId() == null ? null : flat.get(String.valueOf(p.getDepartmentId()));
                     for (int i = 0; i < cols.size(); i++) {
-                        setCell(sh, r, 1 + i, nameStyle, value(p, d, edu, cols.get(i)[0]));
+                        setCell(sh, r, 1 + i, nameStyle, value(p, d, cols.get(i)[0]));
                     }
                     r++;
                 }
@@ -261,7 +247,7 @@ public class RosterExcelService {
         }
     }
 
-    private String value(Personnel p, String[] dept, Map<Long, Map<String, Object>> edu, String key) {
+    private String value(Personnel p, String[] dept, String key) {
         LocalDate today = LocalDate.now();
         switch (key) {
             case "name": return nz(p.getName());
@@ -302,10 +288,10 @@ public class RosterExcelService {
             case "partyOrgLocation": return nz(p.getPartyOrgLocation());
             case "partyPost": return nz(p.getPartyPost());
             case "education": return nz(p.getEducation());
-            case "eduSchool": { Map<String, Object> e = edu.get(p.getId()); return e == null ? "" : nz(str(e.get("school"))); }
-            case "eduMajor": { Map<String, Object> e = edu.get(p.getId()); return e == null ? "" : nz(str(e.get("major"))); }
-            case "eduDegree": { Map<String, Object> e = edu.get(p.getId()); return e == null ? "" : nz(str(e.get("degree"))); }
-            case "eduGraduate": { Map<String, Object> e = edu.get(p.getId()); return e == null ? "" : cnDate(str(e.get("graduate_date"))); }
+            case "eduSchool": return nz(p.getEduSchool());
+            case "eduMajor": return nz(p.getEduMajor());
+            case "eduDegree": return nz(p.getEduDegree());
+            case "eduGraduate": return cnDate(p.getEduGraduateDate());
             case "maritalStatus": return nz(p.getMaritalStatus());
             case "marriageDate": return cnDate(p.getMarriageDate());
             case "spouseName": return nz(p.getSpouseName());
@@ -386,10 +372,6 @@ public class RosterExcelService {
 
     private static String nz(String s) {
         return s == null ? "" : s;
-    }
-
-    private static String str(Object o) {
-        return o == null ? "" : String.valueOf(o);
     }
 
     private static String emptyAs(String s, String def) {
