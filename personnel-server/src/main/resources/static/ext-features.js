@@ -643,8 +643,6 @@
       return;
     }
     menu.setAttribute('data-leavegrp', '1');
-    var dbg = (typeof toast === 'function');
-    if (dbg) { try { toast('休假菜单重组成功'); } catch (e) { } }
     var open = localStorage.getItem('menuGroup:leavegrp') !== '0';
     var iconHtml = '';
     var ic = leaveItem.querySelector('.ic');
@@ -887,7 +885,7 @@
       });
     });
     var nameRow = h('div', { style: 'display:flex;align-items:center' }, nameEl, pickBtn);
-  }
+
     var modal = null;
     modal = openModal({
       title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
@@ -928,6 +926,7 @@
           }
         })]
     });
+  }
 
   // 菜单渲染后重组休假菜单;启动停在 #leave-plan 时恢复计划页;均带异常保护与重试兑底
   new MutationObserver(function (muts) {
