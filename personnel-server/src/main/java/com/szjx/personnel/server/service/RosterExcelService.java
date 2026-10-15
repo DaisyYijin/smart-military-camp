@@ -64,6 +64,8 @@ public class RosterExcelService {
         FIELDS.put("eduSchool", new String[]{"毕业院校", "20"});
         FIELDS.put("eduMajor", new String[]{"所学专业", "16"});
         FIELDS.put("eduDegree", new String[]{"学位", "10"});
+        FIELDS.put("eduForm", new String[]{"学历形式", "11"});
+        FIELDS.put("eduCertNo", new String[]{"毕业证号", "20"});
         FIELDS.put("eduGraduate", new String[]{"毕业时间", "14"});
         FIELDS.put("maritalStatus", new String[]{"婚姻状况", "9"});
         FIELDS.put("marriageDate", new String[]{"结婚日期", "14"});
@@ -291,6 +293,8 @@ public class RosterExcelService {
             case "eduSchool": return nz(p.getEduSchool());
             case "eduMajor": return nz(p.getEduMajor());
             case "eduDegree": return nz(p.getEduDegree());
+            case "eduForm": return nz(p.getEduForm());
+            case "eduCertNo": return nz(p.getEduCertNo());
             case "eduGraduate": return cnDate(p.getEduGraduateDate());
             case "maritalStatus": return nz(p.getMaritalStatus());
             case "marriageDate": return cnDate(p.getMarriageDate());

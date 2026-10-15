@@ -94,9 +94,11 @@
       { section: '学历情况' },
       { key: 'eduEnrollDate', label: '入学时间', type: 'date' },
       { key: 'eduGraduateDate', label: '毕业时间', type: 'date' },
+      { key: 'eduForm', label: '学历形式', type: 'select', options: function () { return dictLabels('edu_form'); } },
       { key: 'eduSchool', label: '毕业院校' },
       { key: 'eduMajor', label: '所学专业' },
-      { key: 'eduDegree', label: '学位' }
+      { key: 'eduDegree', label: '学位', type: 'select', options: function () { return dictLabels('edu_degree'); }, hint: '选项在数据字典「学位」中维护' },
+      { key: 'eduCertNo', label: '毕业证号' }
     ];
     if (idx >= 0) {
       personnelCfg.form.splice.apply(personnelCfg.form, [idx, 0].concat(fields));

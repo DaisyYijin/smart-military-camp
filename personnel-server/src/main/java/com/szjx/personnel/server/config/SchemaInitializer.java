@@ -312,6 +312,8 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("military_type", new String[]{"理论考核", "射击考核", "战术考核", "共同科目", "专业科目", "其他"});
         addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
         addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
+        addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
+        addDict("edu_form", new String[]{"全日制", "非全日制"});
 
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
@@ -359,6 +361,8 @@ public class SchemaInitializer implements CommandLineRunner {
         ensureColumn("personnel", "edu_school", "edu_school TEXT DEFAULT ''");
         ensureColumn("personnel", "edu_major", "edu_major TEXT DEFAULT ''");
         ensureColumn("personnel", "edu_degree", "edu_degree TEXT DEFAULT ''");
+        ensureColumn("personnel", "edu_form", "edu_form TEXT DEFAULT ''");
+        ensureColumn("personnel", "edu_cert_no", "edu_cert_no TEXT DEFAULT ''");
 
         // 奖惩情况(人员的子记录,kind 区分 奖励/处分)
         jdbc.execute("CREATE TABLE IF NOT EXISTS reward_punish (" +

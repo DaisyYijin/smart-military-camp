@@ -33,6 +33,8 @@ public class Personnel {
     private String eduSchool;       // 毕业院校
     private String eduMajor;        // 所学专业
     private String eduDegree;       // 学位
+    private String eduForm;         // 学历形式(全日制/非全日制)
+    private String eduCertNo;       // 毕业证号
     private String onlyChild;     // 是否独生子女
     private String nativePlace;   // 籍贯所在地(省/市/区县)
     private String enlistPlace;   // 入伍所在地(省/市/区县)
@@ -297,6 +299,22 @@ public class Personnel {
 
     public void setEduDegree(String eduDegree) {
         this.eduDegree = eduDegree;
+    }
+
+    public String getEduForm() {
+        return eduForm;
+    }
+
+    public void setEduForm(String eduForm) {
+        this.eduForm = eduForm;
+    }
+
+    public String getEduCertNo() {
+        return eduCertNo;
+    }
+
+    public void setEduCertNo(String eduCertNo) {
+        this.eduCertNo = eduCertNo;
     }
 
     public String getOnlyChild() {
