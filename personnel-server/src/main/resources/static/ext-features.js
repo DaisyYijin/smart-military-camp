@@ -784,13 +784,10 @@
   /** 休假计划 编辑弹窗(与其他模块一致:输入身份证号自动带出姓名) */
   function openPlanForm(row) {
     function field(label, el) {
-      return h('div', { style: 'margin-bottom:12px' }, h('div', { style: 'font-size:13px;color:#3c4a5c;margin-bottom:5px', text: label }), el);
+      return h('div', { class: 'form-item' }, h('label', { text: label }), el);
     }
-    var inputCss = 'width:100%;padding:8px 10px;border:1px solid #d4dce8;border-radius:4px;box-sizing:border-box';
     var idCardEl = h('input', { type: 'text', placeholder: '输入后自动带出姓名', maxlength: '18' });
-    idCardEl.style.cssText = inputCss;
-    var nameEl = h('input', { type: 'text', readonly: 'readonly', placeholder: '按身份证号自动获取' });
-    nameEl.style.cssText = inputCss + ';background:#f4f6f9';
+    var nameEl = h('input', { type: 'text', readonly: 'readonly', class: 'ro', placeholder: '按身份证号自动获取' });
     var pidHolder = { pid: row ? row.personnel_id : 0 };
     var hint = h('div', { style: 'font-size:11px;color:#8a94a6;margin-top:3px;min-height:14px', text: '' });
     if (row) {
@@ -834,25 +831,20 @@
     var idCardBox = h('div', {}, idCardEl, hint);
 
     var yearSel = h('select');
-    yearSel.style.cssText = inputCss;
     var nowYear = new Date().getFullYear();
     for (var y = nowYear + 1; y >= nowYear - 2; y--) {
       yearSel.options.add(new Option(y + ' 年', String(y)));
     }
     yearSel.value = row && row.year ? String(row.year) : String(nowYear);
     var typeSel = h('select');
-    typeSel.style.cssText = inputCss;
     var types = dictLabels('leave_type');
     if (!types.length) { types = ['事假', '病假', '年假', '探亲假', '婚假', '其他']; }
     types.forEach(function (t) { typeSel.options.add(new Option(t, t)); });
     if (row) { typeSel.value = row.leave_type || types[0]; }
     var startEl = h('input', { type: 'date' });
-    startEl.style.cssText = inputCss;
     var endEl = h('input', { type: 'date' });
-    endEl.style.cssText = inputCss;
     if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
     var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
-    daysEl.style.cssText = inputCss;
     if (row && row.days) { daysEl.value = row.days; }
     function syncDays() {
       if (startEl.value && endEl.value) {
@@ -863,14 +855,10 @@
     startEl.addEventListener('change', syncDays);
     endEl.addEventListener('change', syncDays);
     var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
-    remarkEl.style.cssText = inputCss;
     if (row) { remarkEl.value = row.remark || ''; }
 
-    // 与其他模块一致:姓名只读框旁提供「选择」按钮(弹窗按姓名/身份证/部门搜索选人);
-    // 自建稳定的弹性行布局,透传系统统一的选人弹窗,避免悬浮定位在本弹窗内跳动
-    var pickBtn = h('button', { type: 'button', class: 'btn btn-ghost', text: '选择' });
-    pickBtn.style.cssText = 'flex:none;margin-left:8px';
-    nameEl.style.cssText = inputCss + ';background:#f4f6f9;flex:1;min-width:0;padding-right:10px';
+    // 复用系统统一的选人按钮及 field-row 样式
+    var pickBtn = h('button', { type: 'button', class: 'btn btn-ghost pick-btn', text: '选择' });
     pickBtn.addEventListener('click', function () {
       if (typeof openPersonPicker !== 'function') {
         toast('选人组件不可用', 'err');
@@ -884,12 +872,12 @@
         hint.textContent = '已选:' + (p.name || '') + (p.departmentName ? '(' + p.departmentName + ')' : '');
       });
     });
-    var nameRow = h('div', { style: 'display:flex;align-items:center' }, nameEl, pickBtn);
+    var nameRow = h('div', { class: 'field-row' }, nameEl, pickBtn);
 
     var modal = null;
     modal = openModal({
       title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
-      body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
+      body: h('div', { class: 'form-grid' },
         field('身份证号', idCardBox), field('姓名', nameRow),
         field('年度', yearSel), field('休假类型', typeSel),
         field('计划开始日期', startEl), field('计划结束日期', endEl),
