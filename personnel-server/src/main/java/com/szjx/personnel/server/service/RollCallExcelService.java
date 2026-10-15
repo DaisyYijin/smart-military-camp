@@ -218,14 +218,14 @@ public class RollCallExcelService {
             sh.setMargin(Sheet.HeaderMargin, 0.15);
             sh.setMargin(Sheet.FooterMargin, 0.15);
 
-            // 无底色:仅用加粗区分表头;标题/日期/区块行/统计行不带边框,更像正式表格
-            CellStyle titleStyle = style(wb, 16, true, false, null, false);
-            CellStyle subStyle = style(wb, 11, false, false, null, false);
-            CellStyle sectionStyle = style(wb, 12, true, false, null, false);
-            CellStyle unitStyle = style(wb, 12, true, false, null, true);
-            CellStyle squadStyle = style(wb, 11, true, true, null, true);
-            CellStyle nameStyle = style(wb, 12, false, true, null, true);
-            CellStyle footStyle = style(wb, 11, false, false, null, false);
+            // 公文字体:标题=方正小标宋简体,表头=黑体,内容/日期/统计=仿宋_GB2312;标题与表头字体自带笔重,不再加粗
+            CellStyle titleStyle = style(wb, "方正小标宋简体", 18, false, false, null, false);
+            CellStyle subStyle = style(wb, "仿宋_GB2312", 12, false, false, null, false);
+            CellStyle sectionStyle = style(wb, "黑体", 12, false, false, null, false);
+            CellStyle unitStyle = style(wb, "黑体", 12, false, false, null, true);
+            CellStyle squadStyle = style(wb, "黑体", 11, false, true, null, true);
+            CellStyle nameStyle = style(wb, "仿宋_GB2312", 12, false, true, null, true);
+            CellStyle footStyle = style(wb, "仿宋_GB2312", 12, false, false, null, false);
 
             int r = 0;
             // 标题 + 日期
@@ -388,11 +388,11 @@ public class RollCallExcelService {
         }
     }
 
-    private static CellStyle style(Workbook wb, int fontPt, boolean bold, boolean wrap, IndexedColors fill, boolean bordered) {
+    private static CellStyle style(Workbook wb, String fontName, int fontPt, boolean bold, boolean wrap, IndexedColors fill, boolean bordered) {
         Font font = wb.createFont();
         font.setFontHeightInPoints((short) fontPt);
         font.setBold(bold);
-        font.setFontName("微软雅黑");
+        font.setFontName(fontName);
         CellStyle st = wb.createCellStyle();
         st.setFont(font);
         st.setAlignment(HorizontalAlignment.CENTER);
