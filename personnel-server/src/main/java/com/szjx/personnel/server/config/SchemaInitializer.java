@@ -369,7 +369,6 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
         addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
         addDict("edu_form", new String[]{"全日制", "非全日制"});
-        addDict("leave_plan_status", new String[]{"计划中", "已执行", "已取消"});
 
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}

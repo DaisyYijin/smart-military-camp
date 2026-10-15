@@ -364,6 +364,7 @@ public class PersonnelService {
             Map<String, Object> m = new HashMap<String, Object>();
             m.put("id", row.get("id"));
             m.put("name", row.get("name"));
+            m.put("idCard", row.get("id_card"));
             m.put("departmentName", row.get("department_name"));
             m.put("rank", row.get("rank"));
             m.put("post", row.get("post"));

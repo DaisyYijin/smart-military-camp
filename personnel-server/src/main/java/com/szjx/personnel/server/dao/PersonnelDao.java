@@ -310,7 +310,7 @@ public class PersonnelDao {
     /** 全部人员精简列表(供下拉选择,不分页) */
     public List<Map<String, Object>> findAllSimple() {
         return jdbc.queryForList(
-                "SELECT p.id, p.name, p.rank, p.post, IFNULL(d.name,'') AS department_name " +
+                "SELECT p.id, p.name, p.id_card, p.rank, p.post, IFNULL(d.name,'') AS department_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id=d.id ORDER BY p.id");
     }
 

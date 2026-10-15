@@ -37,7 +37,6 @@ public class LeavePlanController {
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String personnelName,
                              @RequestParam(required = false) String year,
-                             @RequestParam(required = false) String status,
                              @RequestParam(required = false) Long personnelId,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "20") int size) {
@@ -57,10 +56,6 @@ public class LeavePlanController {
             where.append(" AND lp.year = ?");
             args.add(year.trim());
         }
-        if (status != null && !status.trim().isEmpty()) {
-            where.append(" AND lp.status = ?");
-            args.add(status.trim());
-        }
         if (personnelId != null && personnelId > 0) {
             where.append(" AND lp.personnel_id = ?");
             args.add(personnelId);
@@ -78,10 +73,9 @@ public class LeavePlanController {
     @PostMapping
     public ApiResponse create(@RequestBody Map<String, Object> m) {
         validate(m);
-        jdbc.update("INSERT INTO leave_plan(personnel_id, year, leave_type, start_date, end_date, days, status, remark) VALUES(?,?,?,?,?,?,?,?)",
+        jdbc.update("INSERT INTO leave_plan(personnel_id, year, leave_type, start_date, end_date, days, remark) VALUES(?,?,?,?,?,?,?)",
                 lng(m.get("personnelId")), str(m.get("year")), str(m.get("leaveType")),
-                str(m.get("startDate")), str(m.get("endDate")), num(m.get("days")),
-                str(m.get("status")).isEmpty() ? "计划中" : str(m.get("status")), str(m.get("remark")));
+                str(m.get("startDate")), str(m.get("endDate")), num(m.get("days")), str(m.get("remark")));
         Long id = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
         return ApiResponse.ok(findOne(id));
     }
@@ -92,11 +86,10 @@ public class LeavePlanController {
             return ApiResponse.error("计划不存在");
         }
         validate(m);
-        jdbc.update("UPDATE leave_plan SET personnel_id=?, year=?, leave_type=?, start_date=?, end_date=?, days=?, status=?, remark=?," +
+        jdbc.update("UPDATE leave_plan SET personnel_id=?, year=?, leave_type=?, start_date=?, end_date=?, days=?, remark=?," +
                         " updated_at=datetime('now','localtime') WHERE id=?",
                 lng(m.get("personnelId")), str(m.get("year")), str(m.get("leaveType")),
-                str(m.get("startDate")), str(m.get("endDate")), num(m.get("days")),
-                str(m.get("status")).isEmpty() ? "计划中" : str(m.get("status")), str(m.get("remark")), id);
+                str(m.get("startDate")), str(m.get("endDate")), num(m.get("days")), str(m.get("remark")), id);
         return ApiResponse.ok(findOne(id));
     }
 

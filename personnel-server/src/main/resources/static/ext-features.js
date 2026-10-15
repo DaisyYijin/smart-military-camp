@@ -698,28 +698,21 @@
     nameInput.style.cssText = 'width:180px;padding:7px 10px;border:1px solid #d4dce8;border-radius:4px';
     var yearSel = h('select');
     yearSel.style.cssText = 'padding:7px 8px;border:1px solid #d4dce8;border-radius:4px';
-    var statusSel = h('select');
-    statusSel.style.cssText = 'padding:7px 8px;border:1px solid #d4dce8;border-radius:4px';
     var nowYear = new Date().getFullYear();
     yearSel.options.add(new Option('全部年度', ''));
     for (var y = nowYear + 1; y >= nowYear - 2; y--) {
       yearSel.options.add(new Option(y + ' 年', String(y)));
     }
-    var statuses = dictLabels('leave_plan_status');
-    if (!statuses.length) { statuses = ['计划中', '已执行', '已取消']; }
-    statusSel.options.add(new Option('全部状态', ''));
-    statuses.forEach(function (s) { statusSel.options.add(new Option(s, s)); });
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +
       '<th>姓名</th><th>身份证号</th><th>年度</th><th>休假类型</th><th>计划开始</th><th>计划结束</th>' +
-      '<th>天数</th><th>状态</th><th>备注</th><th style="width:110px">操作</th></tr></thead><tbody></tbody>';
+      '<th>天数</th><th>备注</th><th style="width:110px">操作</th></tr></thead><tbody></tbody>';
 
     function load() {
       var q = [];
       if (String(nameInput.value || '').trim()) { q.push('personnelName=' + encodeURIComponent(nameInput.value.trim())); }
       if (yearSel.value) { q.push('year=' + encodeURIComponent(yearSel.value)); }
-      if (statusSel.value) { q.push('status=' + encodeURIComponent(statusSel.value)); }
       GET('/api/leave-plan?page=1&size=200' + (q.length ? '&' + q.join('&') : '')).then(function (r) {
         state.rows = (r && r.list) || [];
         var tb = table.querySelector('tbody');
@@ -731,18 +724,16 @@
             '<td>' + esc(row.start_date || '') + '</td>' +
             '<td>' + esc(row.end_date || '') + '</td>' +
             '<td>' + (row.days || '') + '</td>' +
-            '<td>' + badge(row.status || '') + '</td>' +
             '<td>' + esc(row.remark || '') + '</td>' +
             '<td class="actions" style="white-space:nowrap">' +
             '<button class="btn-link" data-act="edit" data-id="' + row.id + '">编辑</button> ' +
             '<button class="btn-link danger" data-act="del" data-id="' + row.id + '">删除</button></td></tr>';
-        }).join('') : '<tr><td colspan="10" class="empty-row">暂无数据</td></tr>';
+        }).join('') : '<tr><td colspan="9" class="empty-row">暂无数据</td></tr>';
       }).catch(function (e) { toast(e.message, 'err'); });
     }
 
     nameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { load(); } });
     yearSel.addEventListener('change', load);
-    statusSel.addEventListener('change', load);
 
     table.addEventListener('click', function (e) {
       var btn = e.target.closest('button[data-act]');
@@ -763,7 +754,7 @@
 
     var toolbar = h('div', { class: 'toolbar' },
       h('button', { class: 'btn btn-primary', text: '新增休假计划', onclick: function () { openPlanForm(null); } }),
-      nameInput, yearSel, statusSel,
+      nameInput, yearSel,
       h('div', { class: 'spacer' }),
       h('span', { style: 'color:#66707f;font-size:12px', text: '年度休假安排;实际休假请到「休假登记」录入' }));
 
@@ -784,10 +775,66 @@
       var inputCss = 'width:100%;padding:8px 10px;border:1px solid #d4dce8;border-radius:4px;box-sizing:border-box';
       var personSel = h('select');
       personSel.style.cssText = inputCss;
+      var idCardEl = h('input', { type: 'text', placeholder: '输入身份证号自动带出人员', maxlength: '18' });
+      idCardEl.style.cssText = inputCss;
+      var idCardHint = h('div', { style: 'font-size:11px;color:#8a94a6;margin-top:3px;min-height:14px', text: '选择人员或输入身份证号,两者自动联动' });
+      function personById(id) {
+        for (var i = 0; i < people.length; i++) {
+          if (String(people[i].id) === String(id)) { return people[i]; }
+        }
+        return null;
+      }
+      function personByIdCard(v) {
+        v = String(v || '').trim().toUpperCase();
+        for (var j = 0; j < people.length; j++) {
+          if (String(people[j].idCard || '').trim().toUpperCase() === v) { return people[j]; }
+        }
+        return null;
+      }
       people.forEach(function (p) {
         personSel.options.add(new Option(p.name + (p.departmentName ? '(' + p.departmentName + ')' : ''), String(p.id)));
       });
-      if (row) { personSel.value = String(row.personnel_id); }
+      if (row) {
+        personSel.value = String(row.personnel_id);
+        var rp = personById(row.personnel_id);
+        if (rp) { idCardEl.value = rp.idCard || ''; }
+      }
+      // 联动:选人 → 带出身份证
+      personSel.addEventListener('change', function () {
+        var p = personById(personSel.value);
+        idCardEl.value = p ? (p.idCard || '') : '';
+        idCardHint.style.color = '#8a94a6';
+        idCardHint.textContent = p ? '已选:' + p.name : '';
+      });
+      // 联动:输入身份证 → 带出人员
+      function syncFromIdCard() {
+        var v = String(idCardEl.value || '').trim();
+        if (!v) {
+          idCardHint.style.color = '#8a94a6';
+          idCardHint.textContent = '';
+          return;
+        }
+        if (v.length !== 18) {
+          idCardHint.style.color = '#c0392b';
+          idCardHint.textContent = '身份证号应为18位(当前' + v.length + '位)';
+          return;
+        }
+        var hit = personByIdCard(v);
+        if (hit) {
+          personSel.value = String(hit.id);
+          idCardHint.style.color = '#1e7e34';
+          idCardHint.textContent = '已匹配:' + hit.name + (hit.departmentName ? '(' + hit.departmentName + ')' : '');
+        } else {
+          idCardHint.style.color = '#c0392b';
+          idCardHint.textContent = '未找到该身份证对应的人员';
+        }
+      }
+      idCardEl.addEventListener('input', function () {
+        clearTimeout(idCardEl._t);
+        idCardEl._t = setTimeout(syncFromIdCard, 250);
+      });
+      idCardEl.addEventListener('change', syncFromIdCard);
+      var idCardBox = h('div', {}, idCardEl, idCardHint);
       var yearSel = h('select');
       yearSel.style.cssText = inputCss;
       var nowYear = new Date().getFullYear();
@@ -817,12 +864,6 @@
       }
       startEl.addEventListener('change', syncDays);
       endEl.addEventListener('change', syncDays);
-      var statusSel = h('select');
-      statusSel.style.cssText = inputCss;
-      var sts = dictLabels('leave_plan_status');
-      if (!sts.length) { sts = ['计划中', '已执行', '已取消']; }
-      sts.forEach(function (s) { statusSel.options.add(new Option(s, s)); });
-      statusSel.value = row && row.status ? row.status : sts[0];
       var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
       remarkEl.style.cssText = inputCss;
       if (row) { remarkEl.value = row.remark || ''; }
@@ -831,8 +872,8 @@
       modal = openModal({
         title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
         body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
-          field('人员', personSel), field('年度', yearSel),
-          field('休假类型', typeSel), field('状态', statusSel),
+          field('人员(选择后带出身份证)', personSel), field('身份证号(输入后带出人员)', idCardBox),
+          field('年度', yearSel), field('休假类型', typeSel),
           field('计划开始日期', startEl), field('计划结束日期', endEl),
           field('天数', daysEl), field('备注', remarkEl)),
         footer: [
@@ -840,6 +881,15 @@
           h('button', {
             class: 'btn btn-primary', text: '保存',
             onclick: function () {
+              if (!personSel.value) {
+                toast('请选择人员(或输入身份证号自动匹配)', 'err');
+                return;
+              }
+              var idv = String(idCardEl.value || '').trim();
+              if (idv && !personByIdCard(idv)) {
+                toast('身份证号未匹配到人员,请核对', 'err');
+                return;
+              }
               var payload = {
                 personnelId: personSel.value,
                 year: yearSel.value,
@@ -847,7 +897,6 @@
                 startDate: startEl.value,
                 endDate: endEl.value,
                 days: daysEl.value,
-                status: statusSel.value,
                 remark: remarkEl.value
               };
               var done = function (r) {
