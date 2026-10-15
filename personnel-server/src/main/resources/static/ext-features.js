@@ -337,14 +337,8 @@
       '<div class="foot"><span>制表人:<span class="blank" style="min-width:80px"></span></span><span>审核人:<span class="blank" style="min-width:80px"></span></span><span>日期:' + cnToday() + '</span></div>';
   }
 
-  /** 生成打印文档并在隐藏 iframe 中调起浏览器打印 */
-  function printHtmlDocument(docTitle, landscape, bodyHtml) {
-    if (window.__printFrame) { window.__printFrame.remove(); }
-    var frame = document.createElement('iframe');
-    frame.setAttribute('title', docTitle);
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;';
-    window.__printFrame = frame;
-    document.body.appendChild(frame);
+  /** 打印/下载文档共用的完整 HTML(含样式) */
+  function buildDocument(docTitle, landscape, bodyHtml) {
     var css =
       '@page{size:A4 ' + (landscape ? 'landscape' : 'portrait') + ';margin:10mm 9mm;}' +
       '*{box-sizing:border-box;}' +
@@ -365,9 +359,26 @@
       'td.rs{background:#f4f7fb;font-weight:600;width:78px;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
+    return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(docTitle) + '</title><style>' + css + '</style></head><body>' + bodyHtml + '</body></html>';
+  }
+
+  /** 以 HTML 文件方式下载(浏览器打开后可直接打印,版式与打印完全一致) */
+  function downloadHtmlDocument(filename, landscape, bodyHtml) {
+    var blob = new Blob([buildDocument(filename.replace(/\.html$/, ''), landscape, bodyHtml)], { type: 'text/html;charset=utf-8' });
+    downloadBlob(blob, filename);
+  }
+
+  /** 生成打印文档并在隐藏 iframe 中调起浏览器打印 */
+  function printHtmlDocument(docTitle, landscape, bodyHtml) {
+    if (window.__printFrame) { window.__printFrame.remove(); }
+    var frame = document.createElement('iframe');
+    frame.setAttribute('title', docTitle);
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;';
+    window.__printFrame = frame;
+    document.body.appendChild(frame);
     var doc = frame.contentWindow.document;
     doc.open();
-    doc.write('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(docTitle) + '</title><style>' + css + '</style></head><body>' + bodyHtml + '</body></html>');
+    doc.write(buildDocument(docTitle, landscape, bodyHtml));
     doc.close();
     setTimeout(function () {
       try {
@@ -413,10 +424,17 @@
       pm.setStatus('正在生成' + (isRoll ? '点名册' : '花名册') + '(' + rows.length + '人)…');
       setTimeout(function () {
         pm.setProgress(100);
-        pm.close();
-        // 点名册与花名册统一用横版 A4(单位/班并排时横向宽度更充裕)
-        printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', true,
-          isRoll ? rollCallHtml(rows, deptIdx, leaveMap) : rosterHtml(rows, deptIdx));
+        if (isRoll) {
+          // 点名册:横版 A4 版式的 HTML 文件下载(浏览器打开后可直接打印,版式一致)
+          var t = new Date();
+          var stamp = t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2);
+          pm.setStatus('已开始下载:人员点名册-' + stamp + '.html');
+          downloadHtmlDocument('人员点名册-' + stamp + '.html', true, rollCallHtml(rows, deptIdx, leaveMap));
+        } else {
+          pm.setStatus('已调起打印');
+          printHtmlDocument('人员花名册', true, rosterHtml(rows, deptIdx));
+        }
+        setTimeout(function () { pm.close(); }, 500);
       }, 50);
     }).catch(function (e) {
       pm.close();
@@ -451,8 +469,8 @@
       toolbar.setAttribute('data-printbtns', '1');
       var grp = h('div', { class: 'toolbar-left' });
       grp.appendChild(h('button', {
-        class: 'btn btn-ghost', text: '点名册打印',
-        title: '按当前筛选条件生成点名册(单位→班两级分组显示姓名,底部列不在位人员)并发送打印',
+        class: 'btn btn-ghost', text: '点名册下载',
+        title: '按当前筛选条件生成点名册文件并下载(横版A4版式,浏览器打开后可直接打印)',
         onclick: function () { printPersonnelDoc('rollcall', readFilterParams()); }
       }));
       grp.appendChild(h('button', {
