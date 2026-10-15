@@ -47,14 +47,14 @@ public class RosterExcelService {
         FIELDS.put("post", new String[]{"职务", "12"});
         FIELDS.put("status", new String[]{"状态", "8"});
         FIELDS.put("phone", new String[]{"手机号", "14"});
-        FIELDS.put("birthday", new String[]{"出生日期", "12"});
+        FIELDS.put("birthday", new String[]{"出生日期", "16"});
         FIELDS.put("age", new String[]{"年龄", "6"});
         FIELDS.put("nation", new String[]{"民族", "8"});
         FIELDS.put("nativePlace", new String[]{"籍贯所在地", "18"});
         FIELDS.put("politicalStatus", new String[]{"政治面貌", "10"});
         FIELDS.put("education", new String[]{"学历", "9"});
         FIELDS.put("maritalStatus", new String[]{"婚姻状况", "9"});
-        FIELDS.put("entryDate", new String[]{"入伍日期", "12"});
+        FIELDS.put("entryDate", new String[]{"入伍日期", "16"});
         FIELDS.put("serviceYears", new String[]{"军龄", "7"});
         FIELDS.put("bloodType", new String[]{"血型", "6"});
         FIELDS.put("height", new String[]{"身高(cm)", "8"});
@@ -246,7 +246,7 @@ public class RosterExcelService {
             case "post": return nz(p.getPost());
             case "status": return nz(p.getStatus());
             case "phone": return nz(p.getPhone());
-            case "birthday": return nz(p.getBirthday());
+            case "birthday": return cnDate(p.getBirthday());
             case "age": {
                 LocalDate b = parseDate(p.getBirthday());
                 if (b == null) {
@@ -263,7 +263,7 @@ public class RosterExcelService {
             case "politicalStatus": return nz(p.getPoliticalStatus());
             case "education": return nz(p.getEducation());
             case "maritalStatus": return nz(p.getMaritalStatus());
-            case "entryDate": return nz(p.getEntryDate());
+            case "entryDate": return cnDate(p.getEntryDate());
             case "serviceYears": {
                 LocalDate e0 = parseDate(p.getEntryDate());
                 if (e0 == null) {
@@ -311,11 +311,27 @@ public class RosterExcelService {
         if (s == null || s.trim().isEmpty()) {
             return null;
         }
+        String v = s.trim();
         try {
-            return LocalDate.parse(s.trim().substring(0, 10), DateTimeFormatter.ISO_LOCAL_DATE);
+            if (v.length() >= 10) {
+                return LocalDate.parse(v.substring(0, 10), DateTimeFormatter.ISO_LOCAL_DATE);
+            }
+            if (v.length() == 8) {
+                return LocalDate.parse(v.substring(0, 4) + "-" + v.substring(4, 6) + "-" + v.substring(6, 8), DateTimeFormatter.ISO_LOCAL_DATE);
+            }
         } catch (Exception e) {
             return null;
         }
+        return null;
+    }
+
+    /** 日期显示为 年月日;解析失败原样返回 */
+    private static String cnDate(String s) {
+        LocalDate d = parseDate(s);
+        if (d == null) {
+            return nz(s);
+        }
+        return d.getYear() + "年" + d.getMonthValue() + "月" + d.getDayOfMonth() + "日";
     }
 
     private static String nz(String s) {

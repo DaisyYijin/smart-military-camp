@@ -316,7 +316,7 @@ public class RollCallExcelService {
                     String ret = returns.get(p.getId());
                     String text = p.getName() == null ? "" : p.getName();
                     if (ret != null && !ret.isEmpty()) {
-                        text = text + "\n归队:" + ret;
+                        text = text + "\n归队:" + cnDate(ret);
                     }
                     setCell(sh, rowAt, colAt, nameStyle, text);
                 }
@@ -348,6 +348,23 @@ public class RollCallExcelService {
 
     private static String emptyAs(String s, String def) {
         return s == null || s.isEmpty() ? def : s;
+    }
+
+    /** 日期显示为 年月日;解析失败原样返回 */
+    private static String cnDate(String s) {
+        if (s == null || s.trim().isEmpty()) {
+            return "";
+        }
+        String v = s.trim();
+        try {
+            String iso = v.length() == 8
+                    ? v.substring(0, 4) + "-" + v.substring(4, 6) + "-" + v.substring(6, 8)
+                    : v.substring(0, 10);
+            java.time.LocalDate d = java.time.LocalDate.parse(iso, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE);
+            return d.getYear() + "年" + d.getMonthValue() + "月" + d.getDayOfMonth() + "日";
+        } catch (Exception e) {
+            return v;
+        }
     }
 
     private static Long parseLong(String s) {
