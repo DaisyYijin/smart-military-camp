@@ -841,8 +841,8 @@
     if (!types.length) { types = ['事假', '病假', '年假', '探亲假', '婚假', '其他']; }
     types.forEach(function (t) { typeSel.options.add(new Option(t, t)); });
     if (row) { typeSel.value = row.leave_type || types[0]; }
-    var startEl = h('input', { type: 'date' });
-    var endEl = h('input', { type: 'date' });
+    var startEl = makeDateField();
+    var endEl = makeDateField();
     if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
     var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
     if (row && row.days) { daysEl.value = row.days; }
