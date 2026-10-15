@@ -199,8 +199,11 @@ public class RollCallExcelService {
         try {
             Sheet sh = wb.createSheet("点名册");
             int totalCols = Math.max(presentCols, 6);
+            // 列宽自适应:目标总宽≈160字符,让内容宽高比接近横版A4,减少整页缩放后的左右留白;
+            // 同时保证不在位列能容纳“归队:yyyy-MM-dd”整行
+            int colWidth = Math.max(16, Math.min(24, 160 / Math.max(1, totalCols)));
             for (int c = 0; c < totalCols; c++) {
-                sh.setColumnWidth(c, 14 * 256);
+                sh.setColumnWidth(c, colWidth * 256);
             }
             sh.getPrintSetup().setLandscape(true);
             sh.getPrintSetup().setPaperSize((short) 9); // A4
@@ -208,10 +211,10 @@ public class RollCallExcelService {
             sh.getPrintSetup().setFitWidth((short) 1);
             sh.getPrintSetup().setFitHeight((short) 1); // 整表缩放到一页
             sh.setHorizontallyCenter(true);
-            sh.setMargin(Sheet.LeftMargin, 0.35);
-            sh.setMargin(Sheet.RightMargin, 0.35);
-            sh.setMargin(Sheet.TopMargin, 0.4);
-            sh.setMargin(Sheet.BottomMargin, 0.4);
+            sh.setMargin(Sheet.LeftMargin, 0.25);
+            sh.setMargin(Sheet.RightMargin, 0.25);
+            sh.setMargin(Sheet.TopMargin, 0.35);
+            sh.setMargin(Sheet.BottomMargin, 0.35);
             sh.setMargin(Sheet.HeaderMargin, 0.15);
             sh.setMargin(Sheet.FooterMargin, 0.15);
 
@@ -292,7 +295,7 @@ public class RollCallExcelService {
                 List<Personnel> people = e.getValue();
                 int rowsN = Math.max(1, (people.size() + perRow - 1) / perRow);
                 for (int i = 0; i < rowsN; i++) {
-                    ensureRow(sh, r + i).setHeightInPoints(30); // 预留归队时间第二行
+                    ensureRow(sh, r + i).setHeightInPoints(32); // 预留归队时间第二行(加宽后不截断)
                 }
                 merge(sh, r, 0, r + rowsN - 1, 0, squadStyle, e.getKey() + "(" + people.size() + "人)");
                 for (int i = 0; i < people.size(); i++) {
