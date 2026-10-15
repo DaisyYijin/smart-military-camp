@@ -14,6 +14,8 @@ public class MilitaryAssessment {
     private String score;           // 成绩
     private Double points;          // 分数(0-100)
     private String grade;           // 评定:优秀/良好/及格/不及格
+    private Long schemeId;         // 考核方案ID(0=旧式手工记录)
+    private String detail;          // 课目明细JSON:[{name,weight(占总分百分比),score}]
     private String testDate;        // 考核日期
     private String remark;
     private String createdAt;
@@ -45,6 +47,22 @@ public class MilitaryAssessment {
 
     public String getGrade() { return grade; }
     public void setGrade(String grade) { this.grade = grade; }
+
+    public Long getSchemeId() {
+        return schemeId;
+    }
+
+    public void setSchemeId(Long schemeId) {
+        this.schemeId = schemeId;
+    }
+
+    public String getDetail() {
+        return detail;
+    }
+
+    public void setDetail(String detail) {
+        this.detail = detail;
+    }
 
     public String getTestDate() { return testDate; }
     public void setTestDate(String testDate) { this.testDate = testDate; }

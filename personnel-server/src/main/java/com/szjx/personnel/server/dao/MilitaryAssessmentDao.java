@@ -32,6 +32,9 @@ public class MilitaryAssessmentDao {
         m.setPoints(rs.getObject("points") == null ? null : rs.getDouble("points"));
         m.setGrade(rs.getString("grade"));
         m.setTestDate(rs.getString("test_date"));
+        Object sid = rs.getObject("scheme_id");
+        m.setSchemeId(sid == null ? Long.valueOf(0L) : Long.valueOf(rs.getLong("scheme_id")));
+        m.setDetail(rs.getString("detail"));
         m.setRemark(rs.getString("remark"));
         m.setCreatedAt(rs.getString("created_at"));
         m.setUpdatedAt(rs.getString("updated_at"));
@@ -100,18 +103,18 @@ public class MilitaryAssessmentDao {
 
     public long insert(MilitaryAssessment m) {
         return jdbc.queryForObject(
-                "INSERT INTO military_assessment(personnel_id, category, item, score, points, grade, test_date, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?) RETURNING id",
+                "INSERT INTO military_assessment(personnel_id, scheme_id, detail, category, item, score, points, grade, test_date, remark) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
-                m.getPersonnelId(), nvl(m.getCategory()), nvl(m.getItem()), nvl(m.getScore()),
+                m.getPersonnelId(), m.getSchemeId() == null ? Long.valueOf(0L) : m.getSchemeId(), nvl(m.getDetail()), nvl(m.getCategory()), nvl(m.getItem()), nvl(m.getScore()),
                 m.getPoints(), nvl(m.getGrade()), nvl(m.getTestDate()), nvl(m.getRemark()));
     }
 
     public void update(MilitaryAssessment m) {
         jdbc.update(
-                "UPDATE military_assessment SET personnel_id=?, category=?, item=?, score=?, points=?, grade=?, " +
+                "UPDATE military_assessment SET personnel_id=?, scheme_id=?, detail=?, category=?, item=?, score=?, points=?, grade=?, " +
                 "test_date=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
-                m.getPersonnelId(), nvl(m.getCategory()), nvl(m.getItem()), nvl(m.getScore()),
+                m.getPersonnelId(), m.getSchemeId() == null ? Long.valueOf(0L) : m.getSchemeId(), nvl(m.getDetail()), nvl(m.getCategory()), nvl(m.getItem()), nvl(m.getScore()),
                 m.getPoints(), nvl(m.getGrade()), nvl(m.getTestDate()), nvl(m.getRemark()), m.getId());
     }
 

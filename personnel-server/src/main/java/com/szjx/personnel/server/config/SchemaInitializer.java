@@ -308,7 +308,46 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
+        ensureColumn("military_assessment", "scheme_id", "scheme_id INTEGER DEFAULT 0");
+        ensureColumn("military_assessment", "detail", "detail TEXT DEFAULT ''");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_military_personnel ON military_assessment(personnel_id)");
+
+        // 军事考核方案:两级课目+占比(顶级课目占总分百分比;子项占该课目百分比)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS mil_scheme (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "name TEXT NOT NULL," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS mil_scheme_item (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "scheme_id INTEGER NOT NULL," +
+                "parent_id INTEGER DEFAULT 0," +
+                "name TEXT DEFAULT ''," +
+                "weight REAL DEFAULT 0," +
+                "sort INTEGER DEFAULT 0," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        // 默认方案种子:军事课目综合考核 = 理论30% + 实操70%(射击40%/战术30%/体能30%)
+        try {
+            if (jdbc.queryForObject("SELECT COUNT(*) FROM mil_scheme", Integer.class) == 0) {
+                jdbc.update("INSERT INTO mil_scheme(name, remark) VALUES(?, ?)",
+                        "军事课目综合考核", "理论+实操加权,百分制");
+                Long sid = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+                jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,1)", sid, "理论", 30);
+                jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,2)", sid, "实操", 70);
+                Long prac = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+                String[] names = {"射击", "战术", "体能"};
+                double[] ws = {40, 30, 30};
+                for (int i = 0; i < names.length; i++) {
+                    jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?)",
+                            sid, prac, names[i], ws[i], i + 1);
+                }
+            }
+        } catch (Exception ignore) {
+            // 种子失败不影响启动
+        }
         addDict("military_type", new String[]{"理论考核", "射击考核", "战术考核", "共同科目", "专业科目", "其他"});
         addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
         addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});

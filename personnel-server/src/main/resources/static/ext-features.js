@@ -265,6 +265,348 @@
     }
   }
 
+  /* ================= 4. 军事考核:方案化加权评分 ================= */
+
+  /** 方案缓存:[{id,name,remark,items:[{id,name,weight,children:[...]}]}] */
+  var MIL_SCHEMES = [];
+
+  function loadMilSchemes() {
+    return GET('/api/military/schemes').then(function (list) {
+      MIL_SCHEMES = list || [];
+      return MIL_SCHEMES;
+    });
+  }
+
+  /** 方案的叶子课目(带有效占比):顶级无子项→自身占比;有子项→顶级占比×子项占比/100 */
+  function milLeaves(scheme) {
+    var out = [];
+    (scheme && scheme.items ? scheme.items : []).forEach(function (top) {
+      var tw = Number(top.weight) || 0;
+      var kids = top.children || [];
+      if (!kids.length) {
+        out.push({ name: top.name, weight: tw, label: top.name + '(' + trimNumJs(tw) + '%)' });
+      } else {
+        kids.forEach(function (c) {
+          var eff = Math.round(tw * (Number(c.weight) || 0)) / 100;
+          out.push({ name: top.name + '·' + c.name, weight: eff, label: top.name + '·' + c.name + '(' + trimNumJs(eff) + '%)' });
+        });
+      }
+    });
+    return out;
+  }
+
+  function trimNumJs(v) {
+    return Math.round(v * 10) / 10;
+  }
+
+  function milDetailText(r) {
+    if (!r || !r.detail) { return r && r.score ? r.score : '—'; }
+    try {
+      var rows = JSON.parse(r.detail);
+      return rows.map(function (x) { return x.name + trimNumJs(Number(x.score)); }).join('·');
+    } catch (e) {
+      return r.score || '—';
+    }
+  }
+
+  /** 动态课目成绩录入状态(单表单内唯一) */
+  var MIL_FORM_STATE = { leaves: [], inputs: [], totalEl: null, container: null };
+
+  function renderMilLeafInputs(container, scheme, preset) {
+    MIL_FORM_STATE.leaves = milLeaves(scheme);
+    MIL_FORM_STATE.inputs = [];
+    container.innerHTML = '';
+    var presetMap = {};
+    (preset || []).forEach(function (p) { presetMap[p.name] = p.score; });
+    MIL_FORM_STATE.leaves.forEach(function (leaf) {
+      var row = h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:8px' });
+      var lab = h('div', { style: 'flex:1;min-width:0;font-size:13px', text: leaf.label });
+      var input = h('input', { type: 'number', min: '0', max: '100', step: '0.5', placeholder: '0-100' });
+      input.style.cssText = 'width:110px;padding:7px 9px;border:1px solid #d4dce8;border-radius:4px';
+      if (presetMap[leaf.name] !== undefined && presetMap[leaf.name] !== '') { input.value = presetMap[leaf.name]; }
+      row.appendChild(lab);
+      row.appendChild(input);
+      container.appendChild(row);
+      MIL_FORM_STATE.inputs.push({ leaf: leaf, el: input });
+    });
+    var total = h('div', { style: 'margin-top:4px;padding:10px 12px;background:#f0f5fb;border-radius:6px;font-size:14px;font-weight:600' });
+    MIL_FORM_STATE.totalEl = total;
+    container.appendChild(total);
+    function sync() {
+      var sum = 0, missing = 0;
+      MIL_FORM_STATE.inputs.forEach(function (x) {
+        var v = parseFloat(x.el.value);
+        if (isNaN(v)) { missing++; } else { sum += v * x.leaf.weight / 100; }
+      });
+      var t = Math.round(sum * 10) / 10;
+      var g = t >= 90 ? '优秀' : t >= 80 ? '良好' : t >= 60 ? '及格' : '不及格';
+      total.textContent = missing ? '百分制总分:—(还有 ' + missing + ' 项未填,按 0 分计则为 ' + t + ' 分/' + g + ')'
+        : '百分制总分:' + t + ' 分    预评等级:' + g;
+    }
+    MIL_FORM_STATE.inputs.forEach(function (x) {
+      x.el.addEventListener('input', sync);
+      x.el.addEventListener('change', sync);
+    });
+    sync();
+  }
+
+  function setupMilitaryModule() {
+    if (typeof militaryCfg === 'undefined' || !militaryCfg) {
+      return; // app.js 未加载时跳过
+    }
+
+    militaryCfg.columns = [
+      { key: 'personnelName', label: '姓名' },
+      { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+      { key: 'item', label: '考核方案' },
+      { key: 'detailInfo', label: '课目明细', render: function (r) { return milDetailText(r); } },
+      { key: 'points', label: '总分(百分制)' },
+      { key: 'grade', label: '评定', render: function (r) { return badge(r.grade); } },
+      { key: 'testDate', label: '考核日期' }
+    ];
+
+    militaryCfg.form = [
+      { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+      { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+      { key: 'personnelId', type: 'hidden', required: true },
+      { key: 'schemeName', label: '考核方案', type: 'select', required: true,
+        options: function () { return MIL_SCHEMES.map(function (s) { return s.name; }); },
+        hint: '方案与各课目占比在「考核方案设置」中维护' },
+      { key: 'testDate', label: '考核日期', type: 'date', required: true },
+      { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+    ];
+
+    militaryCfg.formSetup = function (form, row) {
+      var schemeEl = form.inputs['schemeName'];
+      var container = h('div', { style: 'grid-column: 1 / -1; margin-top:4px' });
+      MIL_FORM_STATE.container = container;
+      var head = h('div', { style: 'grid-column: 1 / -1;font-weight:600;margin-top:6px;padding-top:8px;border-top:1px dashed #d4dce8', text: '课目成绩(百分制,按方案占比加权)' });
+      form.el.appendChild(head);
+      form.el.appendChild(container);
+      function schemeByName(n) {
+        for (var i = 0; i < MIL_SCHEMES.length; i++) {
+          if (MIL_SCHEMES[i].name === n) { return MIL_SCHEMES[i]; }
+        }
+        return null;
+      }
+      function refresh(preset) {
+        var s = schemeByName(String(schemeEl.value || ''));
+        container.innerHTML = '';
+        MIL_FORM_STATE.leaves = [];
+        MIL_FORM_STATE.inputs = [];
+        if (!s) {
+          container.appendChild(h('div', { style: 'color:#8a94a6;font-size:12px', text: MIL_SCHEMES.length ? '请先选择考核方案' : '暂无考核方案,请先在工具栏「考核方案设置」中创建' }));
+          return;
+        }
+        renderMilLeafInputs(container, s, preset);
+      }
+      schemeEl.addEventListener('change', function () { refresh(null); });
+      var presetDetail = null;
+      try { presetDetail = row && row.detail ? JSON.parse(row.detail) : null; } catch (e) { presetDetail = null; }
+      loadMilSchemes().then(function () {
+        // 编辑时回填方案与各项成绩
+        if (row && row.item && schemeByName(row.item) && !schemeEl.value) {
+          schemeEl.value = row.item;
+        }
+        refresh(presetDetail);
+      });
+    };
+
+    militaryCfg.beforeSave = function (data) {
+      var scheme = null;
+      for (var i = 0; i < MIL_SCHEMES.length; i++) {
+        if (MIL_SCHEMES[i].name === data.schemeName) { scheme = MIL_SCHEMES[i]; break; }
+      }
+      if (!scheme) {
+        toast('请选择考核方案', 'err');
+        return null;
+      }
+      var rows = [];
+      for (var j = 0; j < MIL_FORM_STATE.leaves.length; j++) {
+        var leaf = MIL_FORM_STATE.leaves[j];
+        var el = MIL_FORM_STATE.inputs[j] ? MIL_FORM_STATE.inputs[j].el : null;
+        var v = el ? parseFloat(el.value) : NaN;
+        if (isNaN(v) || v < 0 || v > 100) {
+          toast('「' + leaf.label + '」成绩需填写0-100的分数', 'err');
+          return null;
+        }
+        rows.push({ name: leaf.name, weight: leaf.weight, score: v });
+      }
+      if (!rows.length) {
+        toast('该方案没有课目,请先在「考核方案设置」中配置', 'err');
+        return null;
+      }
+      data.schemeId = scheme.id;
+      data.detail = JSON.stringify(rows);
+      data.item = scheme.name;
+      delete data.schemeName;
+      delete data.idCard;
+      delete data.personnelName;
+      delete data.points;
+      delete data.grade;
+      delete data.score;
+      delete data.category;
+      return data;
+    };
+
+    militaryCfg.toolbarExtra = function (bar) {
+      bar.appendChild(h('button', {
+        class: 'btn btn-ghost', text: '考核方案设置',
+        title: '维护考核方案:顶级课目与占比、实操等课目下的子项与占比(各层级合计须为100%)',
+        onclick: function () { openMilSchemeManager(); }
+      }));
+    };
+  }
+
+  /** 考核方案管理弹窗 */
+  function openMilSchemeManager() {
+    loadMilSchemes().then(function () { renderMilSchemeList(); }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  function milSchemeSummary(s) {
+    return (s.items || []).map(function (top) {
+      var kids = (top.children || []).map(function (c) { return c.name + trimNumJs(Number(c.weight)) + '%'; }).join('/');
+      return top.name + trimNumJs(Number(top.weight)) + '%' + (kids ? '{' + kids + '}' : '');
+    }).join(' + ');
+  }
+
+  function renderMilSchemeList() {
+    var body = h('div');
+    var list = h('div');
+    MIL_SCHEMES.forEach(function (s) {
+      var row = h('div', { style: 'display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid #eef1f6' },
+        h('div', { style: 'flex:1;min-width:0' },
+          h('div', { style: 'font-weight:600', text: s.name }),
+          h('div', { style: 'color:#66707f;font-size:12px;margin-top:2px', text: milSchemeSummary(s) })),
+        h('button', { class: 'btn btn-ghost btn-sm', text: '编辑', onclick: function () { openMilSchemeEditor(s); } }),
+        h('button', {
+          class: 'btn btn-ghost btn-sm', text: '删除',
+          onclick: function () {
+            confirmBox('确定删除方案「' + s.name + '」吗?已录入的考核记录保留明细不受影响。', true).then(function (yes) {
+              if (!yes) { return; }
+              DEL('/api/military/schemes/' + s.id).then(function () {
+                toast('已删除');
+                loadMilSchemes().then(renderMilSchemeList);
+              }).catch(function (err) { toast(err.message, 'err'); });
+            });
+          }
+        }));
+      list.appendChild(row);
+    });
+    if (!MIL_SCHEMES.length) {
+      list.appendChild(h('div', { style: 'color:#8a94a6;padding:16px 0', text: '还没有考核方案,点右上角「新建方案」创建一个' }));
+    }
+    body.appendChild(list);
+    var modal = openModal({
+      title: '考核方案设置(顶级课目占比合计100%;有子项的课目,子项占比合计也为100%)',
+      wide: true,
+      body: body,
+      footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { modal.close(); } })]
+    });
+    modal.dialog.querySelector('.dialog-head').appendChild(h('button', {
+      class: 'btn btn-primary btn-sm', style: 'margin-left:auto', text: '新建方案',
+      onclick: function () { modal.close(); openMilSchemeEditor(null); }
+    }));
+  }
+
+  function openMilSchemeEditor(scheme) {
+    var state = scheme
+      ? (scheme.items || []).map(function (top) {
+          return { name: top.name, weight: Number(top.weight) || 0,
+            children: (top.children || []).map(function (c) { return { name: c.name, weight: Number(c.weight) || 0 }; }) };
+        })
+      : [{ name: '', weight: 0, children: [] }];
+    var nameEl = h('input', { type: 'text', placeholder: '如:军事课目综合考核' });
+    nameEl.value = scheme ? scheme.name : '';
+    nameEl.style.cssText = 'width:320px;padding:7px 9px;border:1px solid #d4dce8;border-radius:4px';
+    var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
+    remarkEl.value = scheme && scheme.remark ? String(scheme.remark) : '';
+    remarkEl.style.cssText = 'width:320px;padding:7px 9px;border:1px solid #d4dce8;border-radius:4px;margin-left:12px';
+    var box = h('div');
+    function draw() {
+      box.innerHTML = '';
+      box.appendChild(h('div', { style: 'display:flex;align-items:center;gap:0;margin-bottom:14px' },
+        h('span', { style: 'width:70px', text: '方案名称:' }), nameEl, h('span', { style: 'margin-left:12px', text: '备注:' }), remarkEl));
+      state.forEach(function (top, ti) {
+        var topRow = h('div', { style: 'display:flex;align-items:center;gap:8px;margin:10px 0 4px' });
+        var tn = h('input', { type: 'text', placeholder: '课目名,如:理论' });
+        tn.value = top.name;
+        var tw = h('input', { type: 'number', min: '0', max: '100', step: '0.5', placeholder: '占比%' });
+        tw.value = top.weight || '';
+        tn.style.cssText = 'width:170px;padding:6px 9px;border:1px solid #d4dce8;border-radius:4px;font-weight:600';
+        tw.style.cssText = 'width:90px;padding:6px 9px;border:1px solid #d4dce8;border-radius:4px';
+        tn.addEventListener('input', function () { top.name = tn.value; });
+        tw.addEventListener('input', function () { top.weight = parseFloat(tw.value) || 0; });
+        topRow.appendChild(h('span', { style: 'font-weight:600', text: '课目' + (ti + 1) + ':' }));
+        topRow.appendChild(tn);
+        topRow.appendChild(tw);
+        topRow.appendChild(h('span', { text: '%(占总分)' }));
+        topRow.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '+子项', title: '添加子项(如实操下的小项目)', onclick: function () { top.children.push({ name: '', weight: 0 }); draw(); } }));
+        topRow.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '删除课目', onclick: function () { state.splice(ti, 1); draw(); } }));
+        box.appendChild(topRow);
+        top.children.forEach(function (c, ci) {
+          var cr = h('div', { style: 'display:flex;align-items:center;gap:8px;margin:4px 0 4px 64px' });
+          var cn = h('input', { type: 'text', placeholder: '子项名,如:射击' });
+          cn.value = c.name;
+          var cw = h('input', { type: 'number', min: '0', max: '100', step: '0.5', placeholder: '占比%' });
+          cw.value = c.weight || '';
+          cn.style.cssText = 'width:150px;padding:6px 9px;border:1px solid #d4dce8;border-radius:4px';
+          cw.style.cssText = 'width:90px;padding:6px 9px;border:1px solid #d4dce8;border-radius:4px';
+          cn.addEventListener('input', function () { c.name = cn.value; });
+          cw.addEventListener('input', function () { c.weight = parseFloat(cw.value) || 0; });
+          cr.appendChild(h('span', { style: 'color:#66707f', text: '└' }));
+          cr.appendChild(cn);
+          cr.appendChild(cw);
+          cr.appendChild(h('span', { text: '%(占该课目)' }));
+          cr.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '删除', onclick: function () { top.children.splice(ci, 1); draw(); } }));
+          box.appendChild(cr);
+        });
+      });
+      box.appendChild(h('button', { class: 'btn btn-ghost btn-sm', text: '+ 添加课目', onclick: function () { state.push({ name: '', weight: 0, children: [] }); draw(); } }));
+    }
+    draw();
+    var modal = null;
+    modal = openModal({
+      title: scheme ? '编辑考核方案:' + scheme.name : '新建考核方案',
+      wide: true,
+      body: box,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { modal.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            var payload = { name: nameEl.value.trim(), remark: remarkEl.value.trim(), items: state };
+            if (scheme) { payload.id = scheme.id; }
+            var topSum = 0;
+            for (var i = 0; i < state.length; i++) {
+              topSum += state[i].weight || 0;
+              var cSum = 0;
+              for (var j = 0; j < state[i].children.length; j++) { cSum += state[i].children[j].weight || 0; }
+              if (state[i].children.length && Math.abs(cSum - 100) > 0.01) {
+                toast('课目「' + (state[i].name || '?') + '」的子项占比合计须为100%(当前' + trimNumJs(cSum) + '%)', 'err');
+                return;
+              }
+              if (!state[i].children.length && (state[i].name || '').trim() === '') {
+                toast('第' + (i + 1) + '个课目名称不能为空', 'err');
+                return;
+              }
+            }
+            if (Math.abs(topSum - 100) > 0.01) {
+              toast('顶级课目占比合计须为100%(当前' + trimNumJs(topSum) + '%)', 'err');
+              return;
+            }
+            POST('/api/military/schemes', payload).then(function () {
+              modal.close();
+              toast('已保存');
+              loadMilSchemes().then(renderMilSchemeList);
+            }).catch(function (err) { toast(err.message, 'err'); });
+          }
+        })]
+    });
+  }
+
+  setupMilitaryModule();
+
   // 视图切换/重渲染后补挂按钮(去抖,等 DOM 稳定)
   var btnTimer = 0;
   new MutationObserver(function () {
