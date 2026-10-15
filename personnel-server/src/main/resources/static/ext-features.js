@@ -864,7 +864,7 @@
           class: 'btn btn-primary', text: '保存',
           onclick: function () {
             if (!pidHolder.pid) {
-              toast('请输入身份证号带出人员', 'err');
+              toast('请输入身份证号带出人员,或点姓名旁的「选择」按钮选人', 'err');
               return;
             }
             var payload = {
@@ -890,6 +890,16 @@
           }
         })]
     });
+    // 与其他模块一致:姓名只读框旁提供「选择」按钮,弹窗搜人选人后回填身份证号与姓名
+    if (typeof attachPersonPick === 'function') {
+      attachPersonPick(nameEl, function (p) {
+        idCardEl.value = p.idCard || '';
+        nameEl.value = p.name || '';
+        pidHolder.pid = p.id;
+        hint.style.color = '#1e7e34';
+        hint.textContent = '已选:' + (p.name || '') + (p.departmentName ? '(' + p.departmentName + ')' : '');
+      });
+    }
   }
 
   // 菜单渲染后重组休假菜单;点击其他菜单时清除自定义项的高亮
