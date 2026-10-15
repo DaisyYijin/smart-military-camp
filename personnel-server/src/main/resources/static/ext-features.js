@@ -168,8 +168,8 @@
     return (age >= 0 && age < 130) ? String(age) : '';
   }
 
-  /** 点名册:竖向 A4。表头=大单位/小单位;正文=单位→班两级分组的在位人员姓名格;底部=不在位人员按原因分组,均标注人数 */
-  function rollCallHtml(rows, deptIdx) {
+  /** 点名册:竖向 A4。表头=大单位/小单位;正文=单位→班两级分组的在位人员姓名格;底部=不在位人员(原因在左,姓名横排,休假显示归队时间) */
+  function rollCallHtml(rows, deptIdx, leaveMap) {
     var PRESENT = ['在位', '在职']; // 视为在位的状态;其余(休假/住院/培训/借调等)归入不在位
     var present = [], absent = [];
     rows.forEach(function (r) {
@@ -271,23 +271,40 @@
     });
     var presentBlock = matrixTable(presentUnits);
 
-    // 不在位人员:按原因分组,同样矩阵式(原因表头并排,姓名纵填),人名后小字标注所属班/单位
+    // 不在位人员:原因放左侧(整块合并),姓名横向排列;休假人员在姓名下方显示归队时间
     var reasonOrder = [], reasonMap = {};
     absent.forEach(function (r) {
       var s = r.status || '其他';
-      var u = unitOf(r);
       if (!reasonMap[s]) { reasonMap[s] = []; reasonOrder.push(s); }
-      reasonMap[s].push({ name: r.name || '', unit: u.squad || u.unit || '' });
+      reasonMap[s].push({ name: r.name || '', ret: leaveMap ? leaveMap[String(r.id)] : '' });
     });
     var reasonText = reasonOrder.map(function (s) { return esc(s) + reasonMap[s].length + '人'; }).join('、');
-    var absentFmt = function (p) {
-      return '<b>' + esc(p.name) + '</b>' + (p.unit ? '<span class="mu">(' + esc(p.unit) + ')</span>' : '');
-    };
-    var absentBlock = matrixTable(reasonOrder.map(function (s) {
-      return {
-        label: s, split: false, grids: [{ label: s, fmt: absentFmt, g: colLayout(reasonMap[s]) }]
-      };
-    }));
+    var ABSENT_PER_ROW = 5; // 不在位人员每行姓名数(横向填充)
+    var absentBlock = '';
+    if (reasonOrder.length) {
+      absentBlock = '<table><tbody>';
+      reasonOrder.forEach(function (s) {
+        var people = reasonMap[s];
+        var cells = people.map(function (p) {
+          var inner = '<b>' + esc(p.name) + '</b>' +
+            (p.ret ? '<div class="ret">归队:' + esc(p.ret) + '</div>' : '');
+          return '<td class="nm">' + inner + '</td>';
+        });
+        var rowsN = Math.max(1, Math.ceil(cells.length / ABSENT_PER_ROW));
+        for (var r = 0; r < rowsN; r++) {
+          absentBlock += '<tr>' +
+            (r === 0 ? '<td class="rs" rowspan="' + rowsN + '">' + esc(s) + '(' + people.length + '人)</td>' : '');
+          for (var c = 0; c < ABSENT_PER_ROW; c++) {
+            var i = r * ABSENT_PER_ROW + c; // 横向填充:先左后右
+            absentBlock += i < cells.length ? cells[i] : '<td class="nm"></td>';
+          }
+          absentBlock += '</tr>';
+        }
+      });
+      absentBlock += '</tbody></table>';
+    } else {
+      absentBlock = '<table><tbody><tr><td class="none">无</td></tr></tbody></table>';
+    }
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
       '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
@@ -348,7 +365,8 @@
       '.grp td{background:#e8eef7;font-weight:600;text-align:center;}' +
       '.sq td{background:#f4f7fb;font-weight:600;text-align:center;}' +
       'td.nm{height:28px;font-size:13px;}' +
-      '.mu{font-weight:400;font-size:10px;color:#555;}' +
+      '.ret{font-size:10px;color:#555;font-weight:400;line-height:1.3;}' +
+      'td.rs{background:#f4f7fb;font-weight:600;width:78px;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
     var doc = frame.contentWindow.document;
@@ -365,12 +383,30 @@
     }, 80);
   }
 
-  /** 入口:按当前筛选拉取人员并生成点名册/花名册调起打印 */
+  /** 休假归队时间表:personnelId → 当前在休(结束日期>=今天)记录中最晚的结束日期 */
+  function leaveReturnMap(list) {
+    var t = new Date();
+    var iso = t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2);
+    var map = {};
+    (list || []).forEach(function (l) {
+      if (!l.personnelId || !l.endDate) return;
+      if (l.endDate < iso) return; // 已结束的记录不代表当前归队时间
+      var pid = String(l.personnelId);
+      if (!map[pid] || l.endDate > map[pid]) { map[pid] = l.endDate; }
+    });
+    return map;
+  }
+
+  /** 入口:按当前筛选拉取人员并生成点名册/花名册调起打印;点名册附带休假归队时间 */
   function printPersonnelDoc(kind, filters) {
     var isRoll = kind === 'rollcall';
     var pm = showProgressModal(isRoll ? '生成点名册' : '生成花名册');
     pm.setStatus('正在按当前筛选条件读取人员…');
-    fetchAllPersonnel(filters).then(function (res) {
+    var leaveReady = isRoll
+      ? GET('/api/leave?page=1&size=200').then(function (r) { return leaveReturnMap((r && r.list) || []); })
+      : Promise.resolve(null);
+    Promise.all([fetchAllPersonnel(filters), leaveReady]).then(function (rs) {
+      var res = rs[0], leaveMap = rs[1];
       var rows = res.rows, deptIdx = res.deptIdx;
       if (!rows.length) {
         pm.close();
@@ -383,7 +419,7 @@
         pm.setProgress(100);
         pm.close();
         printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', !isRoll,
-          isRoll ? rollCallHtml(rows, deptIdx) : rosterHtml(rows, deptIdx));
+          isRoll ? rollCallHtml(rows, deptIdx, leaveMap) : rosterHtml(rows, deptIdx));
       }, 50);
     }).catch(function (e) {
       pm.close();
