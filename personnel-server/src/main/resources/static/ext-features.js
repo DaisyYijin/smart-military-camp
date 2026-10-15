@@ -615,8 +615,12 @@
     LEAVE_CUSTOM_ITEMS.forEach(function (el) { el.classList.remove('active'); });
   }
 
+  // 页面加载时(渲染前)捕获是否停在休假计划页:系统 navigate 会改写 hash,必须提前记住
+  var LP_BOOT_HASH = (location.hash || '') === '#leave-plan';
+
   /** 把顶级「休假管理」菜单项改造成分组:休假登记(原页面)+休假计划(新页面) */
   function tryRestructureLeaveMenu(node) {
+    try {
     var menu = node.nodeType === 1 && node.classList && node.classList.contains('menu') ? node
       : (node.querySelector ? node.querySelector('.menu') : null);
     if (!menu || menu.getAttribute('data-leavegrp')) {
@@ -681,6 +685,10 @@
     menu.insertBefore(group, leaveItem);
     menu.insertBefore(sub, leaveItem);
     leaveItem.style.display = 'none'; // 隐藏原项但保留其导航行为供「休假登记」调用
+    } catch (err) {
+      // 重组失败不影响其他功能
+      try { console.warn('休假菜单重组失败', err); } catch (e2) { /* 忽略 */ }
+    }
   }
 
   /** 休假计划页面(渲染到主内容区;点其他菜单时由 app.js navigate 自动清空) */
@@ -918,28 +926,47 @@
         })]
     });
 
-  // 菜单渲染后重组休假菜单;#leave-plan 时恢复计划页(刷新/回退后内容区无本页标记则重渲染)
+  // 菜单渲染后重组休假菜单;启动停在 #leave-plan 时恢复计划页;均带异常保护与重试兑底
   new MutationObserver(function (muts) {
-    for (var i = 0; i < muts.length; i++) {
-      var nodes = muts[i].addedNodes;
-      for (var j = 0; j < nodes.length; j++) {
-        if (nodes[j].nodeType === 1) {
-          tryRestructureLeaveMenu(nodes[j]);
+    try {
+      for (var i = 0; i < muts.length; i++) {
+        var nodes = muts[i].addedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          if (nodes[j].nodeType === 1) {
+            tryRestructureLeaveMenu(nodes[j]);
+          }
         }
       }
-    }
-    if ((location.hash || '') === '#leave-plan' && !document.querySelector('.content [data-lp]')) {
-      var lpContent = document.querySelector('.content');
-      if (lpContent && lpContent.children.length) {
-        renderLeavePlanPage();
+      if (LP_BOOT_HASH && !document.querySelector('.content [data-lp]')) {
+        var lpContent = document.querySelector('.content');
+        if (lpContent && lpContent.children.length) {
+          LP_BOOT_HASH = false;
+          renderLeavePlanPage();
+        }
       }
-    }
+    } catch (err) { /* 观察器异常不影响页面 */ }
   }).observe(document.body, { childList: true, subtree: true });
+
+  // 兑底:菜单若因时序未被重组,定时重试(最多约30秒)
+  var lpTries = 0;
+  var lpMenuTimer = setInterval(function () {
+    try {
+      var menuEl = document.querySelector('.menu');
+      if (menuEl && !menuEl.getAttribute('data-leavegrp')) {
+        tryRestructureLeaveMenu(menuEl);
+      }
+      if ((menuEl && menuEl.getAttribute('data-leavegrp')) || ++lpTries > 60) {
+        clearInterval(lpMenuTimer);
+      }
+    } catch (err) {
+      clearInterval(lpMenuTimer);
+    }
+  }, 500);
 
   // 浏览器前进/后退回到 #leave-plan 时恢复计划页
   window.addEventListener('hashchange', function () {
     if ((location.hash || '') === '#leave-plan') {
-      renderLeavePlanPage();
+      try { renderLeavePlanPage(); } catch (err) { /* 忽略 */ }
     }
   });
 
