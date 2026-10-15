@@ -689,6 +689,9 @@
     if (!content) {
       return;
     }
+    // 与系统一致的记忆机制:hash + lastView,刷新后可回到本页
+    try { history.replaceState(null, '', '#leave-plan'); } catch (e) { /* 忽略 */ }
+    try { localStorage.setItem('lastView', 'leave-plan'); } catch (e) { /* 忽略 */ }
     var title = document.querySelector('.topbar-title');
     if (title) { title.textContent = '休假计划'; }
     content.innerHTML = '';
@@ -758,10 +761,14 @@
       h('span', { style: 'color:#66707f;font-size:12px;margin-right:10px', text: '年度休假安排;实际休假请到「休假登记」录入' }),
       h('button', { class: 'btn btn-primary', text: '新增休假计划', onclick: function () { openPlanForm(null); } }));
 
-    var root = h('div', { class: 'content-main' },
+    var root = h('div', { class: 'content-main', 'data-lp': '1' },
       h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
       h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table)));
     content.appendChild(root);
+    // 高亮菜单:清除全部后标记「休假计划」
+    var allActive = document.querySelectorAll('.menu-item.active');
+    for (var ai = 0; ai < allActive.length; ai++) { allActive[ai].classList.remove('active'); }
+    if (LEAVE_CUSTOM_ITEMS[1]) { LEAVE_CUSTOM_ITEMS[1].classList.add('active'); }
     load();
   }
 
@@ -850,11 +857,31 @@
     remarkEl.style.cssText = inputCss;
     if (row) { remarkEl.value = row.remark || ''; }
 
+    // 与其他模块一致:姓名只读框旁提供「选择」按钮(弹窗按姓名/身份证/部门搜索选人);
+    // 自建稳定的弹性行布局,透传系统统一的选人弹窗,避免悬浮定位在本弹窗内跳动
+    var pickBtn = h('button', { type: 'button', class: 'btn btn-ghost', text: '选择' });
+    pickBtn.style.cssText = 'flex:none;margin-left:8px';
+    nameEl.style.cssText = inputCss + ';background:#f4f6f9;flex:1;min-width:0;padding-right:10px';
+    pickBtn.addEventListener('click', function () {
+      if (typeof openPersonPicker !== 'function') {
+        toast('选人组件不可用', 'err');
+        return;
+      }
+      openPersonPicker(function (p) {
+        idCardEl.value = p.idCard || '';
+        nameEl.value = p.name || '';
+        pidHolder.pid = p.id;
+        hint.style.color = '#1e7e34';
+        hint.textContent = '已选:' + (p.name || '') + (p.departmentName ? '(' + p.departmentName + ')' : '');
+      });
+    });
+    var nameRow = h('div', { style: 'display:flex;align-items:center' }, nameEl, pickBtn);
+  }
     var modal = null;
     modal = openModal({
       title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
       body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
-        field('身份证号', idCardBox), field('姓名', nameEl),
+        field('身份证号', idCardBox), field('姓名', nameRow),
         field('年度', yearSel), field('休假类型', typeSel),
         field('计划开始日期', startEl), field('计划结束日期', endEl),
         field('天数', daysEl), field('备注', remarkEl)),
@@ -890,19 +917,8 @@
           }
         })]
     });
-    // 与其他模块一致:姓名只读框旁提供「选择」按钮,弹窗搜人选人后回填身份证号与姓名
-    if (typeof attachPersonPick === 'function') {
-      attachPersonPick(nameEl, function (p) {
-        idCardEl.value = p.idCard || '';
-        nameEl.value = p.name || '';
-        pidHolder.pid = p.id;
-        hint.style.color = '#1e7e34';
-        hint.textContent = '已选:' + (p.name || '') + (p.departmentName ? '(' + p.departmentName + ')' : '');
-      });
-    }
-  }
 
-  // 菜单渲染后重组休假菜单;点击其他菜单时清除自定义项的高亮
+  // 菜单渲染后重组休假菜单;#leave-plan 时恢复计划页(刷新/回退后内容区无本页标记则重渲染)
   new MutationObserver(function (muts) {
     for (var i = 0; i < muts.length; i++) {
       var nodes = muts[i].addedNodes;
@@ -912,7 +928,20 @@
         }
       }
     }
+    if ((location.hash || '') === '#leave-plan' && !document.querySelector('.content [data-lp]')) {
+      var lpContent = document.querySelector('.content');
+      if (lpContent && lpContent.children.length) {
+        renderLeavePlanPage();
+      }
+    }
   }).observe(document.body, { childList: true, subtree: true });
+
+  // 浏览器前进/后退回到 #leave-plan 时恢复计划页
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#leave-plan') {
+      renderLeavePlanPage();
+    }
+  });
 
   document.addEventListener('click', function (e) {
     var clicked = e.target && e.target.closest ? e.target.closest('.menu-item') : null;
