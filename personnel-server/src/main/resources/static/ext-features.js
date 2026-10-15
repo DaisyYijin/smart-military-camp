@@ -607,6 +607,285 @@
 
   setupMilitaryModule();
 
+  /* ================= 5. 休假管理分组:休假计划 + 休假登记 ================= */
+
+  var LEAVE_CUSTOM_ITEMS = [];
+
+  function clearCustomActive() {
+    LEAVE_CUSTOM_ITEMS.forEach(function (el) { el.classList.remove('active'); });
+  }
+
+  /** 把顶级「休假管理」菜单项改造成分组:休假登记(原页面)+休假计划(新页面) */
+  function tryRestructureLeaveMenu(node) {
+    var menu = node.nodeType === 1 && node.classList && node.classList.contains('menu') ? node
+      : (node.querySelector ? node.querySelector('.menu') : null);
+    if (!menu || menu.getAttribute('data-leavegrp')) {
+      return;
+    }
+    var tops = menu.querySelectorAll('.menu-item');
+    var leaveItem = null;
+    for (var i = 0; i < tops.length; i++) {
+      var t = tops[i];
+      if (t.classList.contains('sub') || t.classList.contains('group')) {
+        continue;
+      }
+      var txt = t.querySelector('.txt');
+      if (txt && String(txt.textContent || '').trim() === '休假管理') {
+        leaveItem = t;
+        break;
+      }
+    }
+    if (!leaveItem) {
+      return;
+    }
+    menu.setAttribute('data-leavegrp', '1');
+    var open = localStorage.getItem('menuGroup:leavegrp') !== '0';
+    var iconHtml = '';
+    var ic = leaveItem.querySelector('.ic');
+    if (ic) { iconHtml = ic.innerHTML; }
+    // 分组头
+    var group = h('div', { class: 'menu-item group' + (open ? ' open' : ''), 'data-tip': '休假管理' },
+      h('span', { class: 'ic', html: iconHtml }),
+      h('span', { class: 'txt', text: '休假管理' }),
+      h('span', { class: 'ga', text: '▸' }));
+    group.addEventListener('click', function () {
+      var isOpen = !group.classList.contains('open');
+      group.classList.toggle('open', isOpen);
+      sub.classList.toggle('open', isOpen);
+      localStorage.setItem('menuGroup:leavegrp', isOpen ? '1' : '0');
+    });
+    // 子菜单
+    var sub = h('div', { class: 'menu-sub' + (open ? ' open' : '') });
+    if (open) { sub.style.height = 'auto'; }
+    var regItem = h('div', { class: 'menu-item sub', 'data-tip': '休假登记' },
+      h('span', { class: 'dot' }), h('span', { class: 'txt', text: '休假登记' }));
+    regItem.setAttribute('data-leavecustom', '1');
+    regItem.addEventListener('click', function (e) {
+      e.stopPropagation();
+      clearCustomActive();
+      leaveItem.click(); // 复用原菜单项的导航逻辑
+      regItem.classList.add('active');
+    });
+    var planItem = h('div', { class: 'menu-item sub', 'data-tip': '休假计划' },
+      h('span', { class: 'dot' }), h('span', { class: 'txt', text: '休假计划' }));
+    planItem.setAttribute('data-leavecustom', '1');
+    planItem.addEventListener('click', function (e) {
+      e.stopPropagation();
+      clearCustomActive();
+      renderLeavePlanPage();
+      planItem.classList.add('active');
+    });
+    LEAVE_CUSTOM_ITEMS = [regItem, planItem];
+    sub.appendChild(regItem);
+    sub.appendChild(planItem);
+    menu.insertBefore(group, leaveItem);
+    menu.insertBefore(sub, leaveItem);
+    leaveItem.style.display = 'none'; // 隐藏原项但保留其导航行为供「休假登记」调用
+  }
+
+  /** 休假计划页面(渲染到主内容区;点其他菜单时由 app.js navigate 自动清空) */
+  function renderLeavePlanPage() {
+    var content = document.querySelector('.content');
+    if (!content) {
+      return;
+    }
+    var title = document.querySelector('.topbar-title');
+    if (title) { title.textContent = '休假计划'; }
+    content.innerHTML = '';
+
+    var state = { rows: [] };
+    var nameInput = h('input', { type: 'text', placeholder: '按姓名搜索,回车' });
+    nameInput.style.cssText = 'width:180px;padding:7px 10px;border:1px solid #d4dce8;border-radius:4px';
+    var yearSel = h('select');
+    yearSel.style.cssText = 'padding:7px 8px;border:1px solid #d4dce8;border-radius:4px';
+    var statusSel = h('select');
+    statusSel.style.cssText = 'padding:7px 8px;border:1px solid #d4dce8;border-radius:4px';
+    var nowYear = new Date().getFullYear();
+    yearSel.options.add(new Option('全部年度', ''));
+    for (var y = nowYear + 1; y >= nowYear - 2; y--) {
+      yearSel.options.add(new Option(y + ' 年', String(y)));
+    }
+    var statuses = dictLabels('leave_plan_status');
+    if (!statuses.length) { statuses = ['计划中', '已执行', '已取消']; }
+    statusSel.options.add(new Option('全部状态', ''));
+    statuses.forEach(function (s) { statusSel.options.add(new Option(s, s)); });
+
+    var table = h('table', { class: 'grid' });
+    table.innerHTML = '<thead><tr>' +
+      '<th>姓名</th><th>身份证号</th><th>年度</th><th>休假类型</th><th>计划开始</th><th>计划结束</th>' +
+      '<th>天数</th><th>状态</th><th>备注</th><th style="width:110px">操作</th></tr></thead><tbody></tbody>';
+
+    function load() {
+      var q = [];
+      if (String(nameInput.value || '').trim()) { q.push('personnelName=' + encodeURIComponent(nameInput.value.trim())); }
+      if (yearSel.value) { q.push('year=' + encodeURIComponent(yearSel.value)); }
+      if (statusSel.value) { q.push('status=' + encodeURIComponent(statusSel.value)); }
+      GET('/api/leave-plan?page=1&size=200' + (q.length ? '&' + q.join('&') : '')).then(function (r) {
+        state.rows = (r && r.list) || [];
+        var tb = table.querySelector('tbody');
+        tb.innerHTML = state.rows.length ? state.rows.map(function (row) {
+          return '<tr data-vrow="1"><td><b>' + esc(row.personnel_name || '') + '</b></td>' +
+            '<td>' + esc(row.id_card || '') + '</td>' +
+            '<td>' + esc(row.year || '') + '</td>' +
+            '<td>' + esc(row.leave_type || '') + '</td>' +
+            '<td>' + esc(row.start_date || '') + '</td>' +
+            '<td>' + esc(row.end_date || '') + '</td>' +
+            '<td>' + (row.days || '') + '</td>' +
+            '<td>' + badge(row.status || '') + '</td>' +
+            '<td>' + esc(row.remark || '') + '</td>' +
+            '<td class="actions" style="white-space:nowrap">' +
+            '<button class="btn-link" data-act="edit" data-id="' + row.id + '">编辑</button> ' +
+            '<button class="btn-link danger" data-act="del" data-id="' + row.id + '">删除</button></td></tr>';
+        }).join('') : '<tr><td colspan="10" class="empty-row">暂无数据</td></tr>';
+      }).catch(function (e) { toast(e.message, 'err'); });
+    }
+
+    nameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { load(); } });
+    yearSel.addEventListener('change', load);
+    statusSel.addEventListener('change', load);
+
+    table.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-act]');
+      if (!btn) { return; }
+      var id = btn.getAttribute('data-id');
+      var row = state.rows.filter(function (r) { return String(r.id) === String(id); })[0];
+      if (!row) { return; }
+      if (btn.getAttribute('data-act') === 'edit') {
+        openPlanForm(row);
+      } else {
+        confirmBox('确定删除「' + (row.personnel_name || '') + '」的这条休假计划吗?', true).then(function (yes) {
+          if (!yes) { return; }
+          DEL('/api/leave-plan/' + id).then(function () { toast('已删除'); load(); })
+            .catch(function (err) { toast(err.message, 'err'); });
+        });
+      }
+    });
+
+    var toolbar = h('div', { class: 'toolbar' },
+      h('button', { class: 'btn btn-primary', text: '新增休假计划', onclick: function () { openPlanForm(null); } }),
+      nameInput, yearSel, statusSel,
+      h('div', { class: 'spacer' }),
+      h('span', { style: 'color:#66707f;font-size:12px', text: '年度休假安排;实际休假请到「休假登记」录入' }));
+
+    var root = h('div', { class: 'content-main' },
+      h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
+      h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table)));
+    content.appendChild(root);
+    load();
+  }
+
+  /** 休假计划 编辑弹窗 */
+  function openPlanForm(row) {
+    GET('/api/personnel/options').then(function (people) {
+      people = people || [];
+      function field(label, el) {
+        return h('div', { style: 'margin-bottom:12px' }, h('div', { style: 'font-size:13px;color:#3c4a5c;margin-bottom:5px', text: label }), el);
+      }
+      var inputCss = 'width:100%;padding:8px 10px;border:1px solid #d4dce8;border-radius:4px;box-sizing:border-box';
+      var personSel = h('select');
+      personSel.style.cssText = inputCss;
+      people.forEach(function (p) {
+        personSel.options.add(new Option(p.name + (p.departmentName ? '(' + p.departmentName + ')' : ''), String(p.id)));
+      });
+      if (row) { personSel.value = String(row.personnel_id); }
+      var yearSel = h('select');
+      yearSel.style.cssText = inputCss;
+      var nowYear = new Date().getFullYear();
+      for (var y = nowYear + 1; y >= nowYear - 2; y--) {
+        yearSel.options.add(new Option(y + ' 年', String(y)));
+      }
+      yearSel.value = row && row.year ? String(row.year) : String(nowYear);
+      var typeSel = h('select');
+      typeSel.style.cssText = inputCss;
+      var types = dictLabels('leave_type');
+      if (!types.length) { types = ['事假', '病假', '年假', '探亲假', '婚假', '其他']; }
+      types.forEach(function (t) { typeSel.options.add(new Option(t, t)); });
+      if (row) { typeSel.value = row.leave_type || types[0]; }
+      var startEl = h('input', { type: 'date' });
+      startEl.style.cssText = inputCss;
+      var endEl = h('input', { type: 'date' });
+      endEl.style.cssText = inputCss;
+      if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
+      var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
+      daysEl.style.cssText = inputCss;
+      if (row && row.days) { daysEl.value = row.days; }
+      function syncDays() {
+        if (startEl.value && endEl.value) {
+          var d = (new Date(endEl.value) - new Date(startEl.value)) / 86400000;
+          if (d >= 0) { daysEl.value = d; }
+        }
+      }
+      startEl.addEventListener('change', syncDays);
+      endEl.addEventListener('change', syncDays);
+      var statusSel = h('select');
+      statusSel.style.cssText = inputCss;
+      var sts = dictLabels('leave_plan_status');
+      if (!sts.length) { sts = ['计划中', '已执行', '已取消']; }
+      sts.forEach(function (s) { statusSel.options.add(new Option(s, s)); });
+      statusSel.value = row && row.status ? row.status : sts[0];
+      var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
+      remarkEl.style.cssText = inputCss;
+      if (row) { remarkEl.value = row.remark || ''; }
+
+      var modal = null;
+      modal = openModal({
+        title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
+        body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
+          field('人员', personSel), field('年度', yearSel),
+          field('休假类型', typeSel), field('状态', statusSel),
+          field('计划开始日期', startEl), field('计划结束日期', endEl),
+          field('天数', daysEl), field('备注', remarkEl)),
+        footer: [
+          h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { modal.close(); } }),
+          h('button', {
+            class: 'btn btn-primary', text: '保存',
+            onclick: function () {
+              var payload = {
+                personnelId: personSel.value,
+                year: yearSel.value,
+                leaveType: typeSel.value,
+                startDate: startEl.value,
+                endDate: endEl.value,
+                days: daysEl.value,
+                status: statusSel.value,
+                remark: remarkEl.value
+              };
+              var done = function (r) {
+                modal.close();
+                toast('已保存');
+                var planBtn = document.querySelector('[data-leavecustom][data-tip="休假计划"]');
+                if (planBtn) { planBtn.click(); } // 刷新列表
+              };
+              if (row) {
+                PUT('/api/leave-plan/' + row.id, payload).then(done).catch(function (e) { toast(e.message, 'err'); });
+              } else {
+                POST('/api/leave-plan', payload).then(done).catch(function (e) { toast(e.message, 'err'); });
+              }
+            }
+          })]
+      });
+    }).catch(function (e) { toast(e.message, 'err'); });
+  }
+
+  // 菜单渲染后重组休假菜单;点击其他菜单时清除自定义项的高亮
+  new MutationObserver(function (muts) {
+    for (var i = 0; i < muts.length; i++) {
+      var nodes = muts[i].addedNodes;
+      for (var j = 0; j < nodes.length; j++) {
+        if (nodes[j].nodeType === 1) {
+          tryRestructureLeaveMenu(nodes[j]);
+        }
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+
+  document.addEventListener('click', function (e) {
+    var clicked = e.target && e.target.closest ? e.target.closest('.menu-item') : null;
+    if (clicked && !clicked.hasAttribute('data-leavecustom')) {
+      clearCustomActive();
+    }
+  }, true);
+
   // 视图切换/重渲染后补挂按钮(去抖,等 DOM 稳定)
   var btnTimer = 0;
   new MutationObserver(function () {

@@ -279,6 +279,22 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_personnel ON leave_record(personnel_id)");
 
+        // 休假计划(年度安排,与实际休假记录互补)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS leave_plan (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "year TEXT DEFAULT ''," +
+                "leave_type TEXT DEFAULT ''," +
+                "start_date TEXT DEFAULT ''," +
+                "end_date TEXT DEFAULT ''," +
+                "days REAL DEFAULT 0," +
+                "status TEXT DEFAULT '计划中'," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_plan_personnel ON leave_plan(personnel_id)");
+
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -353,6 +369,7 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
         addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
         addDict("edu_form", new String[]{"全日制", "非全日制"});
+        addDict("leave_plan_status", new String[]{"计划中", "已执行", "已取消"});
 
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
