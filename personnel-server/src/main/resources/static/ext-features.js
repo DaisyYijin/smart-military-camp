@@ -186,8 +186,7 @@
     // 小单位表头:全部人员同属一个单位时自动带出,否则留空手填
     var unitSet = {};
     rows.forEach(function (r) { unitSet[unitOf(r).unit] = true; });
-    var unitKeys = Object.keys(unitSet);
-    var smallUnit = unitKeys.length === 1 ? unitKeys[0] : '';
+    void unitSet; // 仅用于统计口径,不再在表头展示单位名称
 
     var ROWS_PER_COL = 10; // 每列人名行数:班内人名先自上而下填满一列,再多换到右侧新列
     /** 一个班/一类 → 物理列数与行数(列内纵向填名) */
@@ -306,10 +305,8 @@
       absentBlock = '<table><tbody><tr><td class="none">无</td></tr></tbody></table>';
     }
 
-    return '<h1>' + esc(SITE.name) + '</h1>' +
-      '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
-      '<div class="docname">人员点名册</div>' +
-      '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank" style="min-width:110px"></span></span></div>' +
+    return '<div class="docname">人员点名册</div>' +
+      '<div class="sub"><span>日期:' + cnToday() + '</span></div>' +
       '<h2>在位人员(共' + present.length + '人)</h2>' +
       (presentBlock || '<table><tbody><tr><td class="none">无</td></tr></tbody></table>') +
       '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
@@ -354,8 +351,7 @@
       'body{margin:0;font-family:"Microsoft YaHei","PingFang SC","SimSun",sans-serif;color:#111;font-size:12px;}' +
       'h1{margin:0 0 2px;text-align:center;font-size:19px;letter-spacing:3px;}' +
       'h2{margin:12px 0 5px;font-size:13.5px;letter-spacing:1px;page-break-after:avoid;}' +
-      'h2.unit{margin:0 0 2px;text-align:center;font-size:16px;letter-spacing:2px;font-weight:600;}' +
-      '.docname{text-align:center;font-size:15px;font-weight:600;letter-spacing:8px;margin:2px 0 8px;}' +
+      '.docname{text-align:center;font-size:17px;font-weight:600;letter-spacing:10px;margin:0 0 10px;}' +
       'td.none{text-align:center;color:#666;}' +
       '.sub{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}' +
       'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
