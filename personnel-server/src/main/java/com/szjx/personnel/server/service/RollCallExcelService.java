@@ -206,20 +206,28 @@ public class RollCallExcelService {
             sh.getPrintSetup().setPaperSize((short) 9); // A4
             sh.setFitToPage(true);
             sh.getPrintSetup().setFitWidth((short) 1);
-            sh.getPrintSetup().setFitHeight((short) 0);
+            sh.getPrintSetup().setFitHeight((short) 1); // 整表缩放到一页
+            sh.setHorizontallyCenter(true);
+            sh.setMargin(Sheet.LeftMargin, 0.35);
+            sh.setMargin(Sheet.RightMargin, 0.35);
+            sh.setMargin(Sheet.TopMargin, 0.4);
+            sh.setMargin(Sheet.BottomMargin, 0.4);
+            sh.setMargin(Sheet.HeaderMargin, 0.15);
+            sh.setMargin(Sheet.FooterMargin, 0.15);
 
-            CellStyle titleStyle = style(wb, 16, true, false, null);
-            CellStyle subStyle = style(wb, 11, false, false, null);
-            CellStyle sectionStyle = style(wb, 12, true, false, null);
-            CellStyle unitStyle = style(wb, 12, true, false, IndexedColors.PALE_BLUE);
-            CellStyle squadStyle = style(wb, 11, true, true, IndexedColors.GREY_25_PERCENT);
-            CellStyle nameStyle = style(wb, 12, false, true, null);
-            CellStyle footStyle = style(wb, 11, false, false, null);
+            // 无底色:仅用加粗区分表头;标题/日期/区块行/统计行不带边框,更像正式表格
+            CellStyle titleStyle = style(wb, 16, true, false, null, false);
+            CellStyle subStyle = style(wb, 11, false, false, null, false);
+            CellStyle sectionStyle = style(wb, 12, true, false, null, false);
+            CellStyle unitStyle = style(wb, 12, true, false, null, true);
+            CellStyle squadStyle = style(wb, 11, true, true, null, true);
+            CellStyle nameStyle = style(wb, 12, false, true, null, true);
+            CellStyle footStyle = style(wb, 11, false, false, null, false);
 
             int r = 0;
             // 标题 + 日期
             merge(sh, r, 0, r, totalCols - 1, titleStyle, "人员点名册");
-            sh.getRow(r).setHeightInPoints(26);
+            sh.getRow(r).setHeightInPoints(30);
             r++;
             LocalDate today = LocalDate.now();
             merge(sh, r, 0, r, totalCols - 1, subStyle,
@@ -239,10 +247,10 @@ public class RollCallExcelService {
                     maxNames = Math.max(maxNames, s.names.size());
                 }
             }
-            // 保证行存在
-            ensureRow(sh, squadHeadRow);
+            // 保证行存在并统一行高(名单行稍高便于阅读/手写)
+            ensureRow(sh, squadHeadRow).setHeightInPoints(20);
             for (int i = 0; i < maxNames; i++) {
-                ensureRow(sh, nameStart + i);
+                ensureRow(sh, nameStart + i).setHeightInPoints(22);
             }
             for (UnitBlock u : units) {
                 if (u.split) {
@@ -284,7 +292,7 @@ public class RollCallExcelService {
                 List<Personnel> people = e.getValue();
                 int rowsN = Math.max(1, (people.size() + perRow - 1) / perRow);
                 for (int i = 0; i < rowsN; i++) {
-                    ensureRow(sh, r + i);
+                    ensureRow(sh, r + i).setHeightInPoints(30); // 预留归队时间第二行
                 }
                 merge(sh, r, 0, r + rowsN - 1, 0, squadStyle, e.getKey() + "(" + people.size() + "人)");
                 for (int i = 0; i < people.size(); i++) {
@@ -315,6 +323,7 @@ public class RollCallExcelService {
                             "人    实到:        人    点名人:");
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
+            wb.setPrintArea(0, 0, totalCols - 1, 0, r);
             wb.write(out);
             return out.toByteArray();
         } finally {
@@ -368,7 +377,7 @@ public class RollCallExcelService {
         }
     }
 
-    private static CellStyle style(Workbook wb, int fontPt, boolean bold, boolean wrap, IndexedColors fill) {
+    private static CellStyle style(Workbook wb, int fontPt, boolean bold, boolean wrap, IndexedColors fill, boolean bordered) {
         Font font = wb.createFont();
         font.setFontHeightInPoints((short) fontPt);
         font.setBold(bold);
@@ -378,10 +387,12 @@ public class RollCallExcelService {
         st.setAlignment(HorizontalAlignment.CENTER);
         st.setVerticalAlignment(VerticalAlignment.CENTER);
         st.setWrapText(wrap);
-        st.setBorderTop(BorderStyle.THIN);
-        st.setBorderBottom(BorderStyle.THIN);
-        st.setBorderLeft(BorderStyle.THIN);
-        st.setBorderRight(BorderStyle.THIN);
+        if (bordered) {
+            st.setBorderTop(BorderStyle.THIN);
+            st.setBorderBottom(BorderStyle.THIN);
+            st.setBorderLeft(BorderStyle.THIN);
+            st.setBorderRight(BorderStyle.THIN);
+        }
         if (fill != null) {
             st.setFillForegroundColor(fill.getIndex());
             st.setFillPattern(FillPatternType.SOLID_FOREGROUND);
