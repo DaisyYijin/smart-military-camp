@@ -197,15 +197,16 @@
       var rows = Math.ceil(n / cols);
       return { names: names, cols: cols, rows: rows };
     }
-    /** 某班第 r 行的单元格:逐列取名,索引 = 列号×行数 + 行号(先下后右) */
-    function cellsAtRow(g, r) {
+    /** 某班第 r 行的单元格:逐列取名,索引 = 列号×行数 + 行号(先下后右);fmt 为单元格内容格式化函数 */
+    function cellsAtRow(g, r, fmt) {
       var tds = '';
       for (var c = 0; c < g.cols; c++) {
         var i = c * g.rows + r; // 先下后右
-        tds += '<td class="nm">' + (i < g.names.length ? '<b>' + esc(g.names[i]) + '</b>' : '') + '</td>';
+        tds += '<td class="nm">' + (i < g.names.length ? fmt(g.names[i]) : '') + '</td>';
       }
       return tds;
     }
+    function defaultNameFmt(name) { return '<b>' + esc(name) + '</b>'; }
     /** 矩阵表:一级表头(单位/原因)左右并排,二级表头(班)也在右侧并排,姓名按列纵向填充 */
     function matrixTable(level1) {
       var totalCols = 0, maxRows = 0, hasSplit = false;
@@ -235,7 +236,7 @@
       for (var r = 0; r < maxRows; r++) {
         body += '<tr>';
         level1.forEach(function (u) {
-          u.grids.forEach(function (x) { body += cellsAtRow(x.g, r); });
+          u.grids.forEach(function (x) { body += cellsAtRow(x.g, r, x.fmt || defaultNameFmt); });
         });
         body += '</tr>';
       }
@@ -270,16 +271,22 @@
     });
     var presentBlock = matrixTable(presentUnits);
 
-    // 不在位人员:按原因分组,同样矩阵式(原因表头并排,姓名纵填)
+    // 不在位人员:按原因分组,同样矩阵式(原因表头并排,姓名纵填),人名后小字标注所属班/单位
     var reasonOrder = [], reasonMap = {};
     absent.forEach(function (r) {
       var s = r.status || '其他';
+      var u = unitOf(r);
       if (!reasonMap[s]) { reasonMap[s] = []; reasonOrder.push(s); }
-      reasonMap[s].push(r.name || '');
+      reasonMap[s].push({ name: r.name || '', unit: u.squad || u.unit || '' });
     });
     var reasonText = reasonOrder.map(function (s) { return esc(s) + reasonMap[s].length + '人'; }).join('、');
+    var absentFmt = function (p) {
+      return '<b>' + esc(p.name) + '</b>' + (p.unit ? '<span class="mu">(' + esc(p.unit) + ')</span>' : '');
+    };
     var absentBlock = matrixTable(reasonOrder.map(function (s) {
-      return { label: s, split: false, grids: [{ label: s, g: colLayout(reasonMap[s]) }] };
+      return {
+        label: s, split: false, grids: [{ label: s, fmt: absentFmt, g: colLayout(reasonMap[s]) }]
+      };
     }));
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
@@ -341,6 +348,7 @@
       '.grp td{background:#e8eef7;font-weight:600;text-align:center;}' +
       '.sq td{background:#f4f7fb;font-weight:600;text-align:center;}' +
       'td.nm{height:28px;font-size:13px;}' +
+      '.mu{font-weight:400;font-size:10px;color:#555;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
     var doc = frame.contentWindow.document;
