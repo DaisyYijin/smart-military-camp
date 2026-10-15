@@ -252,8 +252,16 @@ public class RollCallExcelService {
             }
             // 保证行存在并统一行高(名单行稍高便于阅读/手写)
             ensureRow(sh, squadHeadRow).setHeightInPoints(20);
+            // 表头行与名单行先整行铺边框样式(无数据的单元格也显示框线),再写入内容
+            for (int c = 0; c < totalCols; c++) {
+                setCell(sh, unitHeadRow, c, unitStyle, "");
+                setCell(sh, squadHeadRow, c, squadStyle, "");
+            }
             for (int i = 0; i < maxNames; i++) {
                 ensureRow(sh, nameStart + i).setHeightInPoints(22);
+                for (int c = 0; c < totalCols; c++) {
+                    setCell(sh, nameStart + i, c, nameStyle, "");
+                }
             }
             for (UnitBlock u : units) {
                 if (u.split) {
@@ -290,27 +298,27 @@ public class RollCallExcelService {
                     (reasonText.length() > 0 ? ":" + reasonText : "") + ")";
             merge(sh, r, 0, r, totalCols - 1, sectionStyle, absentTitle);
             r++;
-            int perRow = 5;
+            int nameCols = Math.max(1, totalCols - 1); // 姓名横向铺满原因列右侧的所有列
             for (Map.Entry<String, List<Personnel>> e : reasons.entrySet()) {
                 List<Personnel> people = e.getValue();
-                int rowsN = Math.max(1, (people.size() + perRow - 1) / perRow);
+                int rowsN = Math.max(1, (people.size() + nameCols - 1) / nameCols);
                 for (int i = 0; i < rowsN; i++) {
-                    ensureRow(sh, r + i).setHeightInPoints(32); // 预留归队时间第二行(加宽后不截断)
+                    ensureRow(sh, r + i).setHeightInPoints(32); // 预留归队时间第二行
+                    for (int c = 1; c < totalCols; c++) {
+                        setCell(sh, r + i, c, nameStyle, "");
+                    }
                 }
                 merge(sh, r, 0, r + rowsN - 1, 0, squadStyle, e.getKey() + "(" + people.size() + "人)");
                 for (int i = 0; i < people.size(); i++) {
                     Personnel p = people.get(i);
-                    int rowAt = r + i / perRow;
-                    int colAt = 1 + i % perRow;
+                    int rowAt = r + i / nameCols;
+                    int colAt = 1 + i % nameCols;
                     String ret = returns.get(p.getId());
                     String text = p.getName() == null ? "" : p.getName();
                     if (ret != null && !ret.isEmpty()) {
                         text = text + "\n归队:" + ret;
                     }
                     setCell(sh, rowAt, colAt, nameStyle, text);
-                }
-                for (int i = people.size(); i < rowsN * perRow; i++) {
-                    setCell(sh, r + i / perRow, 1 + i % perRow, nameStyle, "");
                 }
                 r += rowsN;
             }
