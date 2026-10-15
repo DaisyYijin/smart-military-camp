@@ -7,6 +7,7 @@ import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.model.Personnel;
 import com.szjx.personnel.server.service.PersonnelService;
 import com.szjx.personnel.server.service.RollCallExcelService;
+import com.szjx.personnel.server.service.RosterExcelService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,14 +35,17 @@ public class PersonnelController {
     private final DepartmentDao departmentDao;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final RollCallExcelService rollCallExcelService;
+    private final RosterExcelService rosterExcelService;
 
     public PersonnelController(PersonnelService personnelService, DepartmentDao departmentDao,
                                org.springframework.jdbc.core.JdbcTemplate jdbc,
-                               RollCallExcelService rollCallExcelService) {
+                               RollCallExcelService rollCallExcelService,
+                               RosterExcelService rosterExcelService) {
         this.personnelService = personnelService;
         this.departmentDao = departmentDao;
         this.jdbc = jdbc;
         this.rollCallExcelService = rollCallExcelService;
+        this.rosterExcelService = rosterExcelService;
     }
 
     /** 统一年龄计算: 按指定日期(默认今天)算周岁 */
@@ -129,6 +133,28 @@ public class PersonnelController {
         byte[] data = rollCallExcelService.build(query);
         String today = java.time.LocalDate.now().toString();
         String name = java.net.URLEncoder.encode("人员点名册-" + today + ".xlsx", "UTF-8").replace("+", "%20");
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename*=UTF-8''" + name)
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .body(data);
+    }
+
+    /**
+     * 花名册可选字段清单(供下载前的勾选弹窗使用)
+     */
+    @GetMapping("/roster/fields")
+    public ApiResponse rosterFields() {
+        return ApiResponse.ok(rosterExcelService.fieldOptions());
+    }
+
+    /**
+     * 花名册 Excel 下载:列由 fields 参数(逗号分隔)勾选,默认基本档案字段,不含任职经历等子表
+     */
+    @GetMapping("/roster/excel")
+    public ResponseEntity<byte[]> rosterExcel(@RequestParam Map<String, String> query) throws Exception {
+        byte[] data = rosterExcelService.build(query);
+        String today = java.time.LocalDate.now().toString();
+        String name = java.net.URLEncoder.encode("人员花名册-" + today + ".xlsx", "UTF-8").replace("+", "%20");
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename*=UTF-8''" + name)
                 .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

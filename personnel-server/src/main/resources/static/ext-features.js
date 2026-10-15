@@ -2,13 +2,16 @@
  * 扩展功能脚本(独立于 app.js,原生 ES5,零第三方依赖)
  * ------------------------------------------------------------
  * 本文件承载后加的界面增强功能,复用 app.js 暴露的全局函数
- * (GET/h/toast/esc/showProgressModal/SITE),须在 app.js 之后加载。
+ * (GET/h/toast/esc/openModal/showProgressModal/apiBlobWithProgress/downloadBlob),
+ * 须在 app.js 之后加载。
  *
  * 当前包含:
  *   1) 侧栏分组子菜单展开/收起动画(高度+透明度过渡,配合 app.css 的 .menu-sub 规则)
- *   2) 人员管理工具栏左上角:点名册打印 / 花名册打印
- *      (按当前筛选条件分页拉取全部人员,生成 A4 打印文档,经隐藏 iframe 调起浏览器打印)
- *   3) 按名称隐藏分组子菜单(如「装备管理」下的「全部装备」);要恢复删掉对应名称即可
+ *   2) 按名称隐藏分组子菜单(如「装备管理」下的「全部装备」);要恢复删掉对应名称即可
+ *   3) 人员管理工具栏左上角:点名册下载 / 花名册下载
+ *      - 点名册:后端生成 Excel(单位→班两级矩阵、姓名纵填、不在位原因左侧、休假归队时间)
+ *      - 花名册:先弹窗勾选需要的字段(基本档案字段,不含任职经历等子表),后端生成 Excel
+ *      两者均遵循页面当前筛选条件,横版 A4、公文字体(小标宋/黑体/仿宋)
  */
 (function () {
   'use strict';
@@ -70,222 +73,7 @@
     if (sub.classList.contains('open')) openSub(sub); else closeSub(sub);
   });
 
-  /* ================= 2. 点名册 / 花名册打印 ================= */
-
-  /** 拉取部门树并展平:id → {name,parent,seq}(parent 为上级部门名,顶级为 '';seq 为树内先后顺序) */
-  function fetchDeptIndex() {
-    return GET('/api/departments').then(function (tree) {
-      var idx = {}, seq = 0;
-      function walk(nodes, parentName) {
-        (nodes || []).forEach(function (n) {
-          idx[String(n.id)] = { name: n.name || '', parent: parentName || '', seq: seq++ };
-          walk(n.children, n.name);
-        });
-      }
-      walk(tree, '');
-      return idx;
-    });
-  }
-
-  /** 某部门及其全部下级的 id 集合(部门筛选是精确匹配,含下级需自行展开) */
-  function subtreeIds(tree, rootId) {
-    var out = {};
-    function walk(nodes, inside) {
-      (nodes || []).forEach(function (n) {
-        var hit = inside || String(n.id) === String(rootId);
-        if (hit) out[String(n.id)] = true;
-        walk(n.children, hit);
-      });
-    }
-    walk(tree, false);
-    return out;
-  }
-
-  /** 按当前筛选分页拉取全部人员(接口单页上限 200);departmentId 展开为含下级的子树过滤;
-   *  返回 {rows, deptIdx} */
-  function fetchAllPersonnel(filters) {
-    var f = {};
-    Object.keys(filters || {}).forEach(function (k) {
-      if (k !== 'departmentId') f[k] = filters[k];
-    });
-    var qs = Object.keys(f).map(function (k) {
-      return k + '=' + encodeURIComponent(f[k]);
-    }).join('&');
-    var deptId = filters && filters.departmentId ? String(filters.departmentId) : '';
-    var out = [], page = 1;
-    function next() {
-      return GET('/api/personnel?page=' + page + '&size=200' + (qs ? '&' + qs : '')).then(function (r) {
-        var list = (r && r.list) || [];
-        out = out.concat(list);
-        var total = (r && r.total) || 0;
-        if (list.length && out.length < total) { page++; return next(); }
-        return out;
-      });
-    }
-    var ready = deptId
-      ? GET('/api/departments').then(function (tree) { return subtreeIds(tree, deptId); })
-      : Promise.resolve(null);
-    return Promise.all([next(), fetchDeptIndex(), ready]).then(function (rs) {
-      var rows = rs[0], deptIdx = rs[1], allowed = rs[2];
-      if (allowed) {
-        rows = rows.filter(function (r) { return allowed[String(r.departmentId)]; });
-      }
-      return { rows: rows, deptIdx: deptIdx };
-    });
-  }
-
-  /** 部门全名:有上级时为 上级+本部门(如 一连一班),否则为本部门名 */
-  function fullDeptName(r, deptIdx) {
-    var d = deptIdx && deptIdx[String(r.departmentId)];
-    if (!d) return r.departmentName || '未分配部门';
-    return d.parent ? d.parent + d.name : d.name;
-  }
-
-  /** 按部门分组(优先用部门树全名),保持服务端返回顺序 */
-  function groupByDepartment(rows, deptIdx) {
-    var groups = [], index = {};
-    rows.forEach(function (r) {
-      var name = fullDeptName(r, deptIdx);
-      if (!index[name]) { index[name] = { name: name, rows: [] }; groups.push(index[name]); }
-      index[name].rows.push(r);
-    });
-    return groups;
-  }
-
-  function cnToday() {
-    var d = new Date();
-    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
-  }
-
-  function ageOfYear(birthday) {
-    if (!birthday) return '';
-    var b = new Date(String(birthday).replace(/[\s.\/]/g, '-'));
-    if (isNaN(b.getTime())) return '';
-    var n = new Date();
-    var age = n.getFullYear() - b.getFullYear();
-    var m = n.getMonth() - b.getMonth();
-    if (m < 0 || (m === 0 && n.getDate() < b.getDate())) age--;
-    return (age >= 0 && age < 130) ? String(age) : '';
-  }
-
-  /** 花名册:横向 A4,按部门(含上级全名)分组,含基本情况和联系方式 */
-  function rosterHtml(rows, deptIdx) {
-    var groups = groupByDepartment(rows, deptIdx);
-    var no = 0;
-    var body = groups.map(function (g) {
-      var trs = g.rows.map(function (r) {
-        no++;
-        return '<tr><td>' + no + '</td><td><b>' + esc(r.name || '') + '</b></td><td>' + esc(r.gender || '') + '</td>' +
-          '<td>' + esc((r.birthday || '').substring(0, 7)) + '</td><td>' + ageOfYear(r.birthday) + '</td>' +
-          '<td>' + esc(r.rank || '') + '</td><td>' + esc(r.post || '') + '</td>' +
-          '<td>' + esc(r.politicalStatus || '') + '</td><td>' + esc(r.education || '') + '</td>' +
-          '<td>' + esc(r.entryDate || '') + '</td><td>' + esc(r.phone || '') + '</td></tr>';
-      }).join('');
-      return '<tr class="grp"><td colspan="11">' + esc(g.name) + '(' + g.rows.length + '人)</td></tr>' + trs;
-    }).join('');
-    var male = rows.filter(function (r) { return r.gender === '男'; }).length;
-    return '<h1>' + esc(SITE.name) + '人员花名册</h1>' +
-      '<div class="sub"><span>打印日期:' + cnToday() + '</span><span>合计:' + rows.length + '人(男' + male + '/女' + (rows.length - male) + ')</span></div>' +
-      '<table><thead><tr><th style="width:30px">序号</th><th style="width:8%">姓名</th><th style="width:4%">性别</th><th style="width:7%">出生年月</th><th style="width:4%">年龄</th><th style="width:9%">军衔/职级</th><th style="width:9%">职务</th><th style="width:8%">政治面貌</th><th style="width:6%">文化程度</th><th style="width:8%">入伍时间</th><th>联系电话</th></tr></thead><tbody>' + body + '</tbody></table>' +
-      '<div class="foot"><span>制表人:<span class="blank" style="min-width:80px"></span></span><span>审核人:<span class="blank" style="min-width:80px"></span></span><span>日期:' + cnToday() + '</span></div>';
-  }
-
-  /** 打印/下载文档共用的完整 HTML(含样式) */
-  function buildDocument(docTitle, landscape, bodyHtml) {
-    var css =
-      '@page{size:A4 ' + (landscape ? 'landscape' : 'portrait') + ';margin:10mm 9mm;}' +
-      '*{box-sizing:border-box;}' +
-      'body{margin:0;font-family:"Microsoft YaHei","PingFang SC","SimSun",sans-serif;color:#111;font-size:12px;}' +
-      'h1{margin:0 0 2px;text-align:center;font-size:19px;letter-spacing:3px;}' +
-      'h2{margin:12px 0 5px;font-size:13.5px;letter-spacing:1px;page-break-after:avoid;}' +
-      '.docname{text-align:center;font-size:17px;font-weight:600;letter-spacing:10px;margin:0 0 10px;}' +
-      'td.none{text-align:center;color:#666;}' +
-      '.sub{display:flex;justify-content:space-between;font-size:12px;margin-bottom:8px;}' +
-      'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
-      'th,td{border:1px solid #333;padding:4px 3px;text-align:center;word-break:break-all;}' +
-      'thead{display:table-header-group;}' +
-      'tr{page-break-inside:avoid;}' +
-      '.grp td{background:#e8eef7;font-weight:600;text-align:center;}' +
-      '.sq td{background:#f4f7fb;font-weight:600;text-align:center;}' +
-      'td.nm{height:28px;font-size:13px;}' +
-      '.ret{font-size:10px;color:#555;font-weight:400;line-height:1.3;}' +
-      'td.rs{background:#f4f7fb;font-weight:600;width:78px;}' +
-      '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
-      '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
-    return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + esc(docTitle) + '</title><style>' + css + '</style></head><body>' + bodyHtml + '</body></html>';
-  }
-
-  /** 以 HTML 文件方式下载(浏览器打开后可直接打印,版式与打印完全一致) */
-  function downloadHtmlDocument(filename, landscape, bodyHtml) {
-    var blob = new Blob([buildDocument(filename.replace(/\.html$/, ''), landscape, bodyHtml)], { type: 'text/html;charset=utf-8' });
-    downloadBlob(blob, filename);
-  }
-
-  /** 生成打印文档并在隐藏 iframe 中调起浏览器打印 */
-  function printHtmlDocument(docTitle, landscape, bodyHtml) {
-    if (window.__printFrame) { window.__printFrame.remove(); }
-    var frame = document.createElement('iframe');
-    frame.setAttribute('title', docTitle);
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;';
-    window.__printFrame = frame;
-    document.body.appendChild(frame);
-    var doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(buildDocument(docTitle, landscape, bodyHtml));
-    doc.close();
-    setTimeout(function () {
-      try {
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      } catch (e) {
-        toast('调起打印失败:' + e.message, 'err');
-      }
-    }, 80);
-  }
-
-  /** 入口:点名册=后端生成 Excel 下载(含归队时间);花名册=前端生成并调起打印 */
-  function printPersonnelDoc(kind, filters) {
-    var isRoll = kind === 'rollcall';
-    var pm = showProgressModal(isRoll ? '生成点名册' : '生成花名册');
-    pm.setStatus('正在按当前筛选条件生成…');
-    if (isRoll) {
-      var qs = Object.keys(filters || {}).map(function (k) {
-        return k + '=' + encodeURIComponent(filters[k]);
-      }).join('&');
-      apiBlobWithProgress('/api/personnel/rollcall/excel' + (qs ? '?' + qs : ''), function (pct) {
-        pm.setProgress(pct * 0.9);
-        pm.setStatus('正在下载… ' + pct + '%');
-      }).then(function (r) {
-        pm.setProgress(100);
-        pm.setStatus('下载完成');
-        downloadBlob(r.blob, r.filename);
-        setTimeout(function () { pm.close(); }, 600);
-      }).catch(function (e) {
-        pm.close();
-        toast(e.message, 'err');
-      });
-      return;
-    }
-    fetchAllPersonnel(filters).then(function (res) {
-      var rows = res.rows, deptIdx = res.deptIdx;
-      if (!rows.length) {
-        pm.close();
-        toast('当前筛选条件下没有可打印的人员', 'err');
-        return;
-      }
-      pm.setProgress(90);
-      pm.setStatus('正在生成花名册(' + rows.length + '人)…');
-      setTimeout(function () {
-        pm.setProgress(100);
-        pm.setStatus('已调起打印');
-        printHtmlDocument('人员花名册', true, rosterHtml(rows, deptIdx));
-        setTimeout(function () { pm.close(); }, 500);
-      }, 50);
-    }).catch(function (e) {
-      pm.close();
-      toast(e.message, 'err');
-    });
-  }
+  /* ================= 2. 点名册 / 花名册下载 ================= */
 
   /** 读取右侧筛选面板当前条件(与列表查询同口径:非空才参与) */
   function readFilterParams() {
@@ -298,7 +86,93 @@
     return out;
   }
 
-  /** 人员管理视图渲染后,在工具栏最左侧(spacer 之前)插入两个打印按钮 */
+  function toQueryString(obj) {
+    return Object.keys(obj || {}).map(function (k) {
+      return k + '=' + encodeURIComponent(obj[k]);
+    }).join('&');
+  }
+
+  /** 通用:从后端下载 Excel(带进度) */
+  function downloadExcel(url, pmTitle, pm) {
+    return apiBlobWithProgress(url, function (pct) {
+      pm.setProgress(pct * 0.9);
+      pm.setStatus('正在下载… ' + pct + '%');
+    }).then(function (r) {
+      pm.setProgress(100);
+      pm.setStatus('下载完成');
+      downloadBlob(r.blob, r.filename);
+      setTimeout(function () { pm.close(); }, 600);
+    }).catch(function (e) {
+      pm.close();
+      toast(e.message, 'err');
+    });
+  }
+
+  /** 点名册:后端生成 Excel 并下载 */
+  function downloadRollcall() {
+    var pm = showProgressModal('生成点名册');
+    pm.setStatus('正在按当前筛选条件生成…');
+    var qs = toQueryString(readFilterParams());
+    downloadExcel('/api/personnel/rollcall/excel' + (qs ? '?' + qs : ''), '点名册', pm);
+  }
+
+  /** 花名册默认勾选的字段 */
+  var ROSTER_DEFAULT = ['name', 'gender', 'idCard', 'department', 'locationPoint', 'rank', 'post', 'status', 'entryDate', 'phone'];
+
+  /** 花名册:先弹窗勾选字段,再由后端生成 Excel 下载 */
+  function openRosterDialog() {
+    GET('/api/personnel/roster/fields').then(function (list) {
+      list = list || [];
+      if (!list.length) {
+        toast('获取字段清单失败', 'err');
+        return;
+      }
+      var boxes = [];
+      var grid = h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px 18px;max-height:320px;overflow:auto;padding:4px 2px' });
+      list.forEach(function (f) {
+        var cb = h('input', { type: 'checkbox' });
+        cb.checked = ROSTER_DEFAULT.indexOf(f.key) >= 0;
+        boxes.push({ key: f.key, cb: cb });
+        grid.appendChild(h('label', { style: 'display:flex;align-items:center;gap:6px;cursor:pointer;min-width:118px;font-weight:400' },
+          cb, h('span', { text: f.label })));
+      });
+      var modal = null;
+      modal = openModal({
+        title: '花名册下载 - 勾选需要的字段',
+        body: h('div', {},
+          h('div', { style: 'color:#66707f;font-size:12px;margin-bottom:10px',
+            text: '勾选要包含的列(基本档案字段,不含任职经历/奖惩等子表);生成后按部门分组,横版 A4。' }),
+          grid),
+        footer: [
+          h('button', {
+            class: 'btn btn-ghost', text: '取消',
+            onclick: function () { modal.close(); }
+          }),
+          h('button', {
+            class: 'btn btn-primary', text: '下载 Excel',
+            onclick: function () {
+              var keys = boxes.filter(function (b) { return b.cb.checked; })
+                .map(function (b) { return b.key; });
+              if (!keys.length) {
+                toast('请至少勾选一个字段', 'err');
+                return;
+              }
+              modal.close();
+              var pm = showProgressModal('生成花名册');
+              pm.setStatus('正在按当前筛选条件生成…');
+              var f = readFilterParams();
+              f.fields = keys.join(',');
+              downloadExcel('/api/personnel/roster/excel?' + toQueryString(f), '花名册', pm);
+            }
+          })
+        ]
+      });
+    }).catch(function (e) {
+      toast(e.message, 'err');
+    });
+  }
+
+  /** 人员管理视图渲染后,在工具栏最左侧(spacer 之前)插入两个下载按钮 */
   function addPrintButtons() {
     var toolbars = document.querySelectorAll('.content .toolbar');
     for (var i = 0; i < toolbars.length; i++) {
@@ -316,12 +190,12 @@
       grp.appendChild(h('button', {
         class: 'btn btn-ghost', text: '点名册下载',
         title: '按当前筛选条件生成点名册 Excel 并下载(横版A4版式,含休假归队时间)',
-        onclick: function () { printPersonnelDoc('rollcall', readFilterParams()); }
+        onclick: function () { downloadRollcall(); }
       }));
       grp.appendChild(h('button', {
-        class: 'btn btn-ghost', text: '花名册打印',
-        title: '按当前筛选条件生成花名册(按部门分组,含军衔/职务/联系方式等)并发送打印',
-        onclick: function () { printPersonnelDoc('roster', readFilterParams()); }
+        class: 'btn btn-ghost', text: '花名册下载',
+        title: '先勾选需要的字段(姓名/身份证/部门/所在点位等),再生成花名册 Excel 下载',
+        onclick: function () { openRosterDialog(); }
       }));
       toolbar.insertBefore(grp, toolbar.firstChild); // 在 spacer 之前 → 工具栏左上角
     }
