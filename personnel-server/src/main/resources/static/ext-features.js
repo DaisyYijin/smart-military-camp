@@ -418,7 +418,8 @@
       setTimeout(function () {
         pm.setProgress(100);
         pm.close();
-        printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', !isRoll,
+        // 点名册与花名册统一用横版 A4(单位/班并排时横向宽度更充裕)
+        printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', true,
           isRoll ? rollCallHtml(rows, deptIdx, leaveMap) : rosterHtml(rows, deptIdx));
       }, 50);
     }).catch(function (e) {
