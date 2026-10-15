@@ -781,12 +781,62 @@
     load();
   }
 
+  /** 全系统日期控件统一定位与年月/日期视图切换 */
+  function syncAnyDatePicker(wrap) {
+    if (!wrap) return;
+    var panel = wrap.querySelector('.cal-panel');
+    var grid = panel && panel.querySelector('.cal-grid');
+    if (!panel || !grid) return;
+    var dayMode = !!grid.querySelector('.cal-day');
+    grid.classList.toggle('cal-day-grid', dayMode);
+    grid.classList.toggle('cal-picker-grid', !dayMode);
+    panel.classList.toggle('cal-view-day', dayMode);
+    panel.classList.toggle('cal-view-picker', !dayMode);
+    panel.style.height = dayMode ? '220px' : '198px';
+  }
+  function repositionAnyDatePicker(wrap) {
+    if (!wrap || !wrap.classList.contains('open')) return;
+    syncAnyDatePicker(wrap);
+    var panel = wrap.querySelector('.cal-panel');
+    var input = wrap.querySelector('input');
+    if (!panel || !input) return;
+    var r = input.getBoundingClientRect();
+    var margin = 8, gap = 8;
+    var w = Math.min(280, Math.max(220, window.innerWidth - margin * 2));
+    panel.style.position = 'fixed';
+    panel.style.width = w + 'px';
+    panel.style.maxWidth = 'calc(100vw - 16px)';
+    panel.style.maxHeight = Math.max(220, window.innerHeight - margin * 2) + 'px';
+    panel.style.overflow = 'hidden';
+    panel.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)) + 'px';
+    var ph = panel.offsetHeight || 220;
+    var top = r.bottom + gap + ph <= window.innerHeight - margin ? r.bottom + gap : r.top - ph - gap;
+    panel.style.top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin)) + 'px';
+  }
+  document.addEventListener('click', function (e) {
+    var panel = e.target && e.target.closest ? e.target.closest('.cal.open .cal-panel') : null;
+    if (panel) {
+      var wrap = panel.closest('.cal');
+      setTimeout(function () { syncAnyDatePicker(wrap); }, 0);
+    }
+  });
+  document.addEventListener('click', function (e) {
+    var wrap = e.target && e.target.closest ? e.target.closest('.cal') : null;
+    if (wrap) setTimeout(function () { repositionAnyDatePicker(wrap); }, 0);
+  }, true);
+  window.addEventListener('resize', function () {
+    var opened = document.querySelectorAll('.cal.open');
+    for (var i = 0; i < opened.length; i++) opened[i].classList.remove('open');
+  });
+
   /** 休假计划日期控件:避免日历在窄屏越界,并保持与弹窗的视觉层次一致 */
   var leaveDateStyle = document.createElement('style');
   leaveDateStyle.textContent = '\n    .leave-plan-dialog .cal-panel{height:254px;box-sizing:border-box;border-color:#d7e0eb;border-radius:10px;padding:9px 10px 8px;box-shadow:0 12px 32px rgba(24,45,75,.20),0 2px 8px rgba(24,45,75,.08);overflow:hidden}\n    .leave-plan-dialog .cal-head{height:34px;box-sizing:border-box;margin:0 0 4px;padding:0 0 4px}\n    .leave-plan-dialog .cal-week{height:15px;box-sizing:border-box}\n    .leave-plan-dialog .cal-week span{padding:2px 0;font-size:11px}\n    .leave-plan-dialog .cal-grid{height:142px;box-sizing:border-box;gap:1px;align-content:center}\n    .leave-plan-dialog .cal-grid.cal-day-grid{grid-template-columns:repeat(7,minmax(0,1fr))}\n    .leave-plan-dialog .cal-grid.cal-picker-grid{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:32px}\n    .leave-plan-dialog .cal-view-picker .cal-week{visibility:hidden}\n    .leave-plan-dialog .cal-day{height:22px;line-height:22px;border-radius:6px}\n    .leave-plan-dialog .cal-day.sel{box-shadow:0 2px 6px rgba(47,111,214,.24)}\n    .leave-plan-dialog .cal-foot{height:36px;box-sizing:border-box;margin:4px 0 0;padding:5px 0 0}\n    .leave-plan-dialog .cal-foot-btn{padding:3px 11px;border-radius:6px}\n    .leave-plan-dialog .cal-day:focus-visible,.leave-plan-dialog .cal-year-cell:focus-visible,.leave-plan-dialog .cal-nav:focus-visible,.leave-plan-dialog .cal-foot-btn:focus-visible{outline:2px solid #2f6fd6;outline-offset:1px}\n  ';
   document.head.appendChild(leaveDateStyle);
+  leaveDateStyle.disabled = true; // 休假计划改用全系统公共日期控件样式
 
   function syncLeavePickerView(wrap) {
+    return; // 视图切换统一由全系统日期控件逻辑处理
     if (!wrap) return;
     var panel = wrap.querySelector('.cal-panel');
     var grid = panel && panel.querySelector('.cal-grid');
@@ -799,6 +849,7 @@
   }
 
   function repositionLeaveDatePicker(wrap) {
+    return; // 定位统一由全系统日期控件逻辑处理
     if (!wrap || !wrap.classList.contains('open')) return;
     syncLeavePickerView(wrap);
     var panel = wrap.querySelector('.cal-panel');
@@ -812,7 +863,7 @@
     panel.style.maxHeight = Math.max(220, window.innerHeight - margin * 2) + 'px';
     panel.style.overflowY = 'auto';
     panel.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)) + 'px';
-    var h = panel.offsetHeight || 330;
+    var ph = panel.offsetHeight || 220;
     var canBelow = r.bottom + gap + h <= window.innerHeight - margin;
     var top = canBelow ? r.bottom + gap : r.top - h - gap;
     panel.style.top = Math.max(margin, Math.min(top, window.innerHeight - h - margin)) + 'px';

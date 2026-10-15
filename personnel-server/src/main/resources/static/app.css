@@ -1083,21 +1083,23 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 
 .dialog.xxwide { width: 1240px; }
 
-/* 日期选择器: 年份/月份网格 */
-.cal-grid { grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.cal-panel .cal-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; }
-.cal-year-cell {
-  display: flex; align-items: center; justify-content: center;
-  height: 36px; border-radius: 8px; cursor: pointer; font-size: 13.5px;
-  color: #2c3e50; background: #f5f7fa; transition: background .12s, color .12s;
-}
-.cal-year-cell:hover { background: #d4e3f7; color: #16437e; }
-.cal-year-cell.sel { background: #16437e; color: #ffffff; font-weight: 700; }
-.cal-year-cell.sel:hover { background: #16437e; }
-.cal-year-cell.sel.today { color: #ffffff; }
-.cal-year-cell.today:not(.sel) { color: #d9463e; font-weight: 600; }
-.cal-year-cell.today:hover { color: #d9463e; background: #fdf0ef; }
-.cal-panel .cal-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 2px; }
+/* 日期/月份/年份视图使用明确网格,全系统共享紧凑面板 */
+.cal-panel { box-sizing: border-box; padding: 8px 10px 7px; overflow: hidden; border-radius: 10px; }
+.cal-panel.cal-view-day { height: 220px; }
+.cal-panel.cal-view-picker { height: 198px; }
+.cal-panel .cal-head { height: 32px; box-sizing: border-box; margin: 0 0 3px; padding: 0 0 3px; }
+.cal-panel .cal-week { height: 14px; box-sizing: border-box; }
+.cal-panel .cal-week span { padding: 1px 0; font-size: 11px; }
+.cal-panel .cal-grid { height: 114px; box-sizing: border-box; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; padding: 0; align-content: center; }
+.cal-panel .cal-grid.cal-picker-grid { height: 98px; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 26px; }
+.cal-panel.cal-view-picker .cal-week { visibility: hidden; }
+.cal-panel .cal-day { height: 18px; line-height: 18px; border-radius: 5px; }
+.cal-panel .cal-day.sel { box-shadow: 0 2px 6px rgba(47,111,214,.24); }
+.cal-panel .cal-foot { height: 32px; box-sizing: border-box; margin: 3px 0 0; padding: 4px 0 0; }
+.cal-panel .cal-foot-btn { padding: 2px 10px; border-radius: 6px; }
+.cal-panel .cal-day:focus-visible, .cal-panel .cal-year-cell:focus-visible,
+.cal-panel .cal-nav:focus-visible, .cal-panel .cal-foot-btn:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 1px; }
+.cal-panel .cal-year-cell { height: 26px; }
 .cal-title:hover { color: var(--pri, #2f6fd6); }
 
 /* 侧栏收起后悬停显示菜单名 */
