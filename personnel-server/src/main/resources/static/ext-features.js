@@ -189,20 +189,25 @@
     var unitKeys = Object.keys(unitSet);
     var smallUnit = unitKeys.length === 1 ? unitKeys[0] : '';
 
-    var PER_ROW = 5; // 每行人名格数
+    var ROWS_PER_COL = 10; // 每列人名行数:先自上而下填满一列,再多换到右侧新列
+    /** 纵向填充的姓名格:返回 {html, cols},第 i 个名字落在 第(i div rows)列、第(i mod rows)行 */
     function nameGrid(names) {
+      var n = names.length;
+      var cols = Math.max(1, Math.ceil(n / ROWS_PER_COL));
+      var rows = Math.ceil(n / cols);
       var trs = [];
-      for (var i = 0; i < names.length; i += PER_ROW) {
+      for (var r = 0; r < rows; r++) {
         var tds = '';
-        for (var j = 0; j < PER_ROW; j++) {
-          tds += '<td class="nm">' + (i + j < names.length ? '<b>' + esc(names[i + j]) + '</b>' : '') + '</td>';
+        for (var c = 0; c < cols; c++) {
+          var i = c * rows + r; // 先下后右
+          tds += '<td class="nm">' + (i < n ? '<b>' + esc(names[i]) + '</b>' : '') + '</td>';
         }
         trs.push('<tr>' + tds + '</tr>');
       }
-      return trs.join('');
+      return { html: trs.join(''), cols: cols };
     }
 
-    // 在位人员:单位(在位N人) → 班(N人) → 姓名格
+    // 在位人员:单位(在位N人) → 班(N人) → 姓名格(每班一张表,列数自适应)
     var unitOrder = [], unitMap = {};
     present.forEach(function (r) {
       var u = unitOf(r);
@@ -214,11 +219,16 @@
     var presentBlock = '';
     unitOrder.forEach(function (un) {
       var u = unitMap[un], total = 0;
-      u.order.forEach(function (s) { total += u.squads[s].length; });
-      presentBlock += '<tr class="grp"><td colspan="' + PER_ROW + '">' + esc(un) + '(在位' + total + '人)</td></tr>';
+      var grids = [];
       u.order.forEach(function (s) {
-        if (s !== un) presentBlock += '<tr class="sq"><td colspan="' + PER_ROW + '">' + esc(s) + '(' + u.squads[s].length + '人)</td></tr>';
-        presentBlock += nameGrid(u.squads[s]);
+        total += u.squads[s].length;
+        grids.push({ s: s, g: nameGrid(u.squads[s]) });
+      });
+      presentBlock += '<table><tbody><tr class="grp"><td>' + esc(un) + '(在位' + total + '人)</td></tr></tbody></table>';
+      grids.forEach(function (x) {
+        presentBlock += '<table><tbody>' +
+          (x.s !== un ? '<tr class="sq"><td colspan="' + x.g.cols + '">' + esc(x.s) + '(' + u.squads[x.s].length + '人)</td></tr>' : '') +
+          x.g.html + '</tbody></table>';
       });
     });
 
@@ -232,7 +242,8 @@
     var reasonText = reasonOrder.map(function (s) { return esc(s) + reasonMap[s].length + '人'; }).join('、');
     var absentBlock = '';
     reasonOrder.forEach(function (s) {
-      absentBlock += '<tr class="sq"><td colspan="' + PER_ROW + '">' + esc(s) + '(' + reasonMap[s].length + '人)</td></tr>' + nameGrid(reasonMap[s]);
+      var g = nameGrid(reasonMap[s]);
+      absentBlock += '<table><tbody><tr class="sq"><td colspan="' + g.cols + '">' + esc(s) + '(' + reasonMap[s].length + '人)</td></tr>' + g.html + '</tbody></table>';
     });
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
@@ -240,9 +251,9 @@
       '<div class="docname">人员点名册</div>' +
       '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank" style="min-width:110px"></span></span></div>' +
       '<h2>在位人员(共' + present.length + '人)</h2>' +
-      '<table><tbody>' + (presentBlock || '<tr><td colspan="' + PER_ROW + '" class="none">无</td></tr>') + '</tbody></table>' +
+      (presentBlock || '<table><tbody><tr><td class="none">无</td></tr></tbody></table>') +
       '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
-      '<table><tbody>' + (absentBlock || '<tr><td colspan="' + PER_ROW + '" class="none">无</td></tr>') + '</tbody></table>' +
+      (absentBlock || '<table><tbody><tr><td class="none">无</td></tr></tbody></table>') +
       '<div class="foot"><span>应到:' + rows.length + '人</span><span>在位:' + present.length + '人</span><span>不在位:' + absent.length + '人</span>' +
       '<span>实到:<span class="blank" style="min-width:50px"></span>人</span><span>点名人:<span class="blank" style="min-width:70px"></span></span></div>';
   }
