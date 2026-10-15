@@ -3,6 +3,7 @@ package com.szjx.personnel.server.service;
 import com.szjx.personnel.server.model.Department;
 import com.szjx.personnel.server.model.Personnel;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,7 +63,7 @@ public class RosterExcelTest {
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new ArrayList<Personnel>(Arrays.asList(p1, p2)));
 
-        RosterExcelService service = new RosterExcelService(personnelService, departmentService);
+        RosterExcelService service = new RosterExcelService(personnelService, departmentService, mock(JdbcTemplate.class));
 
         Map<String, String> q = new HashMap<String, String>();
         q.put("fields", "name,idCard,department,locationPoint");
@@ -82,7 +83,7 @@ public class RosterExcelTest {
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new ArrayList<Personnel>());
 
-        RosterExcelService service = new RosterExcelService(personnelService, departmentService);
+        RosterExcelService service = new RosterExcelService(personnelService, departmentService, mock(JdbcTemplate.class));
         byte[] data = service.build(new HashMap<String, String>()); // 未传 fields → 默认列
         assertNotNull(data);
         assertTrue(data.length > 1500);

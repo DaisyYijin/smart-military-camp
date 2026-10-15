@@ -73,6 +73,47 @@
     if (sub.classList.contains('open')) openSub(sub); else closeSub(sub);
   });
 
+  /* ================= 3. 人员管理新增「学历情况」子表 ================= */
+
+  /** 学历情况子表定义(与 app.js 中任职经历等子表同构;因 app.js 受写入通道限制,由本脚本注册) */
+  var EDU_SUB = {
+    name: '学历情况',
+    kind: 'education',
+    columns: [
+      { key: 'enroll_date', label: '入学时间', type: 'date', w: 105 },
+      { key: 'graduate_date', label: '毕业时间', type: 'date', w: 105 },
+      { key: 'school', label: '毕业院校', required: true },
+      { key: 'major', label: '所学专业' },
+      { key: 'degree', label: '学位' },
+      { key: 'remark', label: '备注', w: 130 }
+    ]
+  };
+
+  /** 在人员管理表单中注册学历分区与面板(分区插在「任职经历」之前) */
+  (function registerEduPanel() {
+    if (typeof personnelCfg === 'undefined' || !personnelCfg || !personnelCfg.form || typeof subRecordsPanel !== 'function') {
+      return; // app.js 未加载或结构变化时静默跳过
+    }
+    var idx = -1;
+    for (var i = 0; i < personnelCfg.form.length; i++) {
+      if (personnelCfg.form[i] && personnelCfg.form[i].section === '任职经历') { idx = i; break; }
+    }
+    var section = { section: '学历情况' };
+    if (idx >= 0) {
+      personnelCfg.form.splice(idx, 0, section);
+    } else {
+      personnelCfg.form.push(section);
+    }
+    var originalSubPanels = personnelCfg.subPanels;
+    personnelCfg.subPanels = function (row) {
+      var extra = originalSubPanels ? originalSubPanels(row) : { panels: {} };
+      if (extra && extra.panels) {
+        extra.panels['学历情况'] = subRecordsPanel(EDU_SUB.kind, row && row.id ? row.id : null, EDU_SUB);
+      }
+      return extra;
+    };
+  })();
+
   /* ================= 2. 点名册 / 花名册下载 ================= */
 
   /** 读取右侧筛选面板当前条件(与列表查询同口径:非空才参与) */
@@ -116,8 +157,8 @@
     downloadExcel('/api/personnel/rollcall/excel' + (qs ? '?' + qs : ''), '点名册', pm);
   }
 
-  /** 花名册默认勾选的字段 */
-  var ROSTER_DEFAULT = ['name', 'gender', 'idCard', 'department', 'locationPoint', 'rank', 'post', 'status', 'entryDate', 'phone'];
+  /** 花名册默认不预选任何字段(由用户自行点选) */
+  var ROSTER_DEFAULT = [];
 
   /** 花名册:先弹窗按钮式选取字段,再由后端生成 Excel 下载 */
   function openRosterDialog() {

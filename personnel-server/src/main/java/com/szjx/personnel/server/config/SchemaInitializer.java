@@ -353,6 +353,21 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_position_history_person ON position_history(personnel_id)");
 
+        // 学历情况(人员的子记录:入学/毕业时间、院校、专业、学位,可多条)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS education_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "enroll_date TEXT DEFAULT ''," +
+                "graduate_date TEXT DEFAULT ''," +
+                "school TEXT DEFAULT ''," +
+                "major TEXT DEFAULT ''," +
+                "degree TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_education_person ON education_record(personnel_id)");
+
         // 奖惩情况(人员的子记录,kind 区分 奖励/处分)
         jdbc.execute("CREATE TABLE IF NOT EXISTS reward_punish (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

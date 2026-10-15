@@ -20,6 +20,9 @@ public class PersonnelFullExcel {
 
     /** 每个 Sheet 的定义:名称、表名、列头(中文)、列 key(snake) */
     private static final String[][] SHEETS = {
+        {"学历情况", "education_record",
+            "身份证号,姓名,入学时间,毕业时间,毕业院校,所学专业,学位,备注",
+            "idcard,__name,enroll_date,graduate_date,school,major,degree,remark"},
         {"任职经历", "position_history",
             "身份证号,姓名,开始日期,结束日期,任职地点,担任职务,备注",
             "idcard,__name,start_date,end_date,place,post,remark"},
