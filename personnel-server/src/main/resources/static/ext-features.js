@@ -72,11 +72,46 @@
 
   /* ================= 2. 点名册 / 花名册打印 ================= */
 
-  /** 按当前筛选分页拉取全部人员(接口单页上限 200) */
+  /** 拉取部门树并展平:id → {name,parent}(parent 为上级部门名,顶级为 '') */
+  function fetchDeptIndex() {
+    return GET('/api/departments').then(function (tree) {
+      var idx = {};
+      function walk(nodes, parentName) {
+        (nodes || []).forEach(function (n) {
+          idx[String(n.id)] = { name: n.name || '', parent: parentName || '' };
+          walk(n.children, n.name);
+        });
+      }
+      walk(tree, '');
+      return idx;
+    });
+  }
+
+  /** 某部门及其全部下级的 id 集合(部门筛选是精确匹配,含下级需自行展开) */
+  function subtreeIds(tree, rootId) {
+    var out = {};
+    function walk(nodes, inside) {
+      (nodes || []).forEach(function (n) {
+        var hit = inside || String(n.id) === String(rootId);
+        if (hit) out[String(n.id)] = true;
+        walk(n.children, hit);
+      });
+    }
+    walk(tree, false);
+    return out;
+  }
+
+  /** 按当前筛选分页拉取全部人员(接口单页上限 200);departmentId 展开为含下级的子树过滤;
+   *  返回 {rows, deptIdx} */
   function fetchAllPersonnel(filters) {
-    var qs = Object.keys(filters || {}).map(function (k) {
-      return k + '=' + encodeURIComponent(filters[k]);
+    var f = {};
+    Object.keys(filters || {}).forEach(function (k) {
+      if (k !== 'departmentId') f[k] = filters[k];
+    });
+    var qs = Object.keys(f).map(function (k) {
+      return k + '=' + encodeURIComponent(f[k]);
     }).join('&');
+    var deptId = filters && filters.departmentId ? String(filters.departmentId) : '';
     var out = [], page = 1;
     function next() {
       return GET('/api/personnel?page=' + page + '&size=200' + (qs ? '&' + qs : '')).then(function (r) {
@@ -87,14 +122,30 @@
         return out;
       });
     }
-    return next();
+    var ready = deptId
+      ? GET('/api/departments').then(function (tree) { return subtreeIds(tree, deptId); })
+      : Promise.resolve(null);
+    return Promise.all([next(), fetchDeptIndex(), ready]).then(function (rs) {
+      var rows = rs[0], deptIdx = rs[1], allowed = rs[2];
+      if (allowed) {
+        rows = rows.filter(function (r) { return allowed[String(r.departmentId)]; });
+      }
+      return { rows: rows, deptIdx: deptIdx };
+    });
   }
 
-  /** 按部门分组,保持服务端返回顺序 */
-  function groupByDepartment(rows) {
+  /** 部门全名:有上级时为 上级+本部门(如 一连一班),否则为本部门名 */
+  function fullDeptName(r, deptIdx) {
+    var d = deptIdx && deptIdx[String(r.departmentId)];
+    if (!d) return r.departmentName || '未分配部门';
+    return d.parent ? d.parent + d.name : d.name;
+  }
+
+  /** 按部门分组(优先用部门树全名),保持服务端返回顺序 */
+  function groupByDepartment(rows, deptIdx) {
     var groups = [], index = {};
     rows.forEach(function (r) {
-      var name = r.departmentName || '未分配部门';
+      var name = fullDeptName(r, deptIdx);
       if (!index[name]) { index[name] = { name: name, rows: [] }; groups.push(index[name]); }
       index[name].rows.push(r);
     });
@@ -117,63 +168,88 @@
     return (age >= 0 && age < 130) ? String(age) : '';
   }
 
-  /** 点名册:竖向 A4。表头=大单位/小单位;正文=按分队分组的在位人员;底部=不在位人员及原因,均标注人数 */
-  function rollCallHtml(rows) {
+  /** 点名册:竖向 A4。表头=大单位/小单位;正文=单位→班两级分组的在位人员姓名格;底部=不在位人员按原因分组,均标注人数 */
+  function rollCallHtml(rows, deptIdx) {
     var PRESENT = ['在位', '在职']; // 视为在位的状态;其余(休假/住院/培训/借调等)归入不在位
-    var present = rows.filter(function (r) { return PRESENT.indexOf(r.status) >= 0; });
-    var absent = rows.filter(function (r) { return PRESENT.indexOf(r.status) < 0; });
-
-    // 大单位=系统设置的单位名称;小单位=本次人员同属一个部门时自动带出,否则留空手填
-    var deptNames = [];
+    var present = [], absent = [];
     rows.forEach(function (r) {
-      var d = r.departmentName || '';
-      if (d && deptNames.indexOf(d) < 0) deptNames.push(d);
+      (PRESENT.indexOf(r.status) >= 0 ? present : absent).push(r);
     });
-    var smallUnit = deptNames.length === 1 ? deptNames[0] : '';
 
-    var no = 0;
-    var presentGroups = groupByDepartment(present).map(function (g) {
-      var trs = g.rows.map(function (r) {
-        no++;
-        return '<tr><td>' + no + '</td><td class="nm"><b>' + esc(r.name || '') + '</b></td><td class="sign"></td><td></td></tr>';
-      }).join('');
-      return '<tr class="grp"><td colspan="4">' + esc(g.name) + '(在位' + g.rows.length + '人)</td></tr>' + trs;
-    }).join('');
+    // 单位与班:有上级部门 → 上级=单位,本部门=班;顶级部门 → 自身即单位(单级展示)
+    function unitOf(r) {
+      var d = deptIdx && deptIdx[String(r.departmentId)];
+      if (!d) return { unit: r.departmentName || '未分配部门', squad: '' };
+      return d.parent ? { unit: d.parent, squad: d.name } : { unit: d.name, squad: '' };
+    }
 
-    // 不在位原因汇总(标注人数),如:休假2人、住院1人
-    var reasons = [];
+    // 小单位表头:全部人员同属一个单位时自动带出,否则留空手填
+    var unitSet = {};
+    rows.forEach(function (r) { unitSet[unitOf(r).unit] = true; });
+    var unitKeys = Object.keys(unitSet);
+    var smallUnit = unitKeys.length === 1 ? unitKeys[0] : '';
+
+    var PER_ROW = 5; // 每行人名格数
+    function nameGrid(names) {
+      var trs = [];
+      for (var i = 0; i < names.length; i += PER_ROW) {
+        var tds = '';
+        for (var j = 0; j < PER_ROW; j++) {
+          tds += '<td class="nm">' + (i + j < names.length ? '<b>' + esc(names[i + j]) + '</b>' : '') + '</td>';
+        }
+        trs.push('<tr>' + tds + '</tr>');
+      }
+      return trs.join('');
+    }
+
+    // 在位人员:单位(在位N人) → 班(N人) → 姓名格
+    var unitOrder = [], unitMap = {};
+    present.forEach(function (r) {
+      var u = unitOf(r);
+      if (!unitMap[u.unit]) { unitMap[u.unit] = { squads: {}, order: [] }; unitOrder.push(u.unit); }
+      var sq = u.squad || u.unit;
+      if (!unitMap[u.unit].squads[sq]) { unitMap[u.unit].squads[sq] = []; unitMap[u.unit].order.push(sq); }
+      unitMap[u.unit].squads[sq].push(r.name || '');
+    });
+    var presentBlock = '';
+    unitOrder.forEach(function (un) {
+      var u = unitMap[un], total = 0;
+      u.order.forEach(function (s) { total += u.squads[s].length; });
+      presentBlock += '<tr class="grp"><td colspan="' + PER_ROW + '">' + esc(un) + '(在位' + total + '人)</td></tr>';
+      u.order.forEach(function (s) {
+        if (s !== un) presentBlock += '<tr class="sq"><td colspan="' + PER_ROW + '">' + esc(s) + '(' + u.squads[s].length + '人)</td></tr>';
+        presentBlock += nameGrid(u.squads[s]);
+      });
+    });
+
+    // 不在位人员:按原因分组,同样用姓名格
+    var reasonOrder = [], reasonMap = {};
     absent.forEach(function (r) {
       var s = r.status || '其他';
-      var found = null;
-      for (var i = 0; i < reasons.length; i++) { if (reasons[i][0] === s) { found = reasons[i]; break; } }
-      if (found) { found[1]++; } else { reasons.push([s, 1]); }
+      if (!reasonMap[s]) { reasonMap[s] = []; reasonOrder.push(s); }
+      reasonMap[s].push(r.name || '');
     });
-    var reasonText = reasons.map(function (x) { return esc(x[0]) + x[1] + '人'; }).join('、');
-    var ano = 0;
-    var absentRows = absent.map(function (r) {
-      ano++;
-      return '<tr><td>' + ano + '</td><td class="nm"><b>' + esc(r.name || '') + '</b></td>' +
-        '<td>' + esc(r.status || '') + '</td><td></td></tr>';
-    }).join('');
-    var absentBlock = '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
-      '<table><thead><tr><th style="width:34px">序号</th><th style="width:30%">姓名</th><th style="width:22%">原因</th><th>备注</th></tr></thead><tbody>' +
-      (absentRows || '<tr><td colspan="4" class="none">无</td></tr>') + '</tbody></table>';
+    var reasonText = reasonOrder.map(function (s) { return esc(s) + reasonMap[s].length + '人'; }).join('、');
+    var absentBlock = '';
+    reasonOrder.forEach(function (s) {
+      absentBlock += '<tr class="sq"><td colspan="' + PER_ROW + '">' + esc(s) + '(' + reasonMap[s].length + '人)</td></tr>' + nameGrid(reasonMap[s]);
+    });
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
       '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
       '<div class="docname">人员点名册</div>' +
       '<div class="sub"><span>日期:' + cnToday() + '</span><span>地点:<span class="blank" style="min-width:110px"></span></span></div>' +
       '<h2>在位人员(共' + present.length + '人)</h2>' +
-      '<table><thead><tr><th style="width:34px">序号</th><th style="width:30%">姓名</th><th style="width:22%">签到</th><th>备注</th></tr></thead><tbody>' +
-      (presentGroups || '<tr><td colspan="4" class="none">无</td></tr>') + '</tbody></table>' +
-      absentBlock +
+      '<table><tbody>' + (presentBlock || '<tr><td colspan="' + PER_ROW + '" class="none">无</td></tr>') + '</tbody></table>' +
+      '<h2>不在位人员(共' + absent.length + '人' + (reasonText ? ':' + reasonText : '') + ')</h2>' +
+      '<table><tbody>' + (absentBlock || '<tr><td colspan="' + PER_ROW + '" class="none">无</td></tr>') + '</tbody></table>' +
       '<div class="foot"><span>应到:' + rows.length + '人</span><span>在位:' + present.length + '人</span><span>不在位:' + absent.length + '人</span>' +
       '<span>实到:<span class="blank" style="min-width:50px"></span>人</span><span>点名人:<span class="blank" style="min-width:70px"></span></span></div>';
   }
 
-  /** 花名册:横向 A4,按部门分组,含基本情况和联系方式 */
-  function rosterHtml(rows) {
-    var groups = groupByDepartment(rows);
+  /** 花名册:横向 A4,按部门(含上级全名)分组,含基本情况和联系方式 */
+  function rosterHtml(rows, deptIdx) {
+    var groups = groupByDepartment(rows, deptIdx);
     var no = 0;
     var body = groups.map(function (g) {
       var trs = g.rows.map(function (r) {
@@ -216,8 +292,8 @@
       'thead{display:table-header-group;}' +
       'tr{page-break-inside:avoid;}' +
       '.grp td{background:#e8eef7;font-weight:600;text-align:left;padding-left:8px;}' +
-      '.sign{height:26px;}' +
-      'td.nm{font-size:13px;}' +
+      '.sq td{background:#f4f7fb;font-weight:600;text-align:left;padding-left:20px;}' +
+      'td.nm{height:28px;font-size:13px;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
     var doc = frame.contentWindow.document;
@@ -239,7 +315,8 @@
     var isRoll = kind === 'rollcall';
     var pm = showProgressModal(isRoll ? '生成点名册' : '生成花名册');
     pm.setStatus('正在按当前筛选条件读取人员…');
-    fetchAllPersonnel(filters).then(function (rows) {
+    fetchAllPersonnel(filters).then(function (res) {
+      var rows = res.rows, deptIdx = res.deptIdx;
       if (!rows.length) {
         pm.close();
         toast('当前筛选条件下没有可打印的人员', 'err');
@@ -250,7 +327,8 @@
       setTimeout(function () {
         pm.setProgress(100);
         pm.close();
-        printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', !isRoll, isRoll ? rollCallHtml(rows) : rosterHtml(rows));
+        printHtmlDocument(isRoll ? '人员点名册' : '人员花名册', !isRoll,
+          isRoll ? rollCallHtml(rows, deptIdx) : rosterHtml(rows, deptIdx));
       }, 50);
     }).catch(function (e) {
       pm.close();
@@ -286,7 +364,7 @@
       var grp = h('div', { class: 'toolbar-left' });
       grp.appendChild(h('button', {
         class: 'btn btn-ghost', text: '点名册打印',
-        title: '按当前筛选条件生成点名册(按部门分组,含签到栏)并发送打印',
+        title: '按当前筛选条件生成点名册(单位→班两级分组显示姓名,底部列不在位人员)并发送打印',
         onclick: function () { printPersonnelDoc('rollcall', readFilterParams()); }
       }));
       grp.appendChild(h('button', {
