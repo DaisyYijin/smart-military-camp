@@ -170,7 +170,6 @@ public class RosterExcelService {
             CellStyle titleStyle = style(wb, "方正小标宋简体", 18, false, false, false);
             CellStyle subStyle = style(wb, "仿宋_GB2312", 12, false, false, false);
             CellStyle headStyle = style(wb, "黑体", 11, false, false, true);
-            CellStyle groupStyle = style(wb, "黑体", 11, false, false, true);
             CellStyle nameStyle = style(wb, "仿宋_GB2312", 12, false, false, true);
             CellStyle footStyle = style(wb, "仿宋_GB2312", 12, false, false, false);
 
@@ -204,10 +203,8 @@ public class RosterExcelService {
             r++;
 
             int no = 0;
+            // 平铺列表:不再插入分组行(部门信息由勾选的部门列体现),人员顺序仍按部门树排列
             for (Map.Entry<String, List<Personnel>> g : ordered) {
-                merge(sh, r, 0, r, totalCols - 1, groupStyle, g.getKey() + "(" + g.getValue().size() + "人)");
-                sh.getRow(r).setHeightInPoints(20);
-                r++;
                 for (Personnel p : g.getValue()) {
                     no++;
                     ensureRow(sh, r).setHeightInPoints(22);
@@ -220,7 +217,8 @@ public class RosterExcelService {
                 }
             }
             r++;
-            merge(sh, r, 0, r, totalCols - 1, footStyle, "制表人:                审核人:                日期:" + today);
+            merge(sh, r, 0, r, totalCols - 1, footStyle,
+                    "制表人:                审核人:                日期:" + today.getYear() + "年" + today.getMonthValue() + "月" + today.getDayOfMonth() + "日");
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             wb.setPrintArea(0, 0, totalCols - 1, 0, r);
