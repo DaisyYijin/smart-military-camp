@@ -72,13 +72,13 @@
 
   /* ================= 2. 点名册 / 花名册打印 ================= */
 
-  /** 拉取部门树并展平:id → {name,parent}(parent 为上级部门名,顶级为 '') */
+  /** 拉取部门树并展平:id → {name,parent,seq}(parent 为上级部门名,顶级为 '';seq 为树内先后顺序) */
   function fetchDeptIndex() {
     return GET('/api/departments').then(function (tree) {
-      var idx = {};
+      var idx = {}, seq = 0;
       function walk(nodes, parentName) {
         (nodes || []).forEach(function (n) {
-          idx[String(n.id)] = { name: n.name || '', parent: parentName || '' };
+          idx[String(n.id)] = { name: n.name || '', parent: parentName || '', seq: seq++ };
           walk(n.children, n.name);
         });
       }
@@ -189,50 +189,88 @@
     var unitKeys = Object.keys(unitSet);
     var smallUnit = unitKeys.length === 1 ? unitKeys[0] : '';
 
-    var ROWS_PER_COL = 10; // 每列人名行数:先自上而下填满一列,再多换到右侧新列
-    /** 纵向填充的姓名格:返回 {html, cols},第 i 个名字落在 第(i div rows)列、第(i mod rows)行 */
-    function nameGrid(names) {
+    var ROWS_PER_COL = 10; // 每列人名行数:班内人名先自上而下填满一列,再多换到右侧新列
+    /** 一个班/一类 → 物理列数与行数(列内纵向填名) */
+    function colLayout(names) {
       var n = names.length;
       var cols = Math.max(1, Math.ceil(n / ROWS_PER_COL));
       var rows = Math.ceil(n / cols);
-      var trs = [];
-      for (var r = 0; r < rows; r++) {
-        var tds = '';
-        for (var c = 0; c < cols; c++) {
-          var i = c * rows + r; // 先下后右
-          tds += '<td class="nm">' + (i < n ? '<b>' + esc(names[i]) + '</b>' : '') + '</td>';
-        }
-        trs.push('<tr>' + tds + '</tr>');
+      return { names: names, cols: cols, rows: rows };
+    }
+    /** 某班第 r 行的单元格:逐列取名,索引 = 列号×行数 + 行号(先下后右) */
+    function cellsAtRow(g, r) {
+      var tds = '';
+      for (var c = 0; c < g.cols; c++) {
+        var i = c * g.rows + r; // 先下后右
+        tds += '<td class="nm">' + (i < g.names.length ? '<b>' + esc(g.names[i]) + '</b>' : '') + '</td>';
       }
-      return { html: trs.join(''), cols: cols };
+      return tds;
+    }
+    /** 矩阵表:一级表头(单位/原因)左右并排,二级表头(班)也在右侧并排,姓名按列纵向填充 */
+    function matrixTable(level1) {
+      var totalCols = 0, maxRows = 0, hasSplit = false;
+      level1.forEach(function (u) {
+        u.cols = u.grids.reduce(function (t, x) { return t + x.g.cols; }, 0);
+        u.total = u.grids.reduce(function (t, x) { return t + x.g.names.length; }, 0);
+        totalCols += u.cols;
+        if (u.split) hasSplit = true;
+        u.grids.forEach(function (x) { if (x.g.rows > maxRows) maxRows = x.g.rows; });
+      });
+      if (!totalCols) return '';
+      var colgroup = '';
+      for (var ci = 0; ci < totalCols; ci++) { colgroup += '<col style="width:' + (100 / totalCols).toFixed(2) + '%">'; }
+      var head1 = '';
+      level1.forEach(function (u) {
+        head1 += '<td colspan="' + u.cols + '"' + (u.split || !hasSplit ? '' : ' rowspan="2"') + '>' +
+          esc(u.label) + '(' + u.total + '人)</td>';
+      });
+      var head2 = '';
+      level1.forEach(function (u) {
+        if (!u.split) return;
+        u.grids.forEach(function (x) {
+          head2 += '<td colspan="' + x.g.cols + '">' + esc(x.label) + '(' + x.g.names.length + '人)</td>';
+        });
+      });
+      var body = '';
+      for (var r = 0; r < maxRows; r++) {
+        body += '<tr>';
+        level1.forEach(function (u) {
+          u.grids.forEach(function (x) { body += cellsAtRow(x.g, r); });
+        });
+        body += '</tr>';
+      }
+      return '<table><colgroup>' + colgroup + '</colgroup>' +
+        '<thead><tr class="grp">' + head1 + '</tr>' +
+        (head2 ? '<tr class="sq">' + head2 + '</tr>' : '') + '</thead>' +
+        '<tbody>' + body + '</tbody></table>';
     }
 
-    // 在位人员:单位(在位N人) → 班(N人) → 姓名格(每班一张表,列数自适应)
+    // 在位人员:按部门树顺序组织成 单位(连)→ 班 两级,同级左右并排、姓名纵填
     var unitOrder = [], unitMap = {};
     present.forEach(function (r) {
       var u = unitOf(r);
-      if (!unitMap[u.unit]) { unitMap[u.unit] = { squads: {}, order: [] }; unitOrder.push(u.unit); }
+      if (!unitMap[u.unit]) { unitMap[u.unit] = { label: u.unit, squads: {}, order: [], seq: Infinity, split: false }; unitOrder.push(u.unit); }
+      var U = unitMap[u.unit];
+      var d = deptIdx && deptIdx[String(r.departmentId)];
+      var seq = d ? d.seq : Infinity;
+      if (seq < U.seq) U.seq = seq;
+      if (u.squad) U.split = true;
       var sq = u.squad || u.unit;
-      if (!unitMap[u.unit].squads[sq]) { unitMap[u.unit].squads[sq] = []; unitMap[u.unit].order.push(sq); }
-      unitMap[u.unit].squads[sq].push(r.name || '');
+      if (!U.squads[sq]) { U.squads[sq] = { names: [], seq: seq }; U.order.push(sq); }
+      U.squads[sq].names.push(r.name || '');
     });
-    var presentBlock = '';
-    unitOrder.forEach(function (un) {
-      var u = unitMap[un], total = 0;
-      var grids = [];
-      u.order.forEach(function (s) {
-        total += u.squads[s].length;
-        grids.push({ s: s, g: nameGrid(u.squads[s]) });
-      });
-      presentBlock += '<table><tbody><tr class="grp"><td>' + esc(un) + '(在位' + total + '人)</td></tr></tbody></table>';
-      grids.forEach(function (x) {
-        presentBlock += '<table><tbody>' +
-          (x.s !== un ? '<tr class="sq"><td colspan="' + x.g.cols + '">' + esc(x.s) + '(' + u.squads[x.s].length + '人)</td></tr>' : '') +
-          x.g.html + '</tbody></table>';
-      });
+    unitOrder.sort(function (a, b) { return unitMap[a].seq - unitMap[b].seq; });
+    var presentUnits = unitOrder.map(function (un) {
+      var U = unitMap[un];
+      U.order.sort(function (a, b) { return U.squads[a].seq - U.squads[b].seq; });
+      return {
+        label: un, split: U.split,
+        grids: U.order.map(function (s) { return { label: s, g: colLayout(U.squads[s].names) }; })
+      };
     });
+    var presentBlock = matrixTable(presentUnits);
 
-    // 不在位人员:按原因分组,同样用姓名格
+    // 不在位人员:按原因分组,同样矩阵式(原因表头并排,姓名纵填)
     var reasonOrder = [], reasonMap = {};
     absent.forEach(function (r) {
       var s = r.status || '其他';
@@ -240,11 +278,9 @@
       reasonMap[s].push(r.name || '');
     });
     var reasonText = reasonOrder.map(function (s) { return esc(s) + reasonMap[s].length + '人'; }).join('、');
-    var absentBlock = '';
-    reasonOrder.forEach(function (s) {
-      var g = nameGrid(reasonMap[s]);
-      absentBlock += '<table><tbody><tr class="sq"><td colspan="' + g.cols + '">' + esc(s) + '(' + reasonMap[s].length + '人)</td></tr>' + g.html + '</tbody></table>';
-    });
+    var absentBlock = matrixTable(reasonOrder.map(function (s) {
+      return { label: s, split: false, grids: [{ label: s, g: colLayout(reasonMap[s]) }] };
+    }));
 
     return '<h1>' + esc(SITE.name) + '</h1>' +
       '<h2 class="unit">' + (smallUnit ? esc(smallUnit) : '单位:<span class="blank" style="min-width:180px"></span>') + '</h2>' +
@@ -302,8 +338,8 @@
       'th,td{border:1px solid #333;padding:4px 3px;text-align:center;word-break:break-all;}' +
       'thead{display:table-header-group;}' +
       'tr{page-break-inside:avoid;}' +
-      '.grp td{background:#e8eef7;font-weight:600;text-align:left;padding-left:8px;}' +
-      '.sq td{background:#f4f7fb;font-weight:600;text-align:left;padding-left:20px;}' +
+      '.grp td{background:#e8eef7;font-weight:600;text-align:center;}' +
+      '.sq td{background:#f4f7fb;font-weight:600;text-align:center;}' +
       'td.nm{height:28px;font-size:13px;}' +
       '.foot{display:flex;justify-content:space-between;font-size:12px;margin-top:12px;}' +
       '.blank{display:inline-block;min-width:110px;border-bottom:1px solid #333;height:14px;vertical-align:bottom;}';
