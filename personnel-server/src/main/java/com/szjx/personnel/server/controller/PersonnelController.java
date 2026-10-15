@@ -6,6 +6,7 @@ import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.model.Personnel;
 import com.szjx.personnel.server.service.PersonnelService;
+import com.szjx.personnel.server.service.RollCallExcelService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,12 +33,15 @@ public class PersonnelController {
     private final PersonnelService personnelService;
     private final DepartmentDao departmentDao;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final RollCallExcelService rollCallExcelService;
 
     public PersonnelController(PersonnelService personnelService, DepartmentDao departmentDao,
-                               org.springframework.jdbc.core.JdbcTemplate jdbc) {
+                               org.springframework.jdbc.core.JdbcTemplate jdbc,
+                               RollCallExcelService rollCallExcelService) {
         this.personnelService = personnelService;
         this.departmentDao = departmentDao;
         this.jdbc = jdbc;
+        this.rollCallExcelService = rollCallExcelService;
     }
 
     /** 统一年龄计算: 按指定日期(默认今天)算周岁 */
@@ -115,6 +119,20 @@ public class PersonnelController {
     @GetMapping("/options")
     public ApiResponse options() {
         return ApiResponse.ok(personnelService.findAllOptions());
+    }
+
+    /**
+     * 点名册 Excel 下载(与网页版同版式:单位→班两级表头、姓名纵填、不在位原因左侧、休假显示归队时间)
+     */
+    @GetMapping("/rollcall/excel")
+    public ResponseEntity<byte[]> rollcallExcel(@RequestParam Map<String, String> query) throws Exception {
+        byte[] data = rollCallExcelService.build(query);
+        String today = java.time.LocalDate.now().toString();
+        String name = java.net.URLEncoder.encode("人员点名册-" + today + ".xlsx", "UTF-8").replace("+", "%20");
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename*=UTF-8''" + name)
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .body(data);
     }
 
     @GetMapping("/{id:\\d+}")
