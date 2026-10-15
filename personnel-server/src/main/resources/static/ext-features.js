@@ -781,6 +781,39 @@
     load();
   }
 
+  /** 休假计划日期控件:避免日历在窄屏越界,并保持与弹窗的视觉层次一致 */
+  var leaveDateStyle = document.createElement('style');
+  leaveDateStyle.textContent = '\n    .leave-plan-dialog .cal-panel{border-color:#d7e0eb;border-radius:10px;padding:12px 12px 10px;box-shadow:0 12px 32px rgba(24,45,75,.20),0 2px 8px rgba(24,45,75,.08)}\n    .leave-plan-dialog .cal-head{margin-bottom:8px;padding-bottom:8px}\n    .leave-plan-dialog .cal-day{height:34px;line-height:34px;border-radius:9px}\n    .leave-plan-dialog .cal-day.sel{box-shadow:0 2px 6px rgba(47,111,214,.24)}\n    .leave-plan-dialog .cal-day:focus-visible,.leave-plan-dialog .cal-year-cell:focus-visible,.leave-plan-dialog .cal-nav:focus-visible,.leave-plan-dialog .cal-foot-btn:focus-visible{outline:2px solid #2f6fd6;outline-offset:2px}\n    .leave-plan-dialog .cal-foot-btn{border-radius:6px}\n  ';
+  document.head.appendChild(leaveDateStyle);
+
+  function repositionLeaveDatePicker(wrap) {
+    if (!wrap || !wrap.classList.contains('open')) return;
+    var panel = wrap.querySelector('.cal-panel');
+    var input = wrap.querySelector('input');
+    if (!panel || !input) return;
+    var r = input.getBoundingClientRect();
+    var margin = 8, gap = 8;
+    var w = Math.min(280, Math.max(220, window.innerWidth - margin * 2));
+    panel.style.width = w + 'px';
+    panel.style.maxWidth = 'calc(100vw - 16px)';
+    panel.style.maxHeight = Math.max(220, window.innerHeight - margin * 2) + 'px';
+    panel.style.overflowY = 'auto';
+    panel.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)) + 'px';
+    var h = panel.offsetHeight || 330;
+    var canBelow = r.bottom + gap + h <= window.innerHeight - margin;
+    var top = canBelow ? r.bottom + gap : r.top - h - gap;
+    panel.style.top = Math.max(margin, Math.min(top, window.innerHeight - h - margin)) + 'px';
+  }
+  document.addEventListener('click', function (e) {
+    var target = e.target && e.target.closest ? e.target.closest('.leave-plan-date') : null;
+    if (!target) return;
+    setTimeout(function () { repositionLeaveDatePicker(target); }, 0);
+  }, true);
+  window.addEventListener('resize', function () {
+    var opened = document.querySelectorAll('.leave-plan-date.open');
+    for (var i = 0; i < opened.length; i++) opened[i].classList.remove('open');
+  });
+
   /** 休假计划 编辑弹窗(与其他模块一致:输入身份证号自动带出姓名) */
   function openPlanForm(row) {
     function field(label, el) {
@@ -843,6 +876,8 @@
     if (row) { typeSel.value = row.leave_type || types[0]; }
     var startEl = makeDateField();
     var endEl = makeDateField();
+    startEl.classList.add('leave-plan-date');
+    endEl.classList.add('leave-plan-date');
     if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
     var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
     if (row && row.days) { daysEl.value = row.days; }
@@ -914,6 +949,7 @@
           }
         })]
     });
+    modal.dialog.classList.add('leave-plan-dialog');
   }
 
   // 菜单渲染后重组休假菜单;启动停在 #leave-plan 时恢复计划页;均带异常保护与重试兑底
