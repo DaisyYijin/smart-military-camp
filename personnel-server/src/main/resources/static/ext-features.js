@@ -753,10 +753,10 @@
     });
 
     var toolbar = h('div', { class: 'toolbar' },
-      h('button', { class: 'btn btn-primary', text: '新增休假计划', onclick: function () { openPlanForm(null); } }),
       nameInput, yearSel,
       h('div', { class: 'spacer' }),
-      h('span', { style: 'color:#66707f;font-size:12px', text: '年度休假安排;实际休假请到「休假登记」录入' }));
+      h('span', { style: 'color:#66707f;font-size:12px;margin-right:10px', text: '年度休假安排;实际休假请到「休假登记」录入' }),
+      h('button', { class: 'btn btn-primary', text: '新增休假计划', onclick: function () { openPlanForm(null); } }));
 
     var root = h('div', { class: 'content-main' },
       h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
@@ -765,155 +765,131 @@
     load();
   }
 
-  /** 休假计划 编辑弹窗 */
+  /** 休假计划 编辑弹窗(与其他模块一致:输入身份证号自动带出姓名) */
   function openPlanForm(row) {
-    GET('/api/personnel/options').then(function (people) {
-      people = people || [];
-      function field(label, el) {
-        return h('div', { style: 'margin-bottom:12px' }, h('div', { style: 'font-size:13px;color:#3c4a5c;margin-bottom:5px', text: label }), el);
+    function field(label, el) {
+      return h('div', { style: 'margin-bottom:12px' }, h('div', { style: 'font-size:13px;color:#3c4a5c;margin-bottom:5px', text: label }), el);
+    }
+    var inputCss = 'width:100%;padding:8px 10px;border:1px solid #d4dce8;border-radius:4px;box-sizing:border-box';
+    var idCardEl = h('input', { type: 'text', placeholder: '输入后自动带出姓名', maxlength: '18' });
+    idCardEl.style.cssText = inputCss;
+    var nameEl = h('input', { type: 'text', readonly: 'readonly', placeholder: '按身份证号自动获取' });
+    nameEl.style.cssText = inputCss + ';background:#f4f6f9';
+    var pidHolder = { pid: row ? row.personnel_id : 0 };
+    var hint = h('div', { style: 'font-size:11px;color:#8a94a6;margin-top:3px;min-height:14px', text: '' });
+    if (row) {
+      idCardEl.value = row.id_card || '';
+      nameEl.value = row.personnel_name || '';
+    }
+    function lookup() {
+      var v = String(idCardEl.value || '').trim();
+      nameEl.value = '';
+      pidHolder.pid = 0;
+      if (!v) {
+        hint.style.color = '#8a94a6';
+        hint.textContent = '';
+        return;
       }
-      var inputCss = 'width:100%;padding:8px 10px;border:1px solid #d4dce8;border-radius:4px;box-sizing:border-box';
-      var personSel = h('select');
-      personSel.style.cssText = inputCss;
-      var idCardEl = h('input', { type: 'text', placeholder: '输入身份证号自动带出人员', maxlength: '18' });
-      idCardEl.style.cssText = inputCss;
-      var idCardHint = h('div', { style: 'font-size:11px;color:#8a94a6;margin-top:3px;min-height:14px', text: '选择人员或输入身份证号,两者自动联动' });
-      function personById(id) {
-        for (var i = 0; i < people.length; i++) {
-          if (String(people[i].id) === String(id)) { return people[i]; }
-        }
-        return null;
+      if (v.length !== 18) {
+        hint.style.color = '#c0392b';
+        hint.textContent = '身份证号应为18位(当前' + v.length + '位)';
+        return;
       }
-      function personByIdCard(v) {
-        v = String(v || '').trim().toUpperCase();
-        for (var j = 0; j < people.length; j++) {
-          if (String(people[j].idCard || '').trim().toUpperCase() === v) { return people[j]; }
-        }
-        return null;
-      }
-      people.forEach(function (p) {
-        personSel.options.add(new Option(p.name + (p.departmentName ? '(' + p.departmentName + ')' : ''), String(p.id)));
-      });
-      if (row) {
-        personSel.value = String(row.personnel_id);
-        var rp = personById(row.personnel_id);
-        if (rp) { idCardEl.value = rp.idCard || ''; }
-      }
-      // 联动:选人 → 带出身份证
-      personSel.addEventListener('change', function () {
-        var p = personById(personSel.value);
-        idCardEl.value = p ? (p.idCard || '') : '';
-        idCardHint.style.color = '#8a94a6';
-        idCardHint.textContent = p ? '已选:' + p.name : '';
-      });
-      // 联动:输入身份证 → 带出人员
-      function syncFromIdCard() {
-        var v = String(idCardEl.value || '').trim();
-        if (!v) {
-          idCardHint.style.color = '#8a94a6';
-          idCardHint.textContent = '';
-          return;
-        }
-        if (v.length !== 18) {
-          idCardHint.style.color = '#c0392b';
-          idCardHint.textContent = '身份证号应为18位(当前' + v.length + '位)';
-          return;
-        }
-        var hit = personByIdCard(v);
-        if (hit) {
-          personSel.value = String(hit.id);
-          idCardHint.style.color = '#1e7e34';
-          idCardHint.textContent = '已匹配:' + hit.name + (hit.departmentName ? '(' + hit.departmentName + ')' : '');
+      GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+        if (p) {
+          nameEl.value = p.name || '';
+          pidHolder.pid = p.id;
+          hint.style.color = '#1e7e34';
+          hint.textContent = '已带出:' + (p.name || '') + (p.departmentName ? '(' + p.departmentName + ')' : '');
         } else {
-          idCardHint.style.color = '#c0392b';
-          idCardHint.textContent = '未找到该身份证对应的人员';
+          hint.style.color = '#c0392b';
+          hint.textContent = '未找到该身份证对应的人员';
         }
-      }
-      idCardEl.addEventListener('input', function () {
-        clearTimeout(idCardEl._t);
-        idCardEl._t = setTimeout(syncFromIdCard, 250);
+      }).catch(function (e) {
+        hint.style.color = '#c0392b';
+        hint.textContent = e.message;
       });
-      idCardEl.addEventListener('change', syncFromIdCard);
-      var idCardBox = h('div', {}, idCardEl, idCardHint);
-      var yearSel = h('select');
-      yearSel.style.cssText = inputCss;
-      var nowYear = new Date().getFullYear();
-      for (var y = nowYear + 1; y >= nowYear - 2; y--) {
-        yearSel.options.add(new Option(y + ' 年', String(y)));
-      }
-      yearSel.value = row && row.year ? String(row.year) : String(nowYear);
-      var typeSel = h('select');
-      typeSel.style.cssText = inputCss;
-      var types = dictLabels('leave_type');
-      if (!types.length) { types = ['事假', '病假', '年假', '探亲假', '婚假', '其他']; }
-      types.forEach(function (t) { typeSel.options.add(new Option(t, t)); });
-      if (row) { typeSel.value = row.leave_type || types[0]; }
-      var startEl = h('input', { type: 'date' });
-      startEl.style.cssText = inputCss;
-      var endEl = h('input', { type: 'date' });
-      endEl.style.cssText = inputCss;
-      if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
-      var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
-      daysEl.style.cssText = inputCss;
-      if (row && row.days) { daysEl.value = row.days; }
-      function syncDays() {
-        if (startEl.value && endEl.value) {
-          var d = (new Date(endEl.value) - new Date(startEl.value)) / 86400000;
-          if (d >= 0) { daysEl.value = d; }
-        }
-      }
-      startEl.addEventListener('change', syncDays);
-      endEl.addEventListener('change', syncDays);
-      var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
-      remarkEl.style.cssText = inputCss;
-      if (row) { remarkEl.value = row.remark || ''; }
+    }
+    idCardEl.addEventListener('input', function () {
+      clearTimeout(idCardEl._t);
+      idCardEl._t = setTimeout(lookup, 300);
+    });
+    idCardEl.addEventListener('change', lookup);
+    var idCardBox = h('div', {}, idCardEl, hint);
 
-      var modal = null;
-      modal = openModal({
-        title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
-        body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
-          field('人员(选择后带出身份证)', personSel), field('身份证号(输入后带出人员)', idCardBox),
-          field('年度', yearSel), field('休假类型', typeSel),
-          field('计划开始日期', startEl), field('计划结束日期', endEl),
-          field('天数', daysEl), field('备注', remarkEl)),
-        footer: [
-          h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { modal.close(); } }),
-          h('button', {
-            class: 'btn btn-primary', text: '保存',
-            onclick: function () {
-              if (!personSel.value) {
-                toast('请选择人员(或输入身份证号自动匹配)', 'err');
-                return;
-              }
-              var idv = String(idCardEl.value || '').trim();
-              if (idv && !personByIdCard(idv)) {
-                toast('身份证号未匹配到人员,请核对', 'err');
-                return;
-              }
-              var payload = {
-                personnelId: personSel.value,
-                year: yearSel.value,
-                leaveType: typeSel.value,
-                startDate: startEl.value,
-                endDate: endEl.value,
-                days: daysEl.value,
-                remark: remarkEl.value
-              };
-              var done = function (r) {
-                modal.close();
-                toast('已保存');
-                var planBtn = document.querySelector('[data-leavecustom][data-tip="休假计划"]');
-                if (planBtn) { planBtn.click(); } // 刷新列表
-              };
-              if (row) {
-                PUT('/api/leave-plan/' + row.id, payload).then(done).catch(function (e) { toast(e.message, 'err'); });
-              } else {
-                POST('/api/leave-plan', payload).then(done).catch(function (e) { toast(e.message, 'err'); });
-              }
+    var yearSel = h('select');
+    yearSel.style.cssText = inputCss;
+    var nowYear = new Date().getFullYear();
+    for (var y = nowYear + 1; y >= nowYear - 2; y--) {
+      yearSel.options.add(new Option(y + ' 年', String(y)));
+    }
+    yearSel.value = row && row.year ? String(row.year) : String(nowYear);
+    var typeSel = h('select');
+    typeSel.style.cssText = inputCss;
+    var types = dictLabels('leave_type');
+    if (!types.length) { types = ['事假', '病假', '年假', '探亲假', '婚假', '其他']; }
+    types.forEach(function (t) { typeSel.options.add(new Option(t, t)); });
+    if (row) { typeSel.value = row.leave_type || types[0]; }
+    var startEl = h('input', { type: 'date' });
+    startEl.style.cssText = inputCss;
+    var endEl = h('input', { type: 'date' });
+    endEl.style.cssText = inputCss;
+    if (row) { startEl.value = row.start_date || ''; endEl.value = row.end_date || ''; }
+    var daysEl = h('input', { type: 'number', min: '0', step: '0.5', placeholder: '自动计算' });
+    daysEl.style.cssText = inputCss;
+    if (row && row.days) { daysEl.value = row.days; }
+    function syncDays() {
+      if (startEl.value && endEl.value) {
+        var d = (new Date(endEl.value) - new Date(startEl.value)) / 86400000;
+        if (d >= 0) { daysEl.value = d; }
+      }
+    }
+    startEl.addEventListener('change', syncDays);
+    endEl.addEventListener('change', syncDays);
+    var remarkEl = h('input', { type: 'text', placeholder: '备注(可选)' });
+    remarkEl.style.cssText = inputCss;
+    if (row) { remarkEl.value = row.remark || ''; }
+
+    var modal = null;
+    modal = openModal({
+      title: row ? '编辑休假计划 - ' + (row.personnel_name || '') : '新增休假计划',
+      body: h('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 16px' },
+        field('身份证号', idCardBox), field('姓名', nameEl),
+        field('年度', yearSel), field('休假类型', typeSel),
+        field('计划开始日期', startEl), field('计划结束日期', endEl),
+        field('天数', daysEl), field('备注', remarkEl)),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { modal.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存',
+          onclick: function () {
+            if (!pidHolder.pid) {
+              toast('请输入身份证号带出人员', 'err');
+              return;
             }
-          })]
-      });
-    }).catch(function (e) { toast(e.message, 'err'); });
+            var payload = {
+              personnelId: pidHolder.pid,
+              year: yearSel.value,
+              leaveType: typeSel.value,
+              startDate: startEl.value,
+              endDate: endEl.value,
+              days: daysEl.value,
+              remark: remarkEl.value
+            };
+            var done = function (r) {
+              modal.close();
+              toast('已保存');
+              var planBtn = document.querySelector('[data-leavecustom][data-tip="休假计划"]');
+              if (planBtn) { planBtn.click(); } // 刷新列表
+            };
+            if (row) {
+              PUT('/api/leave-plan/' + row.id, payload).then(done).catch(function (e) { toast(e.message, 'err'); });
+            } else {
+              POST('/api/leave-plan', payload).then(done).catch(function (e) { toast(e.message, 'err'); });
+            }
+          }
+        })]
+    });
   }
 
   // 菜单渲染后重组休假菜单;点击其他菜单时清除自定义项的高亮
