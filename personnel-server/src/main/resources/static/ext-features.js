@@ -119,7 +119,7 @@
   /** 花名册默认勾选的字段 */
   var ROSTER_DEFAULT = ['name', 'gender', 'idCard', 'department', 'locationPoint', 'rank', 'post', 'status', 'entryDate', 'phone'];
 
-  /** 花名册:先弹窗勾选字段,再由后端生成 Excel 下载 */
+  /** 花名册:先弹窗按钮式选取字段,再由后端生成 Excel 下载 */
   function openRosterDialog() {
     GET('/api/personnel/roster/fields').then(function (list) {
       list = list || [];
@@ -127,21 +127,50 @@
         toast('获取字段清单失败', 'err');
         return;
       }
-      var boxes = [];
-      var grid = h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px 18px;max-height:320px;overflow:auto;padding:4px 2px' });
+      var chips = [];
+      var grid = h('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;max-height:320px;overflow:auto;padding:4px 2px' });
+      var dlBtn = null;
+      function selectedKeys() {
+        return chips.filter(function (c) { return c.on; }).map(function (c) { return c.key; });
+      }
+      function syncCount() {
+        if (dlBtn) dlBtn.textContent = '下载 Excel(' + selectedKeys().length + '列)';
+      }
+      function setAll(v) {
+        chips.forEach(function (c) {
+          c.on = v;
+          c.chip.classList.toggle('on', v);
+        });
+        syncCount();
+      }
       list.forEach(function (f) {
-        var cb = h('input', { type: 'checkbox' });
-        cb.checked = ROSTER_DEFAULT.indexOf(f.key) >= 0;
-        boxes.push({ key: f.key, cb: cb });
-        grid.appendChild(h('label', { style: 'display:flex;align-items:center;gap:6px;cursor:pointer;min-width:118px;font-weight:400' },
-          cb, h('span', { text: f.label })));
+        var entry = { key: f.key, on: ROSTER_DEFAULT.indexOf(f.key) >= 0, chip: null };
+        entry.chip = h('button', {
+          type: 'button', class: 'field-chip' + (entry.on ? ' on' : ''), text: f.label,
+          title: entry.on ? '点击取消该列' : '点击选中该列',
+          onclick: function () {
+            entry.on = !entry.on;
+            entry.chip.classList.toggle('on', entry.on);
+            syncCount();
+          }
+        });
+        chips.push(entry);
+        grid.appendChild(entry.chip);
       });
       var modal = null;
       modal = openModal({
-        title: '花名册下载 - 勾选需要的字段',
+        title: '花名册下载 - 点击按钮选择需要的字段',
         body: h('div', {},
-          h('div', { style: 'color:#66707f;font-size:12px;margin-bottom:10px',
-            text: '勾选要包含的列(基本档案字段,不含任职经历/奖惩等子表);生成后按部门分组,横版 A4。' }),
+          h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:10px' },
+            h('span', { style: 'color:#66707f;font-size:12px', text: '点击字段按钮选中/取消(蓝色=选中):' }),
+            h('button', {
+              type: 'button', class: 'btn btn-ghost btn-sm', text: '全选',
+              onclick: function () { setAll(true); }
+            }),
+            h('button', {
+              type: 'button', class: 'btn btn-ghost btn-sm', text: '全不选',
+              onclick: function () { setAll(false); }
+            })),
           grid),
         footer: [
           h('button', {
@@ -151,10 +180,9 @@
           h('button', {
             class: 'btn btn-primary', text: '下载 Excel',
             onclick: function () {
-              var keys = boxes.filter(function (b) { return b.cb.checked; })
-                .map(function (b) { return b.key; });
+              var keys = selectedKeys();
               if (!keys.length) {
-                toast('请至少勾选一个字段', 'err');
+                toast('请至少选择一个字段', 'err');
                 return;
               }
               modal.close();
@@ -167,6 +195,8 @@
           })
         ]
       });
+      dlBtn = modal.dialog.querySelector('.dialog-foot .btn-primary');
+      syncCount();
     }).catch(function (e) {
       toast(e.message, 'err');
     });

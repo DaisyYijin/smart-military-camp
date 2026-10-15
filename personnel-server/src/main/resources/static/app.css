@@ -151,6 +151,17 @@ body.side-mini .main { margin-left: 64px; }
   padding: 16px 16px; border-bottom: 1px solid #edf1f6;
 }
 .toolbar-left { display: flex; align-items: center; gap: 8px; }
+
+/* 花名册字段选择胶囊按钮 */
+.field-chip {
+  background: #fff; border: 1px solid #d4dce8; color: #3c4a5c;
+  border-radius: 999px; padding: 5px 14px; font-size: 13px; line-height: 1.5;
+  cursor: pointer; transition: all .15s ease;
+}
+.field-chip:hover { border-color: var(--pri, #2f6fd6); color: var(--pri, #2f6fd6); }
+.field-chip.on {
+  background: var(--pri, #2f6fd6); border-color: var(--pri, #2f6fd6); color: #fff;
+}
 .toolbar .spacer { flex: 1; }
 .toolbar .field-inline { display: flex; align-items: center; gap: 8px; }
 .toolbar .field-inline label { color: #66788c; font-size: 13px; }
