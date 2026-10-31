@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.ForbiddenException;
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.service.ModuleExcelService;
 import org.springframework.http.HttpHeaders;
@@ -44,11 +45,14 @@ public class ModuleExcelController {
         }
         List<Long> idList = new ArrayList<Long>();
         if (ids != null && !ids.trim().isEmpty()) {
-            for (String s : ids.split(",")) {
+            for (String s : ids.split(",", -1)) {
                 try {
-                    idList.add(Long.parseLong(s.trim()));
-                } catch (NumberFormatException ignore) {
-                    // 跳过非法 id
+                    Long id = Long.parseLong(s.trim());
+                    if (id <= 0) throw new NumberFormatException();
+                    idList.add(id);
+                } catch (NumberFormatException e) {
+                    return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
+                            .body("{\"code\":1,\"message\":\"导出ID必须为正整数\",\"data\":null}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
             }
         }
@@ -59,6 +63,8 @@ public class ModuleExcelController {
             } else {
                 bytes = excelService.export(module, idList);
             }
+        } catch (ForbiddenException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -80,6 +86,11 @@ public class ModuleExcelController {
                 .contentType(new MediaType("application",
                         "vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(bytes);
+    }
+
+    @GetMapping("/api/leave-plan/template")
+    public ResponseEntity<byte[]> leavePlanTemplate() {
+        return template("leave-plan");
     }
 
     @GetMapping("/api/{module}/template")
@@ -124,6 +135,8 @@ public class ModuleExcelController {
                 result = excelService.importExcel(module, file.getInputStream());
             }
             return ApiResponse.ok(result);
+        } catch (ForbiddenException e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());
         } catch (Exception e) {

@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.ApiResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -34,10 +36,12 @@ public class PhoneDeviceController {
                 "SELECT l.id, l.personnel_id AS personnelId, p.name AS personnelName, p.id_card AS idCard, p.phone AS personnelPhone, " +
                 "l.device_type AS deviceType, l.brand, l.model, l.serial_no AS serialNo, " +
                 "l.imei1, l.imei2, l.phone_number AS phoneNumber, l.purchase_date AS purchaseDate, " +
-                "l.status, l.remark, l.created_at AS createdAt " +
+                "l.status, l.remark, l.created_at AS createdAt, p.department_id AS pDepartmentId " +
                 "FROM phone_device l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
                 "SELECT COUNT(*) FROM phone_device l LEFT JOIN personnel p ON l.personnel_id = p.id WHERE 1=1");
+        sql.append(" AND ").append(DataScope.personSql("l.personnel_id"));
+        csql.append(" AND ").append(DataScope.personSql("l.personnel_id"));
         List<Object> args = new ArrayList<Object>();
         List<Object> cargs = new ArrayList<Object>();
         if (personnelId != null) {
@@ -68,6 +72,8 @@ public class PhoneDeviceController {
         sql.append(" ORDER BY l.id DESC LIMIT ? OFFSET ?");
         args.add(size); args.add((long) (page - 1) * size);
         List<Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
+        // 列表附带人员编制单位完整路径(无斜杠层级)
+        com.szjx.personnel.server.util.DepartmentHierarchy.fillPath(jdbc, list, "pDepartmentId", "departmentPath");
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("total", total == null ? 0 : total);
         result.put("list", list);
@@ -94,6 +100,7 @@ public class PhoneDeviceController {
     @PutMapping("/{id}")
     @org.springframework.transaction.annotation.Transactional
     public ApiResponse update(@PathVariable Long id, @RequestBody Map<String, Object> r) {
+        DataScope.requireRecord(jdbc, "phone_device", "personnel_id", id);
         List<Map<String, Object>> old = jdbc.queryForList("SELECT personnel_id FROM phone_device WHERE id=?", id);
         if (old.isEmpty()) { return ApiResponse.error("记录不存在或已被删除"); }
         String error = validate(r);
@@ -116,6 +123,7 @@ public class PhoneDeviceController {
     @DeleteMapping("/{id}")
     @org.springframework.transaction.annotation.Transactional
     public ApiResponse delete(@PathVariable Long id) {
+        DataScope.requireRecord(jdbc, "phone_device", "personnel_id", id);
         List<Map<String, Object>> rows = jdbc.queryForList("SELECT personnel_id FROM phone_device WHERE id=?", id);
         jdbc.update("DELETE FROM phone_device WHERE id=?", id);
         if (!rows.isEmpty()) {
@@ -128,6 +136,7 @@ public class PhoneDeviceController {
     /** 某人的所有手机设备(人员管理联动查看) */
     @GetMapping("/by-person")
     public ApiResponse byPerson(@RequestParam Long personnelId) {
+        DataScope.requirePerson(jdbc, personnelId);
         return ApiResponse.ok(jdbc.queryForList(
                 "SELECT l.*, p.name AS personnelName FROM phone_device l " +
                 "LEFT JOIN personnel p ON l.personnel_id = p.id WHERE l.personnel_id=? ORDER BY l.id DESC", personnelId));
@@ -143,6 +152,7 @@ public class PhoneDeviceController {
 
     private String validate(Map<String, Object> r) {
         Long pid = lng(r.get("personnelId"));
+        DataScope.requirePerson(jdbc, pid);
         if (pid <= 0) { return "请先填写身份证号带出人员"; }
         if (jdbc.queryForList("SELECT id FROM personnel WHERE id=?", pid).isEmpty()) {
             return "所选人员不存在";

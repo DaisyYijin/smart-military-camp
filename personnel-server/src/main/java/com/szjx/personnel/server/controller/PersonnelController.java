@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.auth.AuthInterceptor;
 import com.szjx.personnel.server.dao.DepartmentDao;
 import com.szjx.personnel.server.model.ApiResponse;
@@ -8,6 +10,9 @@ import com.szjx.personnel.server.model.Personnel;
 import com.szjx.personnel.server.service.PersonnelService;
 import com.szjx.personnel.server.service.RollCallExcelService;
 import com.szjx.personnel.server.service.RosterExcelService;
+import com.szjx.personnel.server.util.ActualDutyFilter;
+import com.szjx.personnel.server.util.DriverLicenseFilter;
+import com.szjx.personnel.server.util.PersonnelExtraFilters;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,6 +57,7 @@ public class PersonnelController {
     @GetMapping("/{id}/age")
     public ApiResponse getAge(@PathVariable Long id,
                               @RequestParam(required = false) String refDate) {
+        DataScope.requirePerson(jdbc, id);
         java.util.Map<String, Object> p = jdbc.queryForMap(
                 "SELECT birthday FROM personnel WHERE id=?", id);
         String bd = String.valueOf(p.get("birthday") == null ? "" : p.get("birthday"));
@@ -79,15 +85,22 @@ public class PersonnelController {
         if (idCard == null || idCard.trim().isEmpty()) {
             return ApiResponse.ok(null);
         }
-        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(
-            "SELECT p.id, p.name, p.id_card AS idCard, d.name AS departmentName FROM personnel p " +
-            "LEFT JOIN department d ON p.department_id = d.id WHERE UPPER(TRIM(p.id_card)) = ? LIMIT 1",
-            idCard.trim().toUpperCase(java.util.Locale.ROOT));
-        return ApiResponse.ok(list.isEmpty() ? null : list.get(0));
+        return ApiResponse.ok(personnelService.findByIdCard(idCard));
+    }
+
+    /** Compatibility entry point for existing direct callers; page and size remain last. */
+    public ApiResponse query(String keyword, String name, String idCard, Long departmentId, String status,
+                             String gender, String politicalStatus, String category, String rank, String post,
+                             String nativePlace, String enlistPlace, String education, String maritalStatus,
+                             String nation, String bloodType, String onlyChild, String locationPoint,
+                             String entryDateStart, String entryDateEnd, Boolean includeDescendants, int page, int size) {
+        return queryFiltered(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank,
+                post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint,
+                entryDateStart, entryDateEnd, includeDescendants, null, null, null, null, null, page, size);
     }
 
     @GetMapping
-    public ApiResponse query(@RequestParam(required = false) String keyword,
+    public ApiResponse queryFiltered(@RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String name,
                              @RequestParam(required = false) String idCard,
                              @RequestParam(required = false) Long departmentId,
@@ -107,6 +120,12 @@ public class PersonnelController {
                              @RequestParam(required = false) String locationPoint,
                              @RequestParam(required = false) String entryDateStart,
                              @RequestParam(required = false) String entryDateEnd,
+                             @RequestParam(defaultValue = "false") Boolean includeDescendants,
+                             @RequestParam(required = false) String driverLicense,
+                             @RequestParam(required = false) String driverLicenseType,
+                             @RequestParam(required = false) String driverLicenseStatus,
+                             @RequestParam(required = false) String onDuty,
+                             @RequestParam(required = false) String actualDepartmentId,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "20") int size) {
         if (page < 1) {
@@ -115,8 +134,16 @@ public class PersonnelController {
         if (size < 1 || size > 200) {
             size = 20;
         }
-        List<Personnel> list = personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size);
-        long total = personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd);
+        PersonnelExtraFilters filter = PersonnelExtraFilters.of(
+                DriverLicenseFilter.of(driverLicense, driverLicenseType, driverLicenseStatus),
+                ActualDutyFilter.of(onDuty, actualDepartmentId));
+        // Keep the legacy invocation when absent, including existing internal mocks and fixtures.
+        List<Personnel> list = filter.isEmpty()
+                ? personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size, Boolean.TRUE.equals(includeDescendants))
+                : personnelService.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size, Boolean.TRUE.equals(includeDescendants), filter);
+        long total = filter.isEmpty()
+                ? personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, Boolean.TRUE.equals(includeDescendants))
+                : personnelService.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, Boolean.TRUE.equals(includeDescendants), filter);
         return ApiResponse.ok(new PageResult<Personnel>(total, list));
     }
 
@@ -126,7 +153,7 @@ public class PersonnelController {
     }
 
     /**
-     * 点名册 Excel 下载(与网页版同版式:单位→班两级表头、姓名纵填、不在位原因左侧、休假显示归队时间)
+     * 点名册 Excel 下载：同级单位并排，姓名同列纵填，休假保留归队时间。
      */
     @GetMapping("/rollcall/excel")
     public ResponseEntity<byte[]> rollcallExcel(@RequestParam Map<String, String> query) throws Exception {

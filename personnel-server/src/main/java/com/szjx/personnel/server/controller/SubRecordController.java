@@ -108,6 +108,12 @@ public class SubRecordController {
         if (dao.findById(table, id) == null) {
             return ApiResponse.error("记录不存在");
         }
+        if (body.containsKey("personnelId")) {
+            Long requestedPerson = asLong(body.get("personnelId"));
+            if (requestedPerson == null || !dao.personExists(requestedPerson)) {
+                return ApiResponse.error("所属人员不存在");
+            }
+        }
         if ("fitness".equals(kind)) {
             Long pid = asLong(body.get("personnelId"));
             if (pid == null) {

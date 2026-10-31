@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.FitnessRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -49,6 +51,7 @@ public class FitnessDao {
 
     public List<FitnessRecord> query(String keyword, String item, int page, int size) {
         StringBuilder sql = new StringBuilder(BASE).append(" WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("f.personnel_id")).append(" ");
         List<Object> args = new ArrayList<Object>();
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ? ");
@@ -67,6 +70,7 @@ public class FitnessDao {
     public long count(String keyword, String item) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM fitness_record f LEFT JOIN personnel p ON f.personnel_id=p.id WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("f.personnel_id")).append(" ");
         List<Object> args = new ArrayList<Object>();
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ? ");
@@ -81,11 +85,13 @@ public class FitnessDao {
     }
 
     public FitnessRecord findById(Long id) {
+        DataScope.requireRecord(jdbc, "fitness_record", "personnel_id", id);
         List<FitnessRecord> list = jdbc.query(BASE + " WHERE f.id=?", MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
 
     public long insert(FitnessRecord r) {
+        DataScope.requirePerson(jdbc, r.getPersonnelId());
         return jdbc.queryForObject(
                 "INSERT INTO fitness_record(personnel_id, item, score, points, grade, test_date, tester, remark) " +
                 "VALUES(?,?,?,?,?,?,?,?) RETURNING id",
@@ -97,6 +103,8 @@ public class FitnessDao {
     }
 
     public void update(FitnessRecord r) {
+        DataScope.requireRecord(jdbc, "fitness_record", "personnel_id", r.getId());
+        DataScope.requirePerson(jdbc, r.getPersonnelId());
         jdbc.update(
                 "UPDATE fitness_record SET personnel_id=?, item=?, score=?, points=?, grade=?, test_date=?, tester=?, " +
                 "remark=?, updated_at=datetime('now','localtime') WHERE id=?",
@@ -108,6 +116,7 @@ public class FitnessDao {
     }
 
     public void delete(Long id) {
+        DataScope.requireRecord(jdbc, "fitness_record", "personnel_id", id);
         jdbc.update("DELETE FROM fitness_record WHERE id=?", id);
     }
 

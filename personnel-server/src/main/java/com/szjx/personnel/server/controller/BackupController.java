@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.net.URLEncoder;
@@ -21,16 +22,22 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 备份恢复接口(均需登录)
+ * 备份恢复接口(由全局AuthInterceptor限制为管理员)
  */
 @RestController
 @RequestMapping("/api/backup")
 public class BackupController {
 
     private final BackupService backupService;
+    private com.szjx.personnel.server.service.TokenManager tokenManager;
 
     public BackupController(BackupService backupService) {
         this.backupService = backupService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTokenManager(com.szjx.personnel.server.service.TokenManager tokenManager) {
+        this.tokenManager = tokenManager;
     }
 
     /** 模块目录(网页端勾选用) */
@@ -39,18 +46,26 @@ public class BackupController {
         List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
         Map<String, String> labels = new HashMap<String, String>();
         labels.put("personnel", "人员管理");
-        labels.put("department", "部门管理");
-        labels.put("dict", "数据字典");
+        labels.put("department", "单位管理");
+        labels.put("dict", "数据字典/系统数据");
+        labels.put("dashboard", "仪表盘");
         labels.put("equipment", "装备管理");
         labels.put("material", "物资管理");
         labels.put("vehicle", "车辆管理");
         labels.put("leave", "休假管理");
         labels.put("fitness", "体能考核");
         labels.put("phone", "手机设备");
+        labels.put("military", "军事考核");
+        labels.put("item-loans", "物品借还");
+        labels.put("double-excellence", "双争评比");
         for (String key : BackupService.allModuleKeys()) {
             Map<String, Object> m = new HashMap<String, Object>();
             m.put("key", key);
             m.put("label", labels.containsKey(key) ? labels.get(key) : key);
+            boolean photos = java.util.Arrays.asList("personnel", "equipment", "material", "vehicle").contains(key);
+            m.put("includesPhotos", photos);
+            if (photos) { m.put("photoScope", "personnel".equals(key) ? "人员直属照片及删除撤回记录引用的回收站照片,不含资产目录和未引用回收站照片" : "本模块每资产一张照片,单张最多100MB"); }
+            if ("dict".equals(key)) { m.put("accountScope", "账号及单位授权成对恢复;缺授权表的旧包保留本地账号及授权并返回警告"); }
             list.add(m);
         }
         return ApiResponse.ok(list);
@@ -80,7 +95,13 @@ public class BackupController {
         return ApiResponse.ok(backupService.listBackups());
     }
 
-    /** 恢复,body.modules 为要恢复的模块 key 数组(取与该备份的交集) */
+    /** 单个本系统ZIP最多100MB;仅校验保存,恢复须另行选择模块确认。全局multipart请求上限仍为120MB。 */
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse upload(@RequestParam(value = "file", required = false) MultipartFile file) {
+        return ApiResponse.ok(backupService.upload(file));
+    }
+
+    /** 恢复,body.modules 为要恢复的模块 key 数组;缺失模块拒绝,兼容性告警见 data.warnings。 */
     @PostMapping("/restore")
     public ApiResponse restore(@RequestBody Map<String, Object> body) {
         String name = String.valueOf(body.get("name"));
@@ -89,7 +110,11 @@ public class BackupController {
         if (modules == null) {
             modules = new ArrayList<String>();
         }
-        return ApiResponse.ok(backupService.restore(name, modules));
+        Map<String, Object> result = backupService.restore(name, modules);
+        boolean securityChanged = Boolean.TRUE.equals(result.get("securityStateRestored"));
+        if (securityChanged && tokenManager != null) { tokenManager.revokeAll(); }
+        result.put("requiresRelogin", securityChanged);
+        return ApiResponse.ok(result);
     }
 
     @PostMapping("/delete")

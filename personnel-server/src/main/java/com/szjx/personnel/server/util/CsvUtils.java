@@ -20,7 +20,7 @@ public final class CsvUtils {
 
     /** 导出列顺序(与导入模板一致) */
     private static final String[] HEADERS = {
-            "姓名", "性别", "身份证号", "出生日期", "手机号", "部门", "军衔",
+            "姓名", "性别", "身份证号", "出生日期", "手机号", "单位", "军衔",
             "职务", "状态", "入伍日期", "家庭住址", "备注"
     };
 
@@ -132,7 +132,7 @@ public final class CsvUtils {
         int idxIdCard = header.indexOf("身份证号");
         int idxBirthday = header.indexOf("出生日期");
         int idxPhone = header.indexOf("手机号");
-        int idxDept = header.indexOf("部门");
+        int idxDept = header.indexOf("单位");
         int idxRank = header.indexOf("军衔");
         int idxPost = header.indexOf("职务");
         int idxStatus = header.indexOf("状态");

@@ -66,6 +66,17 @@ public class DictDao {
         return n != null && n > 0;
     }
 
+    /** 新选项默认追加到同类型末尾。 */
+    public int nextSort(String type) {
+        Integer next = jdbc.queryForObject(
+                "SELECT COALESCE(MAX(sort),0)+1 FROM sys_dict WHERE dict_type=?", Integer.class, type);
+        return next == null ? 1 : next;
+    }
+
+    public void updateSort(Long id, int sort) {
+        jdbc.update("UPDATE sys_dict SET sort=?, updated_at=datetime('now','localtime') WHERE id=?", sort, id);
+    }
+
     public long insert(DictItem d) {
         return jdbc.queryForObject(
                 "INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,?,?,?) RETURNING id",

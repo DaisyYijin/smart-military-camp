@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.Vehicle;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -45,6 +47,7 @@ public class VehicleDao {
             v.setInsuranceExpiry(rs.getString("insurance_expiry"));
             v.setInspectionExpiry(rs.getString("inspection_expiry"));
             v.setRemark(rs.getString("remark"));
+            v.setPhoto(rs.getString("photo"));
             v.setCreatedAt(rs.getString("created_at"));
             v.setUpdatedAt(rs.getString("updated_at"));
             return v;
@@ -56,7 +59,7 @@ public class VehicleDao {
             "LEFT JOIN personnel p ON v.driver_id = p.id ";
 
     private void buildFilter(StringBuilder sql, List<Object> args, String keyword, String status) {
-        sql.append(" WHERE 1=1 ");
+        sql.append(" WHERE ").append(DataScope.personSql("v.driver_id")).append(" ");
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND (v.plate_no LIKE ? OR v.brand LIKE ?) ");
             String kw = "%" + keyword.trim() + "%";
@@ -89,37 +92,51 @@ public class VehicleDao {
     }
 
     public Vehicle findById(Long id) {
+        DataScope.requireRecord(jdbc, "vehicle", "driver_id", id);
         List<Vehicle> list = jdbc.query(BASE + " WHERE v.id=?", MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
 
     public long insert(Vehicle v) {
+        requireOwner(v.getDriverId());
         return jdbc.queryForObject(
                 "INSERT INTO vehicle(plate_no, vin, engine_no, brand, model, type, color, fuel_type, status, driver_id, " +
-                "seats, mileage, purchase_date, equip_date, insurance_expiry, inspection_expiry, remark) " +
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "seats, mileage, purchase_date, equip_date, insurance_expiry, inspection_expiry, remark, photo) " +
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
                 nvl(v.getBrand()), nvl(v.getModel()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
                 v.getDriverId(), v.getSeats(), v.getMileage(),
                 nvl(v.getPurchaseDate()), nvl(v.getEquipDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
-                nvl(v.getRemark()));
+                nvl(v.getRemark()), nvl(v.getPhoto()));
     }
 
     public void update(Vehicle v) {
+        DataScope.requireRecord(jdbc, "vehicle", "driver_id", v.getId());
+        requireOwner(v.getDriverId());
         jdbc.update(
                 "UPDATE vehicle SET plate_no=?, vin=?, engine_no=?, brand=?, model=?, type=?, color=?, fuel_type=?, " +
                 "status=?, driver_id=?, seats=?, mileage=?, purchase_date=?, equip_date=?, insurance_expiry=?, " +
-                "inspection_expiry=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                "inspection_expiry=?, remark=?, photo=?, updated_at=datetime('now','localtime') WHERE id=?",
                 nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
                 nvl(v.getBrand()), nvl(v.getModel()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
                 v.getDriverId(), v.getSeats(), v.getMileage(),
                 nvl(v.getPurchaseDate()), nvl(v.getEquipDate()), nvl(v.getInsuranceExpiry()), nvl(v.getInspectionExpiry()),
-                nvl(v.getRemark()), v.getId());
+                nvl(v.getRemark()), nvl(v.getPhoto()), v.getId());
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public void delete(Long id) {
+        DataScope.requireRecord(jdbc, "vehicle", "driver_id", id);
+        Integer faultTable = jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='vehicle_fault_history'", Integer.class);
+        if (faultTable != null && faultTable > 0) {
+            jdbc.update("DELETE FROM vehicle_fault_history WHERE vehicle_id=?", id);
+        }
         jdbc.update("DELETE FROM vehicle WHERE id=?", id);
+    }
+
+    public void requireOwner(Long personnelId) {
+        DataScope.requirePerson(jdbc, personnelId);
     }
 
     private String nvl(String s) {

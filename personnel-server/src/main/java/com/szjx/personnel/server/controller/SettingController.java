@@ -21,7 +21,8 @@ public class SettingController {
     private static final java.util.Set<String> ALLOWED = new java.util.HashSet<String>(
             java.util.Arrays.asList("fitness_grade_rule",
                     "siteName", "siteTitle", "siteSubtitle", "siteLogo", "siteFavicon",
-                    "themeColor", "pageSize", "backupKeep", "bmi_standard"));
+                    "themeColor", "pageSize", "backupKeep", "bmi_standard",
+                    "dashWidgets", "dashStatCards"));
 
     /** 免登录读取的界面配置(登录页也要显示标题/LOGO) */
     public static final String[] PUBLIC_KEYS = {"siteName", "siteTitle", "siteSubtitle",
@@ -33,6 +34,15 @@ public class SettingController {
         this.jdbc = jdbc;
     }
 
+    /** 仪表盘布局类设置存独立表(dash_setting),可在备份页单独勾选"仪表盘"模块 */
+    private static boolean isDashKey(String key) {
+        return "dashWidgets".equals(key) || "dashStatCards".equals(key);
+    }
+
+    private String tableOf(String key) {
+        return isDashKey(key) ? "dash_setting" : "sys_setting";
+    }
+
     @GetMapping("/{key}")
     public ApiResponse get(@PathVariable String key) {
         if (!ALLOWED.contains(key)) {
@@ -40,9 +50,22 @@ public class SettingController {
         }
         String v;
         try {
-            v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey=?", String.class, key);
+            v = jdbc.queryForObject("SELECT svalue FROM " + tableOf(key) + " WHERE skey=?", String.class, key);
         } catch (Exception e) {
             v = null;
+        }
+        if (v == null && isDashKey(key)) {
+            // 旧版本把仪表盘设置存在 sys_setting,读时自动搬到新表
+            try {
+                v = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey=?", String.class, key);
+            } catch (Exception e) {
+                v = null;
+            }
+            if (v != null) {
+                final String value = v;
+                jdbc.update("INSERT INTO dash_setting(skey, svalue) VALUES(?,?) "
+                        + "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", key, value);
+            }
         }
         if ("fitness_grade_rule".equals(key) || "bmi_standard".equals(key)) {
             try {
@@ -89,7 +112,7 @@ public class SettingController {
         }
         try {
             String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(body);
-            jdbc.update("INSERT INTO sys_setting(skey, svalue) VALUES(?,?) " +
+            jdbc.update("INSERT INTO " + tableOf(key) + "(skey, svalue) VALUES(?,?) " +
                     "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", key, json);
             return ApiResponse.ok();
         } catch (Exception e) {

@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.dao.EquipmentDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.Equipment;
@@ -16,10 +18,12 @@ public class EquipmentService {
 
     private final EquipmentDao equipmentDao;
     private final PersonnelDao personnelDao;
+    private final PhotoService photoService;
 
-    public EquipmentService(EquipmentDao equipmentDao, PersonnelDao personnelDao) {
+    public EquipmentService(EquipmentDao equipmentDao, PersonnelDao personnelDao, PhotoService photoService) {
         this.equipmentDao = equipmentDao;
         this.personnelDao = personnelDao;
+        this.photoService = photoService;
     }
 
     public List<Equipment> query(String keyword, String status, int page, int size) {
@@ -31,28 +35,111 @@ public class EquipmentService {
     }
 
     public Equipment create(Equipment e) {
-        validate(e);
-        long id = equipmentDao.insert(e);
-        return equipmentDao.findById(id);
+        validate(e, null);
+            String photo = savePhotoIfAny(e.getPhotoBase64());
+            e.setPhoto(photo);
+        try {
+            long id = equipmentDao.insert(e);
+            return equipmentDao.findById(id);
+        } catch (RuntimeException ex) {
+            photoService.deleteEquipmentPhoto(photo);
+            throw ex;
+        }
     }
 
     public Equipment update(Long id, Equipment e) {
-        if (equipmentDao.findById(id) == null) {
+        Equipment old = equipmentDao.findById(id);
+        if (old == null) {
             throw new IllegalArgumentException("装备不存在");
         }
-        validate(e);
+        if (e.getCategory() == null) e.setCategory(old.getCategory());
+        if (e.getBrand() == null) e.setBrand(old.getBrand());
+        if (e.getCode() == null) e.setCode(old.getCode());
+        if (e.getIdentCode() == null) e.setIdentCode(old.getIdentCode());
+        if (e.getBuyDate() == null) e.setBuyDate(old.getBuyDate());
+        validate(e, id);
+        boolean replacePhoto = e.getPhotoBase64() != null;
+        boolean removePhoto = e.getPhoto() != null && e.getPhoto().isEmpty();
+        String oldPhoto = old.getPhoto();
+        String newPhoto = replacePhoto ? savePhotoIfAny(e.getPhotoBase64()) : null;
+        if (replacePhoto) {
+            e.setPhoto(newPhoto);
+        } else if (removePhoto) {
+            e.setPhoto("");
+        } else {
+            e.setPhoto(oldPhoto);
+        }
         e.setId(id);
-        equipmentDao.update(e);
+        try {
+            equipmentDao.update(e);
+        } catch (RuntimeException ex) {
+            photoService.deleteEquipmentPhoto(newPhoto);
+            throw ex;
+        }
+        if ((replacePhoto || removePhoto) && oldPhoto != null && !oldPhoto.isEmpty()) {
+            photoService.deleteEquipmentPhoto(oldPhoto);
+        }
         return equipmentDao.findById(id);
     }
 
     public void delete(Long id) {
+        Equipment existing = equipmentDao.findById(id);
         equipmentDao.delete(id);
+        if (existing != null && existing.getPhoto() != null && !existing.getPhoto().isEmpty()) {
+            photoService.deleteEquipmentPhoto(existing.getPhoto());
+        }
     }
 
-    private void validate(Equipment e) {
+    public Equipment get(Long id) {
+        return equipmentDao.findById(id);
+    }
+
+    public java.io.File photoFile(String fileName) {
+        return photoService.getEquipmentPhotoFile(fileName);
+    }
+
+    private String savePhotoIfAny(String photoBase64) {
+        if (!StringUtils.hasText(photoBase64)) return null;
+        String base64 = photoBase64;
+        if (base64.startsWith("data:")) base64 = base64.substring(base64.indexOf(',') + 1);
+        // 100MB 为运行时防护上限(与人员照片一致),避免超大 Base64 请求耗尽内存
+        if (base64.length() > 140 * 1024 * 1024) {
+            throw new IllegalArgumentException("照片请求过大,单张图片最多 100MB");
+        }
+        byte[] bytes;
+        try {
+            bytes = java.util.Base64.getDecoder().decode(base64);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("照片数据格式错误");
+        }
+        if (bytes.length > 100 * 1024 * 1024) {
+            throw new IllegalArgumentException("照片请求过大,单张图片最多 100MB");
+        }
+        String ext = guessExt(bytes);
+        String fileName = java.util.UUID.randomUUID().toString().replace("-", "") + ext;
+        photoService.saveEquipmentPhoto(fileName, bytes);
+        return fileName;
+    }
+
+    private String guessExt(byte[] bytes) {
+        if (bytes.length >= 3 && (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0xd8) return ".jpg";
+        if (bytes.length >= 8 && (bytes[0] & 0xff) == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47) return ".png";
+        throw new IllegalArgumentException("仅支持 JPG 或 PNG 图片");
+    }
+
+    private void validate(Equipment e, Long excludeId) {
+        equipmentDao.requireOwner(e.getKeeperId());
         if (!StringUtils.hasText(e.getName())) {
             throw new IllegalArgumentException("装备名称不能为空");
+        }
+        if ("枪支".equals(e.getCategory())) {
+            if (!StringUtils.hasText(e.getCode())) {
+                throw new IllegalArgumentException("枪支装备编号不能为空");
+            }
+            e.setCode(e.getCode().trim());
+            if (equipmentDao.existsGunCode(e.getCode(), excludeId)) {
+                throw new IllegalArgumentException("枪支装备编号已存在");
+            }
         }
         if (e.getKeeperId() != null && e.getKeeperId() > 0
                 && personnelDao.findById(e.getKeeperId()) == null) {

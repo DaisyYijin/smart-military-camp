@@ -28,26 +28,48 @@ public class OpLogInterceptor implements HandlerInterceptor {
         MODULE_NAMES.put("card", "个人卡号");
         MODULE_NAMES.put("pvehicle", "私家车");
         MODULE_NAMES.put("housing", "住房情况");
-        MODULE_NAMES.put("departments", "部门管理");
+        MODULE_NAMES.put("departments", "单位管理");
         MODULE_NAMES.put("dict", "数据字典");
         MODULE_NAMES.put("equipment", "装备管理");
         MODULE_NAMES.put("material", "物资管理");
+        MODULE_NAMES.put("item-loans", "物品借还");
         MODULE_NAMES.put("vehicle", "车辆管理");
         MODULE_NAMES.put("leave", "休假管理");
         MODULE_NAMES.put("leave-plan", "休假计划");
         MODULE_NAMES.put("setting", "系统设置");
         MODULE_NAMES.put("dashboard", "仪表盘");
         MODULE_NAMES.put("fitness", "体能考核");
+        MODULE_NAMES.put("double-excellence", "双争评比");
+        MODULE_NAMES.put("annual-appraisal", "年度考评");
         MODULE_NAMES.put("backup", "备份恢复");
         MODULE_NAMES.put("auth", "账号认证");
+        MODULE_NAMES.put("accounts", "账号管理");
     }
 
     private final LogService logService;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    /** 可信反向代理地址清单;仅当直连来源在清单内才采信 X-Forwarded-For,默认空=一律用直连地址 */
+    private final java.util.Set<String> trustedProxies;
 
-    public OpLogInterceptor(LogService logService, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public OpLogInterceptor(LogService logService, org.springframework.jdbc.core.JdbcTemplate jdbc,
+                            @org.springframework.beans.factory.annotation.Value("${app.auth.trusted-proxies:}") String trustedProxies) {
         this.logService = logService;
         this.jdbc = jdbc;
+        java.util.Set<String> proxies = new java.util.HashSet<String>();
+        if (trustedProxies != null) {
+            for (String piece : trustedProxies.split(",")) {
+                if (!piece.trim().isEmpty()) {
+                    proxies.add(piece.trim());
+                }
+            }
+        }
+        this.trustedProxies = proxies;
+    }
+
+    /** 兼容构造:等价于无可信代理(测试与直连部署) */
+    public OpLogInterceptor(LogService logService, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this(logService, jdbc, "");
     }
 
     /** 各模块按 ID 取"人能看懂"的记录名(删除前预取,删后就查不到了) */
@@ -59,10 +81,13 @@ public class OpLogInterceptor implements HandlerInterceptor {
         NAME_SQL.put("dict", "SELECT dict_type || ' · ' || dict_label FROM sys_dict WHERE id=?");
         NAME_SQL.put("equipment", "SELECT name FROM equipment WHERE id=?");
         NAME_SQL.put("material", "SELECT name FROM material WHERE id=?");
+        NAME_SQL.put("item-loans", "SELECT item_name FROM item_loan WHERE id=?");
         NAME_SQL.put("vehicle", "SELECT plate_no FROM vehicle WHERE id=?");
         NAME_SQL.put("leave", "SELECT (SELECT name FROM personnel WHERE id=l.personnel_id) || '(' || l.start_date || '~' || l.end_date || ')' FROM leave_record l WHERE l.id=?");
         NAME_SQL.put("leave-plan", "SELECT (SELECT name FROM personnel WHERE id=l.personnel_id) || '(' || l.start_date || '~' || l.end_date || ')' FROM leave_plan l WHERE l.id=?");
         NAME_SQL.put("fitness", "SELECT (SELECT name FROM personnel WHERE id=f.personnel_id) || ' · ' || f.item FROM fitness_record f WHERE f.id=?");
+        NAME_SQL.put("double-excellence", "SELECT p.name || ' · ' || r.year || '年第' || r.quarter || '季度' FROM double_excellence_record r JOIN personnel p ON p.id=r.personnel_id WHERE r.id=?");
+        NAME_SQL.put("annual-appraisal", "SELECT p.name || ' · ' || r.year || '年' FROM annual_appraisal_record r JOIN personnel p ON p.id=r.personnel_id WHERE r.id=?");
         // 人员子记录:取所属人员姓名
         String[] subTables = {"position_history", "reward_punish", "child_info", "family_member",
                 "driver_license", "personal_card", "private_vehicle", "housing_info"};
@@ -91,6 +116,7 @@ public class OpLogInterceptor implements HandlerInterceptor {
             if (sql == null || sub == null || !sub.matches("[0-9]+")) {
                 return true;
             }
+            if ("double-excellence".equals(moduleKey) || "annual-appraisal".equals(moduleKey)) sql += " AND " + DataScope.departmentSql("p.department_id");
             java.util.List<java.util.Map<String, Object>> rows = jdbc.queryForList(sql, Long.parseLong(sub));
             if (!rows.isEmpty()) {
                 Object v = rows.get(0).values().iterator().next();
@@ -116,7 +142,8 @@ public class OpLogInterceptor implements HandlerInterceptor {
             // 只记录写操作与导出(查询不记录,避免刷屏)
             boolean isWrite = "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                     || "DELETE".equalsIgnoreCase(method);
-            boolean isExport = "GET".equalsIgnoreCase(method) && uri.contains("/export");
+            boolean isExport = "GET".equalsIgnoreCase(method)
+                    && (uri.contains("/export") || uri.endsWith("/excel"));
             if (!isWrite && !isExport) {
                 return;
             }
@@ -134,7 +161,7 @@ public class OpLogInterceptor implements HandlerInterceptor {
             String action;
             String detail;
             if (isExport) {
-                action = "导出" + moduleName;
+                action = exportAction(moduleKey, sub, moduleName);
                 detail = "Excel导出";
             } else if (sub.equals("import-excel") || sub.equals("import")) {
                 action = "导入" + moduleName;
@@ -153,6 +180,13 @@ public class OpLogInterceptor implements HandlerInterceptor {
                 detail = recordDetail(request, sub);
             }
 
+            // 记录操作结果:失败/被拒绝的写操作与导出不再和成功操作混淆
+            boolean success = ex == null && response.getStatus() < 400;
+            if (!success) {
+                action = action + "(未成功)";
+                String status = "HTTP " + response.getStatus() + (ex != null ? " " + ex.getClass().getSimpleName() : "");
+                detail = detail == null || detail.isEmpty() ? status : status + " · " + detail;
+            }
             String username = (String) request.getAttribute("authUser");
             logService.record(username, action, detail, clientIp(request));
         } catch (Exception ignore) {
@@ -188,12 +222,32 @@ public class OpLogInterceptor implements HandlerInterceptor {
         return "ID " + sub;
     }
 
-    public static String clientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-            int comma = ip.indexOf(',');
-            return comma > 0 ? ip.substring(0, comma).trim() : ip.trim();
+    /** 导出动作名:点名册/花名册不以 /export 结尾,单独命名;其余按模块名 */
+    private static String exportAction(String moduleKey, String sub, String moduleName) {
+        if ("personnel".equals(moduleKey) && "rollcall".equals(sub)) {
+            return "导出点名册";
         }
-        return request.getRemoteAddr();
+        if ("personnel".equals(moduleKey) && "roster".equals(sub)) {
+            return "导出花名册";
+        }
+        return "导出" + moduleName;
+    }
+
+    /**
+     * 审计来源地址:默认一律用直连地址;仅当直连方是配置内可信反向代理时才采信
+     * X-Forwarded-For 首项(多级链取最外层),避免客户端伪造该头污染审计日志。
+     */
+    public String clientIp(HttpServletRequest request) {
+        String remote = request.getRemoteAddr();
+        if (remote == null || !trustedProxies.contains(remote)) {
+            return remote;
+        }
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded == null || forwarded.isEmpty() || "unknown".equalsIgnoreCase(forwarded)) {
+            return remote;
+        }
+        int comma = forwarded.indexOf(',');
+        String first = comma > 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
+        return first.isEmpty() ? remote : first;
     }
 }

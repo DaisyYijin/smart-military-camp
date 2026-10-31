@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 部门接口
+ * 单位接口
  */
 @RestController
 @RequestMapping("/api/departments")

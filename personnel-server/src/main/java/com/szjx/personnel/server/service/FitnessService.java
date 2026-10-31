@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.dao.FitnessDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.FitnessRecord;
@@ -34,6 +36,26 @@ public class FitnessService {
 
     public long count(String keyword, String item) {
         return fitnessDao.count(keyword, item);
+    }
+
+    /** 按记录 ID 批量取记录(宽行导出用);逐条做数据域校验,不静默忽略越权 ID。 */
+    public List<FitnessRecord> listByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        for (Long id : ids) {
+            DataScope.requireRecord(jdbc, "fitness_record", "personnel_id", id);
+        }
+        StringBuilder sql = new StringBuilder(
+            "SELECT f.*, p.name AS personnel_name, p.birthday, p.id_card FROM fitness_record f " +
+            "LEFT JOIN personnel p ON f.personnel_id = p.id WHERE f.id IN (");
+        java.util.List<Object> args = new java.util.ArrayList<Object>();
+        for (int i = 0; i < ids.size(); i++) {
+            sql.append(i > 0 ? ",?" : "?");
+            args.add(ids.get(i));
+        }
+        sql.append(") ORDER BY f.test_date DESC, f.id DESC");
+        return jdbc.query(sql.toString(), new FitnessRowMapper(), args.toArray());
     }
 
     public FitnessRecord create(FitnessRecord r) {
@@ -105,6 +127,7 @@ public class FitnessService {
                                 String item, String grade, String startDate, String endDate,
                                 Long departmentId, String minScore, String maxScore,
                                 Long personnelId) {
+        sql.append(" AND ").append(DataScope.personSql("f.personnel_id"));
         // 支持只填到月(2026-09):起始补-01,终止补-31(字符串比较安全)
         if (startDate != null && startDate.trim().length() == 7) { startDate = startDate.trim() + "-01"; }
         if (endDate != null && endDate.trim().length() == 7) { endDate = endDate.trim() + "-31"; }
@@ -124,9 +147,9 @@ public class FitnessService {
             String g = grade.trim();
             // 分数条件按数字分列过滤;文字评定只做精确匹配,避免把"优秀/良好"当数字比较
             if (g.contains("分以上")) {
-                sql.append(" AND f.points >= ").append(g.replace("分以上", ""));
+                sql.append(" AND f.points >= ?"); args.add(Double.parseDouble(g.replace("分以上", "")));
             } else if (g.contains("分以下")) {
-                sql.append(" AND f.points < ").append(g.replace("分以下", ""));
+                sql.append(" AND f.points < ?"); args.add(Double.parseDouble(g.replace("分以下", "")));
             } else if (g.contains("-")) {
                 String[] parts = g.replace("分", "").split("-");
                 sql.append(" AND f.points >= ? AND f.points <= ?");
@@ -195,9 +218,107 @@ public class FitnessService {
         return jdbc.queryForMap(sql.toString(), args.toArray());
     }
 
+    /**
+     * 宽行汇总:按 人员+考核日期 分组返回各项目成绩,分页按组进行。
+     * total = 匹配筛选条件的 distinct(人员,考核日期) 组数;未填项目不出现键;
+     * items = 启用体能项目名(按字典 sort,id 排序)。权限 DataScope 与列表查询同口径。
+     */
+    public java.util.Map<String, Object> summary(String personnelName, String idCard, String item, String grade,
+                                                 String startDate, String endDate, Long departmentId,
+                                                 String minScore, String maxScore, Long personnelId,
+                                                 int page, int size) {
+        if (page < 1) page = 1;
+        if (size < 1 || size > 200) size = 20;
+        String base = " FROM fitness_record f LEFT JOIN personnel p ON f.personnel_id=p.id WHERE 1=1";
+        StringBuilder whereSql = new StringBuilder();
+        java.util.List<Object> whereArgs = new java.util.ArrayList<Object>();
+        appendFilter2(whereSql, whereArgs, personnelName, idCard, item, grade,
+                startDate, endDate, departmentId, minScore, maxScore, personnelId);
+        Long total = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM (SELECT DISTINCT f.personnel_id, f.test_date" + base + whereSql + ")",
+            Long.class, whereArgs.toArray());
+        java.util.List<java.util.Map<String, Object>> groups = jdbc.queryForList(
+            "SELECT f.personnel_id, MAX(p.name) AS personnel_name, MAX(p.id_card) AS id_card, f.test_date" + base + whereSql +
+            " GROUP BY f.personnel_id, f.test_date ORDER BY f.test_date DESC, f.personnel_id DESC LIMIT ? OFFSET ?",
+            concat(whereArgs, java.util.Arrays.<Object>asList(size, (long) (page - 1) * size)).toArray());
+        java.util.List<java.util.Map<String, Object>> list = new java.util.ArrayList<java.util.Map<String, Object>>();
+        if (!groups.isEmpty()) {
+            // 组内记录沿用同一筛选条件(如按项目/分数过滤时,items 只包含匹配记录)。
+            StringBuilder recordSql = new StringBuilder(
+                "SELECT f.*, p.name AS personnel_name, p.birthday, p.id_card FROM fitness_record f " +
+                "LEFT JOIN personnel p ON f.personnel_id=p.id WHERE 1=1");
+            java.util.List<Object> recordArgs = new java.util.ArrayList<Object>(whereArgs);
+            recordSql.append(" AND (");
+            for (int i = 0; i < groups.size(); i++) {
+                if (i > 0) recordSql.append(" OR ");
+                recordSql.append("(f.personnel_id=? AND f.test_date=?)");
+                recordArgs.add(((Number) groups.get(i).get("personnel_id")).longValue());
+                recordArgs.add(String.valueOf(groups.get(i).get("test_date")));
+            }
+            recordSql.append(") ORDER BY f.id");
+            List<FitnessRecord> records = jdbc.query(recordSql.toString(), new FitnessRowMapper(), recordArgs.toArray());
+            // 组键 = 人员+日期;同一人员在页内可出现多个日期组,不得跨组合并。
+            java.util.Map<String, java.util.Map<String, FitnessRecord>> byGroup =
+                    new java.util.LinkedHashMap<String, java.util.Map<String, FitnessRecord>>();
+            for (FitnessRecord r : records) {
+                String key = r.getPersonnelId() + "|" + r.getTestDate();
+                java.util.Map<String, FitnessRecord> items = byGroup.get(key);
+                if (items == null) {
+                    items = new java.util.LinkedHashMap<String, FitnessRecord>();
+                    byGroup.put(key, items);
+                }
+                // 同组同项目如存在历史重复记录,保留 id 最大(最新)的一条。
+                FitnessRecord existing = items.get(r.getItem());
+                if (existing == null || existing.getId() < r.getId()) items.put(r.getItem(), r);
+            }
+            for (java.util.Map<String, Object> group : groups) {
+                long pid = ((Number) group.get("personnel_id")).longValue();
+                String testDate = String.valueOf(group.get("test_date"));
+                java.util.Map<String, Object> entry = new java.util.LinkedHashMap<String, Object>();
+                entry.put("personnelId", pid);
+                entry.put("personnelName", group.get("personnel_name") == null ? "" : String.valueOf(group.get("personnel_name")));
+                entry.put("idCard", group.get("id_card") == null ? "" : String.valueOf(group.get("id_card")));
+                entry.put("testDate", testDate);
+                java.util.Map<String, Object> itemMap = new java.util.LinkedHashMap<String, Object>();
+                java.util.Map<String, FitnessRecord> items = byGroup.get(pid + "|" + testDate);
+                if (items != null) {
+                    for (java.util.Map.Entry<String, FitnessRecord> e : items.entrySet()) {
+                        java.util.Map<String, Object> cell = new java.util.LinkedHashMap<String, Object>();
+                        cell.put("id", e.getValue().getId());
+                        cell.put("score", e.getValue().getScore());
+                        cell.put("points", e.getValue().getPoints());
+                        cell.put("grade", e.getValue().getGrade());
+                        itemMap.put(e.getKey(), cell);
+                    }
+                }
+                entry.put("items", itemMap);
+                list.add(entry);
+            }
+        }
+        java.util.List<String> enabledItems = new java.util.ArrayList<String>();
+        for (String label : jdbc.queryForList(
+                "SELECT dict_label FROM sys_dict WHERE dict_type='fitness_item' AND enabled=1 ORDER BY sort, id",
+                String.class)) {
+            String value = label == null ? "" : label.trim();
+            if (!value.isEmpty()) enabledItems.add(value);
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
+        result.put("total", total == null ? 0 : total);
+        result.put("list", list);
+        result.put("items", enabledItems);
+        return result;
+    }
+
+    private static java.util.List<Object> concat(java.util.List<Object> first, java.util.List<Object> second) {
+        java.util.List<Object> result = new java.util.ArrayList<Object>(first);
+        result.addAll(second);
+        return result;
+    }
+
     private void appendFilter(StringBuilder sql, List<Object> args, String keyword,
                                String item, String grade, String startDate, String endDate,
                                Long departmentId, String minScore, String maxScore) {
+        sql.append(" AND ").append(DataScope.personSql("f.personnel_id"));
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND (p.name LIKE ? OR f.item LIKE ?)");
             String like = "%" + keyword.trim() + "%";
@@ -210,9 +331,11 @@ public class FitnessService {
         if (grade != null && !grade.trim().isEmpty()) {
             String g = grade.trim();
             if (g.contains("\u5206\u4ee5\u4e0a")) {
-                sql.append(" AND CAST(f.grade AS REAL) >= ").append(g.replace("\u5206\u4ee5\u4e0a", ""));
+                sql.append(" AND CAST(f.grade AS REAL) >= ?");
+                args.add(Double.parseDouble(g.replace("\u5206\u4ee5\u4e0a", "")));
             } else if (g.contains("\u5206\u4ee5\u4e0b")) {
-                sql.append(" AND CAST(f.grade AS REAL) < ").append(g.replace("\u5206\u4ee5\u4e0b", ""));
+                sql.append(" AND CAST(f.grade AS REAL) < ?");
+                args.add(Double.parseDouble(g.replace("\u5206\u4ee5\u4e0b", "")));
             } else if (g.contains("-")) {
                 String[] parts = g.replace("\u5206", "").split("-");
                 sql.append(" AND CAST(f.grade AS REAL) >= ? AND CAST(f.grade AS REAL) <= ?");

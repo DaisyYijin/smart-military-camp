@@ -9,15 +9,22 @@ public class Personnel {
     private String name;          // 姓名
     private String gender;        // 性别
     private String idCard;        // 身份证号
+    private String militaryIdNo;  // 军人证件号（独立必填文本）
     private String birthday;      // 出生日期 yyyy-MM-dd
     private String phone;         // 手机号
-    private Long departmentId;    // 部门ID
-    private String departmentName;// 部门名称(查询时附带)
+    private Long departmentId;    // 单位ID
+    private String departmentName;// 单位名称(查询时附带)
+    private String departmentPath;// 完整单位路径，仅查询上下文，不持久化
     private String rank;          // 军衔/职级
     private String category;      // 人员类别(军官/士官/义务兵/文职人员)
     private String post;          // 职务/岗位
+    private String postDate;      // 任岗位时间
+    private Long actualDepartmentId;   // 实际单位ID(编制岗位与实际在岗分离;0=未分离,按编制单位在岗)
+    private String actualDepartmentName; // 实际单位名称(查询时附带,不持久化)
+    private String actualDepartmentPath; // 实际单位完整路径,仅查询上下文,不持久化
     private String status;        // 状态:在职/休假/培训/借调/离职/其他
     private String entryDate;     // 入伍/入职日期
+    private String equivEntryDate; // 相当入伍时间(大学生士兵等计入军龄的折算日期)
     private String address;       // 家庭住址
     private String photo;         // 照片文件名(服务端 data/photos/ 下)
     private String photoBase64;   // 仅提交时使用:base64 编码的图片数据
@@ -93,6 +100,13 @@ public class Personnel {
         this.idCard = idCard;
     }
 
+    public String getMilitaryIdNo() { return militaryIdNo; }
+    public void setMilitaryIdNo(String militaryIdNo) { this.militaryIdNo = militaryIdNo; }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getDepartmentPath() { return departmentPath; }
+    public void setDepartmentPath(String departmentPath) { this.departmentPath = departmentPath; }
+
     public String getBirthday() {
         return birthday;
     }
@@ -149,6 +163,40 @@ public class Personnel {
         this.post = post;
     }
 
+    public String getPostDate() {
+        return postDate;
+    }
+
+    public void setPostDate(String postDate) {
+        this.postDate = postDate;
+    }
+
+    public Long getActualDepartmentId() {
+        return actualDepartmentId;
+    }
+
+    public void setActualDepartmentId(Long actualDepartmentId) {
+        this.actualDepartmentId = actualDepartmentId;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getActualDepartmentName() {
+        return actualDepartmentName;
+    }
+
+    public void setActualDepartmentName(String actualDepartmentName) {
+        this.actualDepartmentName = actualDepartmentName;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    public String getActualDepartmentPath() {
+        return actualDepartmentPath;
+    }
+
+    public void setActualDepartmentPath(String actualDepartmentPath) {
+        this.actualDepartmentPath = actualDepartmentPath;
+    }
+
     public String getStatus() {
         return status;
     }
@@ -163,6 +211,14 @@ public class Personnel {
 
     public void setEntryDate(String entryDate) {
         this.entryDate = entryDate;
+    }
+
+    public String getEquivEntryDate() {
+        return equivEntryDate;
+    }
+
+    public void setEquivEntryDate(String equivEntryDate) {
+        this.equivEntryDate = equivEntryDate;
     }
 
     public String getAddress() {

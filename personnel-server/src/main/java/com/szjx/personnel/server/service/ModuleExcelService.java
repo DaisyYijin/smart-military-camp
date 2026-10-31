@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.auth.DataScope;
+import com.szjx.personnel.server.util.ExcelDates;
 import com.szjx.personnel.server.util.ExcelUtils;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -27,7 +29,7 @@ import java.util.Map;
  * 通用模块 Excel 导入导出。
  *
  * 导出:仅导出用户勾选的记录(ids);人员模块沿用 ExcelUtils 的完整字段模板。
- * 导入:第一行为中文列头,按各模块的业务键存在则更新、不存在则新增;
+ * 导入:第一行为中文列头;台账按指定业务键更新,考核/休假/物资逐行追加;
  *       含"人员姓名"的列自动解析为对应人员 ID,解析失败计为该行失败。
  */
 @Service
@@ -84,7 +86,10 @@ public class ModuleExcelService {
         m.put("category", "material_category"); m.put("location", "material_location");
         DICT_COLS.put("material", m);
         m = new java.util.HashMap<String, String>();
-        m.put("category", "equipment_category"); m.put("status", "equipment_status");
+        m.put("category", "equipment_category"); m.put("status", "equipment_status"); m.put("location", "equipment_location");
+        DICT_COLS.put("equipment-gun", new java.util.HashMap<String, String>(m));
+        // 枪支仅沿用类别、状态、位置字典；品牌只属于普通装备。
+        m.put("brand", "equipment_brand");
         DICT_COLS.put("equipment", m);
         m = new java.util.HashMap<String, String>();
         m.put("leaveType", "leave_type"); m.put("holidayName", "holiday_type");
@@ -114,12 +119,25 @@ public class ModuleExcelService {
                 Arrays.asList(
                         new Col("装备名称", "name", "text"),
                         new Col("装备编号", "code", "text"),
+                        new Col("识别码", "identCode", "text"),
+                        new Col("类别", "category", "text"),
+                        new Col("品牌", "brand", "text"),
+                        new Col("型号", "model", "text"),
+                        new Col("状态", "status", "text"),
+                        new Col("保管人", "keeperId", "ref-personnel"),
+                        new Col("存放位置", "location", "text"),
+                        new Col("装备时间", "equipDate", "text"),
+                        new Col("备注", "remark", "text")),
+                "identCode"));
+        MODULES.put("equipment-gun", new ModuleDef("equipment-gun", "枪支", "equipment", "枪支",
+                Arrays.asList(
+                        new Col("装备名称", "name", "text"),
+                        new Col("装备编号", "code", "text"),
                         new Col("类别", "category", "text"),
                         new Col("型号", "model", "text"),
                         new Col("状态", "status", "text"),
                         new Col("保管人", "keeperId", "ref-personnel"),
                         new Col("存放位置", "location", "text"),
-                        new Col("购置日期", "buyDate", "text"),
                         new Col("装备时间", "equipDate", "text"),
                         new Col("备注", "remark", "text")),
                 "code"));
@@ -135,7 +153,7 @@ public class ModuleExcelService {
                         new Col("存放位置", "location", "text"),
                         new Col("详细存放点", "detailLocation", "text"),
                         new Col("备注", "remark", "text")),
-                "name"));
+                ""));
         MODULES.put("vehicle", new ModuleDef("vehicle", "车辆", "vehicle", "车辆",
                 Arrays.asList(
                         new Col("车牌号", "plateNo", "text"),
@@ -145,22 +163,19 @@ public class ModuleExcelService {
                         new Col("型号", "model", "text"),
                         new Col("车型", "type", "text"),
                         new Col("车身颜色", "color", "text"),
-                        new Col("燃料类型", "fuelType", "text"),
                         new Col("状态", "status", "text"),
                         new Col("驾驶员", "driverId", "ref-personnel"),
                         new Col("核定人数", "seats", "int"),
-                        new Col("里程(公里)", "mileage", "number"),
-                        new Col("购置日期", "purchaseDate", "text"),
                         new Col("装备时间", "equipDate", "text"),
-                        new Col("保险到期日", "insuranceExpiry", "text"),
                         new Col("年检到期日", "inspectionExpiry", "text"),
                         new Col("备注", "remark", "text")),
-                "plateNo"));
+                "vin"));
         MODULES.put("leave", new ModuleDef("leave", "休假", "leave_record", "休假",
                 Arrays.asList(
                         new Col("人员姓名", "personnelId", "ref-personnel"),
                         new Col("年度", "year", "text"),
                         new Col("休假类型", "leaveType", "text"),
+                        new Col("休假地点", "leaveLocation", "text"),
                         new Col("开始日期", "startDate", "text"),
                         new Col("结束日期", "endDate", "text"),
                         new Col("天数", "days", "number"),
@@ -170,9 +185,21 @@ public class ModuleExcelService {
                         new Col("事由", "reason", "text"),
                         new Col("备注", "remark", "text")),
                 ""));
+        MODULES.put("leave-plan", new ModuleDef("leave-plan", "休假计划", "leave_plan", "休假计划",
+                Arrays.asList(
+                        new Col("人员姓名", "personnelId", "ref-personnel"),
+                        new Col("身份证号", "idCard", "text", true),
+                        new Col("年度", "year", "text"),
+                        new Col("休假类型", "leaveType", "text"),
+                        new Col("计划开始日期", "startDate", "text"),
+                        new Col("计划结束日期", "endDate", "text"),
+                        new Col("天数", "days", "number"),
+                        new Col("备注", "remark", "text")),
+                ""));
         MODULES.put("phone", new ModuleDef("phone", "手机设备", "phone_device", "手机设备",
                 Arrays.asList(
                         new Col("姓名", "personnelId", "ref-personnel"),
+                        new Col("身份证号", "idCard", "text", true),
                         new Col("设备类型", "deviceType", "text"),
                         new Col("品牌", "brand", "text"),
                         new Col("型号", "model", "text"),
@@ -213,12 +240,21 @@ public class ModuleExcelService {
     private final JdbcTemplate jdbc;
     private final PersonnelService personnelService;
     private final DepartmentDaoBridge departmentDaoBridge;
-    private LeaveService leaveService;
+    private LeaveStatusSyncService leaveStatusSyncService;
+    private FitnessWideExcelService wideExcel;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public void setLeaveService(LeaveService leaveService) { this.leaveService = leaveService; }
+    public void setLeaveStatusSyncService(LeaveStatusSyncService leaveStatusSyncService) {
+        this.leaveStatusSyncService = leaveStatusSyncService;
+    }
 
-    /** 部门名解析桥:避免直接依赖 DepartmentDao 造成循环,取人员导出所需 */
+    /** 体能宽行(一人一行)服务;测试用旧构造时可为 null,此时仅支持旧一项一行格式。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWideExcel(FitnessWideExcelService wideExcel) {
+        this.wideExcel = wideExcel;
+    }
+
+    /** 单位名解析桥:避免直接依赖 DepartmentDao 造成循环,取人员导出所需 */
     @Service
     public static class DepartmentDaoBridge {
         public final com.szjx.personnel.server.dao.DepartmentDao departmentDao;
@@ -266,7 +302,11 @@ public class ModuleExcelService {
             font.setBold(true);
             headStyle.setFont(font);
             java.util.List<Col> tplCols = new java.util.ArrayList<Col>();
-            for (Col c : def.cols) { if (!c.computed) { tplCols.add(c); } }
+            for (Col c : def.cols) {
+                if (!c.computed || (("leave-plan".equals(moduleKey) || "phone".equals(moduleKey)) && "idCard".equals(c.key))) {
+                    tplCols.add(c);
+                }
+            }
             org.apache.poi.ss.usermodel.Row hr = sh.createRow(0);
             for (int i = 0; i < tplCols.size(); i++) {
                 org.apache.poi.ss.usermodel.Cell c = hr.createCell(i);
@@ -300,10 +340,12 @@ public class ModuleExcelService {
     }
 
     public byte[] export(String moduleKey, List<Long> ids) throws Exception {
-        if (ids == null || ids.isEmpty()) {
+        boolean leavePlanExport = "leave-plan".equals(moduleKey) && (ids == null || ids.isEmpty());
+        if (!leavePlanExport && (ids == null || ids.isEmpty())) {
             throw new IllegalArgumentException("请先勾选要导出的数据");
         }
         if ("personnel".equals(moduleKey)) {
+            for (Long id : ids) DataScope.requirePerson(jdbc, id);
             List<com.szjx.personnel.server.model.Personnel> all =
                     personnelService.query(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 1, 100000);
             List<com.szjx.personnel.server.model.Personnel> selected =
@@ -322,6 +364,7 @@ public class ModuleExcelService {
             });
         }
         if ("dict".equals(moduleKey)) {
+            DataScope.requireAdmin();
             return exportDict();
         }
         ModuleDef def = MODULES.get(moduleKey);
@@ -329,19 +372,33 @@ public class ModuleExcelService {
             throw new IllegalArgumentException("不支持的模块: " + moduleKey);
         }
 
+        // 校验全部指定 ID，不能静默忽略不在当前用户范围内的记录。
+        if (ids != null) for (Long id : ids) DataScope.requireRecord(jdbc, def.table, ownerColumn(moduleKey), id);
         StringBuilder placeholders = new StringBuilder();
-        for (int i = 0; i < ids.size(); i++) {
-            placeholders.append(i > 0 ? ",?" : "?");
+        List<Map<String, Object>> rows;
+        if ("leave-plan".equals(moduleKey) && (ids == null || ids.isEmpty())) {
+            rows = jdbc.queryForList("SELECT * FROM leave_plan WHERE " + DataScope.personSql("personnel_id") + " ORDER BY year DESC, start_date, id");
+        } else {
+            for (int i = 0; i < ids.size(); i++) {
+                placeholders.append(i > 0 ? ",?" : "?");
+            }
+            String inSql = "SELECT * FROM " + def.table + " WHERE id IN ("
+                    + placeholders + ")";
+            List<Object> args = new ArrayList<Object>(ids);
+            if ("equipment-gun".equals(moduleKey)) {
+                inSql += " AND category=?";
+                args.add("枪支");
+            }
+            inSql += " AND " + DataScope.personSql(ownerColumn(moduleKey)) + " ORDER BY id";
+            rows = jdbc.queryForList(inSql, args.toArray());
         }
-        String inSql = "SELECT * FROM " + def.table + " WHERE id IN ("
-                + placeholders + ") ORDER BY id";
-        List<Map<String, Object>> rows = jdbc.queryForList(inSql, ids.toArray());
+
 
         Map<Long, String> personNames = personNameMap();
         Map<Long, java.util.Map<String, String>> personInfo = new java.util.HashMap<Long, java.util.Map<String, String>>();
-        boolean needPersonInfo = "fitness".equals(moduleKey);
+        boolean needPersonInfo = "fitness".equals(moduleKey) || "leave-plan".equals(moduleKey) || "phone".equals(moduleKey);
         if (needPersonInfo) {
-            for (Map<String, Object> pr : jdbc.queryForList("SELECT id, name, id_card FROM personnel")) {
+            for (Map<String, Object> pr : jdbc.queryForList("SELECT id, name, id_card FROM personnel WHERE " + DataScope.departmentSql("department_id"))) {
                 java.util.Map<String, String> info = new java.util.HashMap<String, String>();
                 info.put("name", String.valueOf(pr.get("name") == null ? "" : pr.get("name")));
                 info.put("idCard", String.valueOf(pr.get("id_card") == null ? "" : pr.get("id_card")));
@@ -353,10 +410,11 @@ public class ModuleExcelService {
         CellStyle headStyle = headerStyle(wb);
         Row head = sheet.createRow(0);
         for (int i = 0; i < def.cols.size(); i++) {
+            Col col = def.cols.get(i);
             Cell c = head.createCell(i);
-            c.setCellValue(def.cols.get(i).header);
+            c.setCellValue(col.header);
             c.setCellStyle(headStyle);
-            sheet.setColumnWidth(i, 16 * 256);
+            sheet.setColumnWidth(i, "idCard".equals(col.key) ? 20 * 256 : 16 * 256);
         }
         DataFormatter fmt = new DataFormatter();
         int r = 1;
@@ -365,18 +423,20 @@ public class ModuleExcelService {
             for (int i = 0; i < def.cols.size(); i++) {
                 Col col = def.cols.get(i);
                 Object v = row.get(snake(col.key));
-                if (v == null && needPersonInfo
-                        && ("personName".equals(col.key) || "idCard".equals(col.key))) {
-                    Object pidv = row.get("personnel_id");
-                    if (pidv != null) {
-                        java.util.Map<String, String> info = personInfo.get(((Number) pidv).longValue());
-                        v = info == null ? "" : ("personName".equals(col.key) ? info.get("name") : info.get("idCard"));
-                    }
-                }
                 if ("ref-personnel".equals(col.type)) {
                     Long pid = v == null ? null : ((Number) v).longValue();
                     xr.createCell(i).setCellValue(pid == null || pid == 0 ? ""
                             : personNames.containsKey(pid) ? personNames.get(pid) : "");
+                } else if ("fitness".equals(moduleKey)
+                        && ("personName".equals(col.key) || "idCard".equals(col.key))) {
+                    Object pidv = row.get("personnel_id");
+                    java.util.Map<String, String> info = pidv == null ? null : personInfo.get(((Number) pidv).longValue());
+                    xr.createCell(i).setCellValue(info == null ? ""
+                            : ("personName".equals(col.key) ? info.get("name") : info.get("idCard")));
+                } else if (("leave-plan".equals(moduleKey) || "phone".equals(moduleKey)) && "idCard".equals(col.key)) {
+                    Object pidv = row.get("personnel_id");
+                    java.util.Map<String, String> info = pidv == null ? null : personInfo.get(((Number) pidv).longValue());
+                    xr.createCell(i).setCellValue(info == null ? "" : info.get("idCard"));
                 } else if (v == null) {
                     xr.createCell(i).setCellValue("");
                 } else if (v instanceof Number) {
@@ -419,6 +479,7 @@ public class ModuleExcelService {
     /* ================= 导入 ================= */
 
     public Map<String, Object> importExcel(String moduleKey, InputStream in) {
+        if ("dict".equals(moduleKey)) DataScope.requireAdmin();
         if ("personnel".equals(moduleKey)) return new PersonnelFullExcel(jdbc).importAll(in);
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         List<String> errors = new ArrayList<String>();
@@ -427,9 +488,20 @@ public class ModuleExcelService {
             if (wb.getNumberOfSheets() == 0) throw new IllegalArgumentException("文件没有工作表");
             Sheet sheet = wb.getSheetAt(0);
             DataFormatter fmt = new DataFormatter();
+            ExcelDates dates = new ExcelDates(wb);
             Map<String, Integer> headers = Integrity.headers(sheet, fmt);
             ModuleDef def = MODULES.get(moduleKey);
             if (!"dict".equals(moduleKey) && def == null) throw new IllegalArgumentException("不支持的模块:" + moduleKey);
+            // 体能宽行(一人一行,项目为列)按表头自动识别;旧一项一行格式走下方通用导入,两者统一覆盖更新。
+            if ("fitness".equals(moduleKey) && wideExcel != null && !headers.containsKey("考核项目")) {
+                if (wideExcel.detectWide(headers)) {
+                    return wideExcel.importWide(sheet, headers, fmt, dates);
+                }
+                if (headers.containsKey("姓名") && headers.containsKey("身份证号码") && headers.containsKey("考核日期")) {
+                    // 形似宽行却没有任何启用项目列,直接说明而不是落入旧格式的业务键报错。
+                    throw new IllegalArgumentException("缺少体能项目列:至少需要一列表头为启用的体能项目");
+                }
+            }
             List<Integer> rows = new ArrayList<Integer>();
             for (int r = 1; r <= sheet.getLastRowNum(); r++) if (!Integrity.blank(sheet.getRow(r), fmt)) rows.add(r);
             if ("dict".equals(moduleKey)) rows.sort((a, b) -> Integer.compare(cell(sheet.getRow(a), headers, "父级路径", fmt).split("/", -1).length, cell(sheet.getRow(b), headers, "父级路径", fmt).split("/", -1).length));
@@ -441,11 +513,16 @@ public class ModuleExcelService {
                         Map<String, Object> vals = new LinkedHashMap<String, Object>();
                         for (Col col : def.cols) {
                             if (col.computed) continue;
-                            String raw = cell(row, headers, col.header, fmt);
+                            String raw = Integrity.dateKey(snake(col.key)) && headers.containsKey(col.header)
+                                    ? dates.read(row.getCell(headers.get(col.header)), col.header)
+                                    : cell(row, headers, col.header, fmt);
                             if ("ref-personnel".equals(col.type)) {
                                 String card = cell(row, headers, col.header + "身份证号", fmt);
                                 if (card.isEmpty()) card = cell(row, headers, "身份证号码", fmt);
                                 if (card.isEmpty()) card = cell(row, headers, "身份证号", fmt);
+                                if ("phone".equals(moduleKey) && card.isEmpty()) {
+                                    throw new IllegalArgumentException("手机设备导入身份证号不能为空");
+                                }
                                 if (!raw.isEmpty() || !card.isEmpty()) vals.put(snake(col.key), Integrity.person(jdbc, card, raw));
                                 else if (headers.containsKey(col.header)) vals.put(snake(col.key), null);
                             } else if (headers.containsKey(col.header)) {
@@ -457,16 +534,34 @@ public class ModuleExcelService {
                                         vals.put(snake(col.key), "int".equals(col.type) ? (Object)(int)n : n);
                                     }
                                 } else {
-                                    if (Integrity.dateKey(snake(col.key)) && !raw.isEmpty()) raw = Integrity.dateCell(row.getCell(headers.get(col.header)), raw, col.header);
                                     vals.put(snake(col.key), raw);
                                 }
                             }
                         }
+                        if ("equipment-gun".equals(moduleKey)) {
+                            vals.put("category", "枪支");
+                            // 历史枪支表单的识别码/购置日期不属于枪支 Excel 接口，忽略不导入。
+                        }
                         if ("fitness".equals(moduleKey)) vals.put("personnel_id", Integrity.person(jdbc, str(vals.remove("id_card")), str(vals.remove("person_name"))));
-                        Long id = Integrity.existing(jdbc, def.table, vals, businessKeys(def, vals));
+                        if ("leave-plan".equals(moduleKey)) {
+                            String card = cell(row, headers, "身份证号", fmt);
+                            String name = cell(row, headers, "人员姓名", fmt);
+                            if (card.isEmpty() && name.isEmpty()) throw new IllegalArgumentException("人员姓名/身份证号为空");
+                            vals.put("personnel_id", Integrity.person(jdbc, card, name));
+                        }
+                        String[] keys = businessKeys(def, vals);
+                        boolean gun = "equipment-gun".equals(moduleKey)
+                                || ("equipment".equals(moduleKey) && "枪支".equals(str(vals.get("category"))));
+                        Long id = gun ? Integrity.existingGun(jdbc, vals)
+                                : (keys.length == 0 ? null : Integrity.existing(jdbc, def.table, vals, keys));
+                        // 业务键全局命中后先校验旧归属，再校验写入后的归属，禁止抢占外域记录。
+                        if (id != null) DataScope.requireRecord(jdbc, def.table, ownerColumn(moduleKey), id);
                         Map<String, Object> merged = new LinkedHashMap<String, Object>();
                         if (id != null) merged.putAll(jdbc.queryForMap("SELECT * FROM " + def.table + " WHERE id=?", id));
-                        merged.putAll(vals); requireModule(def.key, merged);
+                        merged.putAll(vals);
+                        Object owner = merged.get(ownerColumn(moduleKey));
+                        DataScope.requirePerson(jdbc, owner == null ? null : ((Number) owner).longValue());
+                        requireModule(def.key, merged);
                         Map<String, String> dict = DICT_COLS.get(def.key);
                         if (dict != null) for (Map.Entry<String, String> entry : dict.entrySet()) Integrity.dict(jdbc, entry.getValue(), str(merged.get(snake(entry.getKey()))));
                         if ("vehicle".equals(moduleKey)) Integrity.cascade(jdbc, "vehicle_brand", str(merged.get("brand")), "vehicle_model", str(merged.get("model")));
@@ -475,11 +570,12 @@ public class ModuleExcelService {
                             record.setPersonnelId(((Number)merged.get("personnel_id")).longValue()); record.setItem(str(merged.get("item"))); record.setScore(str(merged.get("score"))); record.setTestDate(str(merged.get("test_date")));
                             new FitnessScoringService(jdbc).score(record); vals.put("points", record.getPoints()); vals.put("grade", record.getGrade());
                         }
+                        Integrity.save(jdbc, def.table, vals, id);
                         if ("leave".equals(moduleKey)) {
-                            if (leaveService == null) throw new IllegalStateException("休假服务未配置");
-                            com.szjx.personnel.server.model.LeaveRecord record = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(camelMap(merged), com.szjx.personnel.server.model.LeaveRecord.class);
-                            if (id == null) leaveService.create(record); else leaveService.update(id, record);
-                        } else Integrity.save(jdbc, def.table, vals, id);
+                            // Excel按行追加，允许重复区间；普通API的重叠校验不变。
+                            if (leaveStatusSyncService == null) throw new IllegalStateException("休假状态服务未配置");
+                            leaveStatusSyncService.sync();
+                        }
                         if ("phone".equals(moduleKey)) Integrity.syncPhone(jdbc, ((Number)merged.get("personnel_id")).longValue());
                         return id != null;
                     });
@@ -491,35 +587,40 @@ public class ModuleExcelService {
         return result;
     }
 
-    private Map<String, Object> camelMap(Map<String, Object> db) {
-        Map<String, Object> result = new LinkedHashMap<String, Object>();
-        for (String key : Arrays.asList("personnel_id", "year", "leave_type", "start_date", "end_date", "days", "travel_days", "holiday_days", "holiday_name", "reason", "remark")) {
-            StringBuilder name = new StringBuilder(); boolean upper = false;
-            for (char c : key.toCharArray()) { if (c == '_') upper = true; else { name.append(upper ? Character.toUpperCase(c) : c); upper = false; } }
-            result.put(name.toString(), db.get(key));
-        }
-        return result;
+    private String ownerColumn(String moduleKey) {
+        if ("equipment".equals(moduleKey) || "equipment-gun".equals(moduleKey) || "material".equals(moduleKey)) return "keeper_id";
+        return "vehicle".equals(moduleKey) ? "driver_id" : "personnel_id";
     }
+
     private String[] businessKeys(ModuleDef def, Map<String, Object> vals) {
-        if ("material".equals(def.key)) return new String[]{"name", "category", "spec", "unit", "location", "detail_location"};
-        if ("leave".equals(def.key)) return new String[]{"personnel_id", "start_date", "end_date", "leave_type"};
-        if ("fitness".equals(def.key)) return new String[]{"personnel_id", "test_date", "item"};
-        if ("phone".equals(def.key)) {
-            for (String key : Arrays.asList("serial_no", "imei1", "imei2")) if (!str(vals.get(key)).isEmpty()) return new String[]{"personnel_id", key};
-            throw new IllegalArgumentException("设备幂等业务键需要序列号或IMEI，不能按姓名/品牌猜测设备");
+        if ("equipment-gun".equals(def.key)) return new String[]{"code"};
+        if ("equipment".equals(def.key)) {
+            return "枪支".equals(str(vals.get("category"))) ? new String[]{"code"} : new String[]{"ident_code"};
         }
-        return new String[]{snake(def.importKey)};
+        if ("phone".equals(def.key)) return new String[]{"personnel_id"};
+        // 体能考核:同人+同项目+同考核日期已有成绩时覆盖更新(重算分数/评定)。
+        if ("fitness".equals(def.key)) return new String[]{"personnel_id", "item", "test_date"};
+        // 考核(军事)、休假登记/计划、物资没有导入匹配键，每个有效行只新增。
+        return def.importKey.isEmpty() ? new String[0] : new String[]{snake(def.importKey)};
     }
     private void requireModule(String key, Map<String, Object> vals) {
         String[] required;
-        if ("equipment".equals(key)) required = new String[]{"name", "code"};
+        if ("leave-plan".equals(key)) required = new String[]{"personnel_id", "year", "leave_type", "start_date", "end_date", "days"};
+        else if ("equipment-gun".equals(key)) required = new String[]{"name", "code"};
+        else if ("equipment".equals(key)) required = new String[]{"name", "枪支".equals(str(vals.get("category"))) ? "code" : "ident_code"};
         else if ("material".equals(key)) required = new String[]{"name", "quantity"};
         else if ("vehicle".equals(key)) required = new String[]{"plate_no"};
         else if ("phone".equals(key)) required = new String[]{"personnel_id", "device_type", "brand"};
         else if ("leave".equals(key)) required = new String[]{"personnel_id", "leave_type", "start_date", "end_date", "days"};
         else required = new String[]{"personnel_id", "test_date", "item", "score"};
         for (String field : required) Integrity.required(vals, field);
-        if ("leave".equals(key) && str(vals.get("start_date")).compareTo(str(vals.get("end_date"))) > 0) throw new IllegalArgumentException("结束日期早于开始日期");
+        if (("leave".equals(key) || "leave-plan".equals(key))
+                && str(vals.get("start_date")).compareTo(str(vals.get("end_date"))) > 0) {
+            throw new IllegalArgumentException("结束日期早于开始日期");
+        }
+        if ("leave-plan".equals(key) && FitnessScoringService.number(str(vals.get("days")), "天数") < 0) {
+            throw new IllegalArgumentException("天数不能为负");
+        }
     }
     private boolean importDictRow(Row row, Map<String, Integer> headers, DataFormatter fmt) {
         String type = cell(row, headers, "字典类型", fmt), label = cell(row, headers, "选项内容", fmt);
@@ -546,11 +647,21 @@ public class ModuleExcelService {
         Integrity.save(jdbc, "sys_dict", vals, id); return id != null;
     }
     private String cell(Row row, Map<String, Integer> headers, String header, DataFormatter fmt) {
-        Integer index = headers.get(header); return index == null || row.getCell(index) == null ? "" : fmt.formatCellValue(row.getCell(index)).trim();
+        Integer index = headers.get(header);
+        if (index == null || row.getCell(index) == null) {
+            return "";
+        }
+        org.apache.poi.ss.usermodel.Cell cell = row.getCell(index);
+        // 日期单元格统一 yyyy-MM-dd,避免 DataFormatter 按单元格样式/区域输出 01/03/23
+        if (cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC
+                && org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+            return new java.text.SimpleDateFormat("yyyy-MM-dd").format(cell.getDateCellValue());
+        }
+        return fmt.formatCellValue(cell).trim();
     }
     private Map<Long, String> personNameMap() {
         Map<Long, String> result = new HashMap<Long, String>();
-        for (Map<String, Object> row : jdbc.queryForList("SELECT id, name FROM personnel")) result.put(((Number)row.get("id")).longValue(), str(row.get("name")));
+        for (Map<String, Object> row : jdbc.queryForList("SELECT id, name FROM personnel WHERE " + DataScope.departmentSql("department_id"))) result.put(((Number)row.get("id")).longValue(), str(row.get("name")));
         return result;
     }
 
@@ -579,10 +690,6 @@ public class ModuleExcelService {
             return result;
         }
         static boolean dateKey(String key) { return "birthday".equals(key) || key.endsWith("_date") || key.endsWith("_expiry"); }
-        static String dateCell(Cell cell, String value, String label) {
-            if (cell != null && cell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC && org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) return cell.getLocalDateTimeCellValue().toLocalDate().toString();
-            return FitnessScoringService.date(value, label).toString();
-        }
         static Long person(JdbcTemplate jdbc, String card, String name) {
             card = text(card).toUpperCase(java.util.Locale.ROOT); name = text(name);
             List<Long> ids;
@@ -592,7 +699,17 @@ public class ModuleExcelService {
                 ids = jdbc.queryForList("SELECT id FROM personnel WHERE TRIM(name)=?", Long.class, name);
             }
             if (ids.size() != 1) throw new IllegalArgumentException(ids.isEmpty() ? "人员不存在:" + (card.isEmpty() ? name : card) : "人员不唯一，请使用身份证号:" + name);
+            DataScope.requirePerson(jdbc, ids.get(0));
             return ids.get(0);
+        }
+        static Long existingGun(JdbcTemplate jdbc, Map<String, ?> values) {
+            String code = text(values.get("code"));
+            if (code.isEmpty()) throw new IllegalArgumentException("缺少业务键列:code");
+            List<Long> ids = jdbc.queryForList(
+                    "SELECT id FROM equipment WHERE COALESCE(code,'')=COALESCE(?,'') AND category=?",
+                    Long.class, code, "枪支");
+            if (ids.size() > 1) throw new IllegalArgumentException("业务键匹配多条记录，拒绝任选:equipment-gun");
+            return ids.isEmpty() ? null : ids.get(0);
         }
         static Long existing(JdbcTemplate jdbc, String table, Map<String, ?> values, String[] keys) {
             StringBuilder where = new StringBuilder(); List<Object> args = new ArrayList<Object>();
@@ -607,6 +724,8 @@ public class ModuleExcelService {
             }
             if (args.stream().allMatch(v -> text(v).isEmpty())) throw new IllegalArgumentException("业务键为空");
             if (!"material".equals(table)) for (int i = 0; i < keys.length; i++) if (text(args.get(i)).isEmpty() && !"parent_id".equals(keys[i])) throw new IllegalArgumentException("业务键为空:" + keys[i]);
+            // 枪支只按编号走existingGun，历史残留识别码不得被普通装备导入命中。
+            if ("equipment".equals(table)) where.append(" AND COALESCE(category,'')<>'枪支'");
             List<Long> ids = jdbc.queryForList("SELECT id FROM " + table + " WHERE " + where, Long.class, args.toArray());
             if (ids.size() > 1) throw new IllegalArgumentException("业务键匹配多条记录，拒绝任选:" + table);
             return ids.isEmpty() ? null : ids.get(0);

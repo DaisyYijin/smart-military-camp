@@ -8,7 +8,9 @@ public class Equipment {
     private Long id;
     private String name;         // 装备名称
     private String code;         // 装备编号
+    private String identCode;    // 识别码(唯一识别,Excel导入按此查重更新)
     private String category;     // 类别(字典 equipment_category)
+    private String brand;        // 品牌(字典 equipment_brand,选填)
     private String model;        // 型号
     private String status;       // 状态(字典 equipment_status)
     private Long keeperId;       // 保管人ID
@@ -17,6 +19,8 @@ public class Equipment {
     private String buyDate;      // 购置日期
     private String equipDate;    // 装备时间(列装/配发)
     private String remark;
+    private String photo;        // 装备照片文件名
+    private String photoBase64;  // 上传用,不入库
     private String createdAt;
     private String updatedAt;
 
@@ -44,12 +48,28 @@ public class Equipment {
         this.code = code;
     }
 
+    public String getIdentCode() {
+        return identCode;
+    }
+
+    public void setIdentCode(String identCode) {
+        this.identCode = identCode;
+    }
+
     public String getCategory() {
         return category;
     }
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public String getBrand() {
+        return brand;
+    }
+
+    public void setBrand(String brand) {
+        this.brand = brand;
     }
 
     public String getModel() {
@@ -114,6 +134,22 @@ public class Equipment {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getPhoto() {
+        return photo;
+    }
+
+    public void setPhoto(String photo) {
+        this.photo = photo;
+    }
+
+    public String getPhotoBase64() {
+        return photoBase64;
+    }
+
+    public void setPhotoBase64(String photoBase64) {
+        this.photoBase64 = photoBase64;
     }
 
     public String getCreatedAt() {

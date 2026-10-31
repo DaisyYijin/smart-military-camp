@@ -25,8 +25,8 @@ import java.util.Map;
 /**
  * 数据上报(下级 → 上级):
  *   下级: GET  /api/report/export        导出本单位数据包(JSON: 单位名+人员+子表+休假+体能)
- *   上级: POST /api/report/check         预检(解析包,检索本单位同名部门)
- *         POST /api/report/import       导入(选定部门或新建,按身份证合并,子表替换,休假/体能去重)
+ *   上级: POST /api/report/check         预检(解析包,检索本单位同名单位)
+ *         POST /api/report/import       导入(选定单位或新建,按身份证合并,子表替换,休假/体能去重)
  */
 @RestController
 @RequestMapping("/api/report")
@@ -54,14 +54,14 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
         java.util.Set<String> s = new java.util.HashSet<String>();
         if (scope == null || scope.trim().isEmpty()) {
             s.add("personnel"); s.add("leave"); s.add("fitness");
-            s.add("equipment"); s.add("material"); s.add("vehicle"); s.add("phone");
+            s.add("equipment"); s.add("material"); s.add("vehicle"); s.add("phone"); s.add("military");
         } else {
             for (String x : scope.split(",")) {
                 if (!x.trim().isEmpty()) { s.add(x.trim()); }
             }
         }
         for (String module : s) {
-            if (!java.util.Arrays.asList("personnel", "leave", "fitness", "phone", "equipment", "material", "vehicle").contains(module)) {
+            if (!java.util.Arrays.asList("personnel", "leave", "fitness", "phone", "military", "equipment", "material", "vehicle").contains(module)) {
                 throw new IllegalArgumentException("未知上报模块: " + module);
             }
         }
@@ -89,7 +89,7 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
         meta.put("version", 2);
         pkg.put("meta", meta);
 
-        // 部门过滤:depts=部门ID逗号串(空=全部);选父单位自动含其全部下级
+        // 单位过滤:depts=单位ID逗号串(空=全部);选父单位自动含其全部下级
         StringBuilder deptWhere = new StringBuilder();
         List<Object> deptArgs = new ArrayList<Object>();
         if (depts != null && !depts.trim().isEmpty() ) {
@@ -97,7 +97,7 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
             for (String d : depts.split(",")) {
                 try {
                     picked.add(Long.parseLong(d.trim()));
-                } catch (NumberFormatException invalid) { throw new IllegalArgumentException("非法部门ID: " + d); }
+                } catch (NumberFormatException invalid) { throw new IllegalArgumentException("非法单位ID: " + d); }
             }
             if (!picked.isEmpty()) {
                 // 自底向上:任何祖先被选中即视为选中(等效于父级向下扩展)
@@ -137,9 +137,11 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
         if (s.contains("personnel")) { for (String t : SUB_TABLES) { subs.put(t, rowsWithCard(t, cardOf)); } }
         pkg.put("subs", subs);
         pkg.put("leave", s.contains("leave") ? rowsWithCard("leave_record", cardOf) : new ArrayList<Map<String, Object>>());
+        pkg.put("leavePlan", s.contains("leave") ? rowsWithCard("leave_plan", cardOf) : new ArrayList<Map<String, Object>>());
         pkg.put("fitness", s.contains("fitness") ? rowsWithCard("fitness_record", cardOf) : new ArrayList<Map<String, Object>>());
         pkg.put("phone", s.contains("phone") ? rowsWithCard("phone_device", cardOf) : new ArrayList<Map<String, Object>>());
-        // 资产责任人稳定映射,部门过滤按 keeper/driver 所属人员执行。
+        pkg.put("military", s.contains("military") ? rowsWithCard("military_assessment", cardOf) : new ArrayList<Map<String, Object>>());
+        // 资产责任人稳定映射,单位过滤按 keeper/driver 所属人员执行。
         boolean filtered = depts != null && !depts.trim().isEmpty();
         for (String table : java.util.Arrays.asList("equipment", "material", "vehicle")) {
             List<Map<String, Object>> assets = new ArrayList<Map<String, Object>>();
@@ -198,10 +200,10 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
         int subCount = 0;
         for (Object value : ((Map<?, ?>) pkg.get("subs")).values()) { subCount += ((List<?>) value).size(); }
         out.put("subCount", subCount);
-        for (String module : java.util.Arrays.asList("leave", "fitness", "phone", "equipment", "material", "vehicle")) {
+        for (String module : java.util.Arrays.asList("leave", "leavePlan", "fitness", "phone", "military", "equipment", "material", "vehicle")) {
             out.put(module + "Count", rows(pkg, module).size());
         }
-        // 检索本单位同名部门(精确 → 模糊)
+        // 检索本单位同名单位(精确 → 模糊)
         List<Map<String, Object>> matched = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> d : jdbc.queryForList("SELECT id, name FROM department WHERE name = ?", unit)) {
             matched.add(d);
@@ -234,8 +236,8 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
     /* ================= 上级导入 ================= */
 
     /**
-     * @param deptId    选定的现有部门ID(与 createNew 二选一)
-     * @param createNew true=新建同名部门挂到 parentId
+     * @param deptId    选定的现有单位ID(与 createNew 二选一)
+     * @param createNew true=新建同名单位挂到 parentId
      */
     @PostMapping("/import")
     public ApiResponse importPackage(@RequestParam("file") MultipartFile file,

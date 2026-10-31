@@ -17,9 +17,8 @@ public class PersonnelServerApplication {
         SpringApplication.run(PersonnelServerApplication.class, args);
         System.out.println("======================================================");
         System.out.println("  数智军营人员管理系统 服务端已启动");
-        System.out.println("  本机访问:   http://127.0.0.1:8080");
-        System.out.println("  局域网访问: http://<本机IP>:8080  (客户端填写此地址)");
-        System.out.println("  默认管理员: admin / admin123  (登录后请及时修改密码)");
+        System.out.println("  请使用配置的端口和 HTTP/HTTPS 协议访问；局域网正式部署请启用可信 HTTPS。");
+        System.out.println("  管理员使用初始化时设置的账号与密码，不存在固定默认密码。");
         System.out.println("======================================================");
     }
 

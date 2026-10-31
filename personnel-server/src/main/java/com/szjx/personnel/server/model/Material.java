@@ -17,6 +17,8 @@ public class Material {
     private String location;         // 存放位置(字典 material_location)
     private String detailLocation;   // 详细存放点(如 A区3排2层)
     private String remark;
+    private String photo;        // 物资照片文件名(服务端 data/photos/material/ 下)
+    private String photoBase64;  // 仅提交时使用:base64 编码的图片数据,不入库
     private String createdAt;
     private String updatedAt;
 
@@ -114,6 +116,22 @@ public class Material {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getPhoto() {
+        return photo;
+    }
+
+    public void setPhoto(String photo) {
+        this.photo = photo;
+    }
+
+    public String getPhotoBase64() {
+        return photoBase64;
+    }
+
+    public void setPhotoBase64(String photoBase64) {
+        this.photoBase64 = photoBase64;
     }
 
     public String getCreatedAt() {

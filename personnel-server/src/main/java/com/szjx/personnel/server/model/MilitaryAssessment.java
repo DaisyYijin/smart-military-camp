@@ -9,6 +9,8 @@ public class MilitaryAssessment {
     private Long personnelId;       // 考核人员ID
     private String personnelName;   // 姓名(查询时附带)
     private String idCard;          // 身份证号(查询时附带)
+    private Long departmentId;      // 人员编制单位ID(查询时附带,不持久化)
+    private String departmentPath;  // 人员单位完整路径(查询时附带,不持久化)
     private String category;        // 考核类别:理论考核/射击考核/战术考核等
     private String item;            // 考核项目
     private String score;           // 成绩
@@ -32,6 +34,12 @@ public class MilitaryAssessment {
 
     public String getIdCard() { return idCard; }
     public void setIdCard(String idCard) { this.idCard = idCard; }
+
+    public String getDepartmentPath() { return departmentPath; }
+    public void setDepartmentPath(String departmentPath) { this.departmentPath = departmentPath; }
+
+    public Long getDepartmentId() { return departmentId; }
+    public void setDepartmentId(Long departmentId) { this.departmentId = departmentId; }
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }

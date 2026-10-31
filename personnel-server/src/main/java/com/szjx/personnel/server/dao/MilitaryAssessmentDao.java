@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.MilitaryAssessment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -26,6 +28,7 @@ public class MilitaryAssessmentDao {
         m.setPersonnelId(rs.getLong("personnel_id"));
         m.setPersonnelName(rs.getString("personnel_name"));
         m.setIdCard(rs.getString("id_card"));
+        m.setDepartmentId(rs.getObject("p_department_id") == null ? null : rs.getLong("p_department_id"));
         m.setCategory(rs.getString("category"));
         m.setItem(rs.getString("item"));
         m.setScore(rs.getString("score"));
@@ -42,7 +45,7 @@ public class MilitaryAssessmentDao {
     };
 
     private static final String BASE =
-            "SELECT m.*, p.name AS personnel_name, p.id_card FROM military_assessment m " +
+            "SELECT m.*, p.name AS personnel_name, p.id_card, p.department_id AS p_department_id FROM military_assessment m " +
             "LEFT JOIN personnel p ON m.personnel_id = p.id ";
 
     private void appendFilter(StringBuilder sql, List<Object> args, String personnelName,
@@ -78,18 +81,28 @@ public class MilitaryAssessmentDao {
                                           String grade, String startDate, String endDate,
                                           int page, int size) {
         StringBuilder sql = new StringBuilder(BASE).append(" WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("m.personnel_id")).append(" ");
         List<Object> args = new ArrayList<>();
         appendFilter(sql, args, personnelName, category, item, grade, startDate, endDate);
         sql.append(" ORDER BY m.test_date DESC, m.id DESC LIMIT ? OFFSET ? ");
         args.add(size);
         args.add((long) (page - 1) * size);
-        return jdbc.query(sql.toString(), MAPPER, args.toArray());
+        java.util.List<MilitaryAssessment> list = jdbc.query(sql.toString(), MAPPER, args.toArray());
+        // 列表附带人员编制单位完整路径(无斜杠层级)
+        if (!list.isEmpty()) {
+            com.szjx.personnel.server.util.DepartmentHierarchy hierarchy = com.szjx.personnel.server.util.DepartmentHierarchy.load(jdbc);
+            for (MilitaryAssessment m : list) {
+                m.setDepartmentPath(hierarchy.path(m.getDepartmentId()));
+            }
+        }
+        return list;
     }
 
     public long count(String personnelName, String category, String item,
                       String grade, String startDate, String endDate) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM military_assessment m LEFT JOIN personnel p ON m.personnel_id = p.id WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("m.personnel_id")).append(" ");
         List<Object> args = new ArrayList<>();
         appendFilter(sql, args, personnelName, category, item, grade, startDate, endDate);
         Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
@@ -97,11 +110,13 @@ public class MilitaryAssessmentDao {
     }
 
     public MilitaryAssessment findById(Long id) {
+        DataScope.requireRecord(jdbc, "military_assessment", "personnel_id", id);
         List<MilitaryAssessment> list = jdbc.query(BASE + " WHERE m.id=?", MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
 
     public long insert(MilitaryAssessment m) {
+        DataScope.requirePerson(jdbc, m.getPersonnelId());
         return jdbc.queryForObject(
                 "INSERT INTO military_assessment(personnel_id, scheme_id, detail, category, item, score, points, grade, test_date, remark) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
@@ -111,6 +126,8 @@ public class MilitaryAssessmentDao {
     }
 
     public void update(MilitaryAssessment m) {
+        DataScope.requireRecord(jdbc, "military_assessment", "personnel_id", m.getId());
+        DataScope.requirePerson(jdbc, m.getPersonnelId());
         jdbc.update(
                 "UPDATE military_assessment SET personnel_id=?, scheme_id=?, detail=?, category=?, item=?, score=?, points=?, grade=?, " +
                 "test_date=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
@@ -119,10 +136,12 @@ public class MilitaryAssessmentDao {
     }
 
     public void delete(Long id) {
+        DataScope.requireRecord(jdbc, "military_assessment", "personnel_id", id);
         jdbc.update("DELETE FROM military_assessment WHERE id=?", id);
     }
 
     public boolean personExists(Long personnelId) {
+        DataScope.requirePerson(jdbc, personnelId);
         if (personnelId == null || personnelId <= 0) {
             return false;
         }

@@ -2,6 +2,7 @@ package com.szjx.personnel.server.controller;
 
 import com.szjx.personnel.server.model.ApiResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -74,23 +75,36 @@ public class FitnessMatrixController {
     }
 
     /** 初始化新项目(创建矩阵结构并入库,关闭不丢失) */
-    @SuppressWarnings("unchecked")
+    @Transactional
     @PostMapping("/init")
     public ApiResponse init(@RequestBody Map<String, Object> body) {
+        if (body == null) { return ApiResponse.error("初始化参数不能为空"); }
         String item = str(body.get("item"));
         String unit = str(body.get("unit"));
-        if (item.isEmpty()) { return ApiResponse.error("项目名称不能为空"); }
-        if (!"count".equals(unit) && !"time".equals(unit)) { unit = "count"; }
-        List<String> ageGroups = (List<String>) body.get("ageGroups");
-        List<Number> scores = (List<Number>) body.get("scores");
-        if (ageGroups == null || ageGroups.isEmpty() || scores == null || scores.isEmpty()) {
-            return ApiResponse.error("年龄段和分数不能为空");
+        if (!(body.get("item") instanceof String) || item.isEmpty()) { return ApiResponse.error("项目名称不能为空"); }
+        if (!validUnit(unit)) { return ApiResponse.error("计分方式无效"); }
+        Object rawAges = body.get("ageGroups"), rawScores = body.get("scores");
+        if (!(rawAges instanceof List) || ((List<?>) rawAges).isEmpty()
+                || !(rawScores instanceof List) || ((List<?>) rawScores).isEmpty()) {
+            return ApiResponse.error("年龄段和分数必须为非空数组");
         }
+        Set<String> ageGroups = new LinkedHashSet<String>();
+        for (Object age : (List<?>) rawAges) {
+            if (!(age instanceof String) || str(age).isEmpty() || !ageGroups.add(str(age))) {
+                return ApiResponse.error("年龄段不能为空或重复");
+            }
+        }
+        Set<Integer> scores = new LinkedHashSet<Integer>();
+        for (Object rawScore : (List<?>) rawScores) {
+            Integer score = matrixScore(rawScore);
+            if (score == null || !scores.add(score)) { return ApiResponse.error("分数必须为0~100的整数且不能重复"); }
+        }
+        // 所有输入通过检查后才允许删除;后续任何SQL异常由事务整体回滚。
         jdbc.update("DELETE FROM fitness_matrix WHERE item=?", item);
         for (String g : ageGroups) {
-            for (Number sc : scores) {
+            for (Integer score : scores) {
                 jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value, unit) VALUES(?,?,?,?,?)",
-                        item, g, sc.intValue(), 0.0, unit);
+                        item, g, score, 0.0, unit);
             }
         }
         return ApiResponse.ok(jdbc.queryForList("SELECT * FROM fitness_matrix WHERE item=? ORDER BY score DESC", item));
@@ -110,20 +124,45 @@ public class FitnessMatrixController {
     }
 
     /** 复制项目(含全部矩阵数据) */
+    @Transactional
     @PostMapping("/copy")
     public ApiResponse copy(@RequestBody Map<String, Object> body) {
+        if (body == null) { return ApiResponse.error("复制参数不能为空"); }
         String source = str(body.get("source"));
         String target = str(body.get("target"));
-        if (source.isEmpty() || target.isEmpty()) { return ApiResponse.error("源项目和目标项目不能为空"); }
+        if (!(body.get("source") instanceof String) || !(body.get("target") instanceof String)
+                || source.isEmpty() || target.isEmpty()) { return ApiResponse.error("源项目和目标项目不能为空"); }
+        if (source.equals(target)) { return ApiResponse.error("源项目和目标项目不能相同"); }
         List<Map<String, Object>> src = jdbc.queryForList("SELECT * FROM fitness_matrix WHERE item=?", source);
         if (src.isEmpty()) { return ApiResponse.error("源项目不存在"); }
+        Set<String> cells = new HashSet<String>();
+        String unit = str(src.get(0).get("unit"));
+        if (!validUnit(unit)) { return ApiResponse.error("源项目计分方式无效"); }
+        for (Map<String, Object> row : src) {
+            String age = str(row.get("age_group"));
+            Integer score = matrixScore(row.get("score"));
+            Double value = asDouble(row.get("value"));
+            if (age.isEmpty() || score == null || value == null || !Double.isFinite(value) || value < 0
+                    || !unit.equals(str(row.get("unit"))) || !cells.add(age + "|" + score)) {
+                return ApiResponse.error("源项目包含无效或重复矩阵数据");
+            }
+        }
         jdbc.update("DELETE FROM fitness_matrix WHERE item=?", target);
         for (Map<String, Object> row : src) {
             jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value, unit) VALUES(?,?,?,?,?)",
-                    target, row.get("age_group"), row.get("score"), row.get("value"),
-                    row.get("unit") == null ? "" : row.get("unit"));
+                    target, str(row.get("age_group")), matrixScore(row.get("score")), asDouble(row.get("value")), unit);
         }
         return ApiResponse.ok();
+    }
+
+    private static boolean validUnit(String unit) {
+        return "count".equals(unit) || "time".equals(unit);
+    }
+
+    private Integer matrixScore(Object raw) {
+        if (!(raw instanceof Number)) { return null; }
+        double value = ((Number) raw).doubleValue();
+        return Double.isFinite(value) && value >= 0 && value <= 100 && value == Math.rint(value) ? (int) value : null;
     }
 
     /** 重命名项目 */

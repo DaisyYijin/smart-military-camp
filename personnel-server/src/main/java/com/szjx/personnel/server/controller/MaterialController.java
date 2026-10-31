@@ -1,9 +1,13 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.Material;
 import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.service.MaterialService;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,11 +50,13 @@ public class MaterialController {
         StringBuilder sql = new StringBuilder(
             "SELECT m.id, m.name, m.category, m.spec, m.unit, m.quantity, " +
             "m.min_quantity AS minQuantity, m.keeper_id AS keeperId, p.name AS keeperName, " +
-            "p.id_card AS keeperIdCard, m.location, m.detail_location AS detailLocation, m.remark, " +
+            "p.id_card AS keeperIdCard, m.location, m.detail_location AS detailLocation, m.remark, m.photo, " +
             "m.created_at AS createdAt, m.updated_at AS updatedAt " +
             "FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+        sql.append(" AND ").append(DataScope.personSql("m.keeper_id"));
+        csql.append(" AND ").append(DataScope.personSql("m.keeper_id"));
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         java.util.List<Object> cargs = new java.util.ArrayList<Object>();
         if (name != null && !name.trim().isEmpty()) {
@@ -78,6 +84,23 @@ public class MaterialController {
         args.add(size); args.add((page - 1) * size);
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
+    }
+
+    @GetMapping("/{id:\\d+}/photo")
+    public ResponseEntity<byte[]> photo(@PathVariable Long id) {
+        Material material = materialService.get(id);
+        if (material == null || material.getPhoto() == null || material.getPhoto().isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        java.io.File file = materialService.photoFile(material.getPhoto());
+        if (file == null || !file.exists()) return ResponseEntity.notFound().build();
+        try {
+            byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+            MediaType type = material.getPhoto().toLowerCase().endsWith(".png") ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+            return ResponseEntity.ok().contentType(type).body(bytes);
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PostMapping

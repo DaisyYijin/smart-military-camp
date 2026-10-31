@@ -2,9 +2,13 @@ package com.szjx.personnel.server.config;
 
 import com.szjx.personnel.server.dao.AdminUserDao;
 import com.szjx.personnel.server.service.PasswordUtil;
+import com.szjx.personnel.server.util.ItemLoanSnapshots;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.InitializingBean;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.StandardEnvironment;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,32 +18,195 @@ import java.util.Map;
  * 数据库初始化:建表 + 默认管理员
  */
 @Component
-public class SchemaInitializer implements CommandLineRunner {
+public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     private static final Logger log = LoggerFactory.getLogger(SchemaInitializer.class);
 
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final AdminUserDao adminUserDao;
+    private Environment environment = new StandardEnvironment();
+    private boolean administratorCreated;
+
+    public boolean isAdministratorCreated() { return administratorCreated; }
+
+    @Override
+    public void setEnvironment(Environment environment) { this.environment = environment; }
+
+    @Override
+    public void afterPropertiesSet() { run(); }
 
     public SchemaInitializer(org.springframework.jdbc.core.JdbcTemplate jdbc, AdminUserDao adminUserDao) {
         this.jdbc = jdbc;
         this.adminUserDao = adminUserDao;
     }
 
-    /** 旧库迁移:若表缺少某列则补充 */
-    private void ensureColumn(String table, String column, String ddl) {
+    /** 旧库迁移:若表缺少某列则补充，返回本次是否新增。 */
+    private boolean ensureColumn(String table, String column, String ddl) {
         try {
             List<Map<String, Object>> cols = jdbc.queryForList("PRAGMA table_info(" + table + ")");
             for (Map<String, Object> col : cols) {
                 if (column.equals(String.valueOf(col.get("name")))) {
-                    return;
+                    return false;
                 }
             }
             jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + ddl);
             log.info("迁移:表 {} 新增列 {}", table, column);
+            return true;
         } catch (Exception e) {
-            log.warn("迁移列 {} 失败:{}", column, e.getMessage());
+            throw new IllegalStateException("数据库结构升级失败: " + table + "." + column + "，服务未开放，请检查日志后重试", e);
         }
+    }
+
+    /** 软人员引用：备份部分恢复不得触发数据库级联删除。评定合法值由数据字典 de_rating 驱动,不设硬 CHECK。 */
+    private void initializeDoubleExcellence() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS double_excellence_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
+                "quarter INTEGER NOT NULL CHECK(quarter BETWEEN 1 AND 4)," +
+                "rating TEXT NOT NULL," +
+                "rating_date TEXT NOT NULL," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime')))" );
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_double_excellence_person_year_quarter ON double_excellence_record(personnel_id,year,quarter)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_double_excellence_year ON double_excellence_record(year,quarter)");
+        migrateDoubleExcellenceRating();
+    }
+
+    /**
+     * 历史版本的表带固定评级 CHECK(rating IN ('好','中','一般'))，与字典驱动的评定相抵触：
+     * 管理员在数据字典新增/改名评级后写入会被数据库拒绝。SQLite 无法直接删约束，
+     * 检测到旧结构时在事务内重建表（无 rating CHECK，其余约束保留）并完整搬移数据。
+     */
+    private void migrateDoubleExcellenceRating() {
+        String ddl;
+        try {
+            ddl = jdbc.queryForObject(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='double_excellence_record'", String.class);
+        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+            return; // 表尚未创建（新建库由上面的建表语句处理）
+        }
+        if (ddl == null || !ddl.toUpperCase().contains("RATING IN (")) return; // 已是新结构
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        try {
+            tx.executeWithoutResult(status -> {
+                log.info("迁移:double_excellence_record 移除固定评级 CHECK,评定改由数据字典 de_rating 驱动");
+                jdbc.execute("CREATE TABLE double_excellence_mig (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "personnel_id INTEGER NOT NULL," +
+                        "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
+                        "quarter INTEGER NOT NULL CHECK(quarter BETWEEN 1 AND 4)," +
+                        "rating TEXT NOT NULL," +
+                        "rating_date TEXT NOT NULL," +
+                        "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                        "updated_at TEXT DEFAULT (datetime('now','localtime')))");
+                jdbc.update("INSERT INTO double_excellence_mig(id, personnel_id, year, quarter, rating, rating_date, created_at, updated_at) " +
+                        "SELECT id, personnel_id, year, quarter, rating, rating_date, created_at, updated_at FROM double_excellence_record");
+                jdbc.execute("DROP TABLE double_excellence_record");
+                jdbc.execute("ALTER TABLE double_excellence_mig RENAME TO double_excellence_record");
+                jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_double_excellence_person_year_quarter ON double_excellence_record(personnel_id,year,quarter)");
+                jdbc.execute("CREATE INDEX IF NOT EXISTS idx_double_excellence_year ON double_excellence_record(year,quarter)");
+            });
+        } catch (Exception e) {
+            throw new IllegalStateException("双争评比表结构升级失败，已回滚，服务未开放，请检查日志后重试", e);
+        }
+    }
+
+    /** 软人员引用：备份部分恢复不得触发数据库级联删除。评定合法值由数据字典 annual_rating 驱动,不设硬 CHECK。 */
+    private void initializeAnnualAppraisal() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS annual_appraisal_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
+                "rating TEXT NOT NULL," +
+                "rating_date TEXT NOT NULL," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime')))" );
+        jdbc.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_annual_appraisal_person_year ON annual_appraisal_record(personnel_id,year)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_annual_appraisal_year ON annual_appraisal_record(year)");
+    }
+
+    private void initializeVehicleFaultHistory() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS vehicle_fault_history (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "vehicle_id INTEGER NOT NULL," +
+                "fault_date TEXT NOT NULL DEFAULT ''," +
+                "description TEXT NOT NULL DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_vehicle_fault_history_vehicle ON vehicle_fault_history(vehicle_id)");
+    }
+
+    /** 借还独立建表；旧库仅补列/索引，不重建、不清理已有记录。 */
+    private void initializeItemLoans() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS item_loan (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "item_name TEXT NOT NULL," +
+                "specification TEXT NOT NULL DEFAULT ''," +
+                "quantity TEXT NOT NULL," +
+                "unit TEXT NOT NULL," +
+                "personnel_id INTEGER NOT NULL DEFAULT 0," +
+                "borrower_name TEXT NOT NULL DEFAULT ''," +
+                "borrower_id_card TEXT NOT NULL DEFAULT ''," +
+                "borrower_phone TEXT NOT NULL DEFAULT ''," +
+                "borrower_unit TEXT NOT NULL DEFAULT ''," +
+                "registration_department TEXT NOT NULL DEFAULT ''," +
+                "department_id INTEGER NOT NULL DEFAULT 0," +
+                "owner_user_id INTEGER NOT NULL DEFAULT 0," +
+                "handler_id INTEGER NOT NULL DEFAULT 0," +
+                "handler_name TEXT NOT NULL DEFAULT ''," +
+                "handler_id_card TEXT NOT NULL DEFAULT ''," +
+                "borrower_migrated INTEGER NOT NULL DEFAULT 0," +
+                "returned INTEGER NOT NULL DEFAULT 0," +
+                "borrow_date TEXT NOT NULL," +
+                "expected_return_date TEXT NOT NULL DEFAULT ''," +
+                "actual_return_date TEXT NOT NULL DEFAULT ''," +
+                "return_condition TEXT NOT NULL DEFAULT ''," +
+                "return_remark TEXT NOT NULL DEFAULT ''," +
+                "remark TEXT NOT NULL DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime')))" );
+        String[] textColumns = {"item_name", "specification", "quantity", "unit", "borrow_date",
+                "expected_return_date", "actual_return_date", "return_condition", "return_remark",
+                "remark", "created_at", "updated_at"};
+        for (String column : textColumns) ensureColumn("item_loan", column, column + " TEXT DEFAULT ''");
+        ensureColumn("item_loan", "personnel_id", "personnel_id INTEGER DEFAULT 0");
+        for (String column : new String[]{"borrower_name", "borrower_id_card", "borrower_phone", "borrower_unit"}) {
+            ensureColumn("item_loan", column, column + " TEXT NOT NULL DEFAULT ''");
+        }
+        ensureColumn("item_loan", "department_id", "department_id INTEGER NOT NULL DEFAULT 0");
+        ensureColumn("item_loan", "owner_user_id", "owner_user_id INTEGER NOT NULL DEFAULT 0");
+        // Optional descriptive snapshots only: no personnel foreign key or historical inference.
+        ensureColumn("item_loan", "handler_id", "handler_id INTEGER NOT NULL DEFAULT 0");
+        ensureColumn("item_loan", "handler_name", "handler_name TEXT NOT NULL DEFAULT ''");
+        ensureColumn("item_loan", "handler_id_card", "handler_id_card TEXT NOT NULL DEFAULT ''");
+        ensureColumn("item_loan", "borrower_migrated", "borrower_migrated INTEGER NOT NULL DEFAULT 0");
+        org.springframework.transaction.support.TransactionTemplate returnMigration =
+                new org.springframework.transaction.support.TransactionTemplate(
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        returnMigration.executeWithoutResult(status -> {
+            // Add the column and backfill atomically, exactly once; retained dates never override explicit state.
+            if (ensureColumn("item_loan", "returned", "returned INTEGER NOT NULL DEFAULT 0")) {
+                jdbc.update("UPDATE item_loan SET returned=1 WHERE actual_return_date IS NOT NULL AND actual_return_date<>''");
+            }
+        });
+        boolean registrationAdded = jdbc.queryForList("PRAGMA table_info(item_loan)").stream()
+                .noneMatch(column -> "registration_department".equals(column.get("name")));
+        ensureColumn("item_loan", "registration_department", "registration_department TEXT NOT NULL DEFAULT ''");
+        ItemLoanSnapshots.migrateExisting(jdbc);
+        if (registrationAdded) {
+            // One-time display snapshot only; never derive or change the permission owner from text.
+            jdbc.update("UPDATE item_loan SET registration_department=COALESCE(" +
+                    "(SELECT name FROM department WHERE department.id=item_loan.department_id),'') " +
+                    "WHERE registration_department=''");
+        }
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_item_loan_personnel ON item_loan(personnel_id)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_item_loan_department ON item_loan(department_id)");
+        jdbc.execute("DROP INDEX IF EXISTS idx_item_loan_return_dates");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_item_loan_returned ON item_loan(returned)");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_item_loan_updated ON item_loan(updated_at,id)");
     }
 
     /** 启动时确保各类默认字典存在(INSERT OR IGNORE 幂等,不覆盖已有自定义项) */
@@ -48,6 +215,8 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("holiday_type", new String[]{"元旦", "春节", "清明节", "劳动节", "端午节", "中秋节", "国庆节", "其他"});
         addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "BMI", "其他"});
         addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
+        addDict("de_rating", new String[]{"好", "中", "一般"});
+        addDict("annual_rating", new String[]{"优秀", "称职", "一般称职", "不称职"});
         addDict("personnel_status", new String[]{"在职", "休假", "培训", "借调", "离职", "其他"});
         addDict("personnel_category", new String[]{"军官", "士官", "义务兵", "文职人员", "其他"});
         // 军衔按人员类别挂接(级联下拉)
@@ -61,6 +230,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 "三级军士长", "二级军士长", "一级军士长", "少尉", "中尉", "上尉", "少校", "中校", "上校", "大校", "无"});
         addDict("equipment_category", new String[]{"枪械", "防护", "通信", "侦察", "生活", "其他"});
         addDict("equipment_status", new String[]{"在用", "库存", "维修", "报废"});
+        addDict("equipment_brand", new String[]{"其他"});
+        addDict("equipment_location", new String[]{"枪械库", "弹药库", "器材库", "一号库房", "二号库房", "办公室", "其他"});
         addDict("material_category", new String[]{"办公", "被装", "食品", "医药", "工具", "其他"});
         addDict("material_location", new String[]{"一号库房", "二号库房", "器材库", "给养库", "油料库", "弹药库", "车间", "办公室", "其他"});
         addDict("vehicle_type", new String[]{"轿车", "客车", "卡车", "越野车", "特种车", "其他"});
@@ -82,8 +253,10 @@ public class SchemaInitializer implements CommandLineRunner {
                 "珞巴族", "基诺族"});
         addDict("political_status", new String[]{"群众", "共青团员", "中共党员", "其他"});
         addDict("marital_status", new String[]{"未婚", "已婚", "离异", "丧偶", "其他"});
-        addDict("education", new String[]{"博士", "硕士", "本科", "大专", "高中及以下", "其他"});
+        addDict("education", new String[]{"博士", "硕士", "本科", "大专", "职高", "中专", "初中", "小学", "其他"});
         addDict("only_child", new String[]{"否", "是"});
+        addDict("gender", new String[]{"男", "女"});
+        addDict("reward_punish_kind", new String[]{"奖励", "处分"});
         addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
         addDict("license_type", new String[]{"军本", "地方本"});
         addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
@@ -152,7 +325,6 @@ public class SchemaInitializer implements CommandLineRunner {
         }
     }
 
-    @Override
     public void run(String... args) {
         // 所有字典种子/清理之前建表;旧库先升级 parent_id 和唯一约束。
         jdbc.execute("CREATE TABLE IF NOT EXISTS sys_dict (" +
@@ -192,22 +364,24 @@ public class SchemaInitializer implements CommandLineRunner {
         addDict("phone_brand", new String[]{"华为", "小米", "OPPO", "vivo", "荣耀", "苹果", "三星"});
         addDict("device_status", new String[]{"在用", "停用", "维修", "报废"});
 
-        // 休假计划模块已下线:清理旧数据(历史备份中仍可找回)
-        jdbc.execute("DROP TABLE IF EXISTS leave_plan");
-        jdbc.update("DELETE FROM sys_dict WHERE dict_type = 'leave_plan_status'");
-
         jdbc.execute("CREATE TABLE IF NOT EXISTS personnel (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "gender TEXT DEFAULT ''," +
                 "id_card TEXT DEFAULT ''," +
+                "military_id_no TEXT DEFAULT ''," +
                 "birthday TEXT DEFAULT ''," +
                 "phone TEXT DEFAULT ''," +
                 "department_id INTEGER DEFAULT 0," +
                 "rank TEXT DEFAULT ''," +
                 "post TEXT DEFAULT ''," +
+                "post_date TEXT DEFAULT ''," +
+                "actual_department_id INTEGER DEFAULT 0," +
+                "actual_post TEXT DEFAULT ''," +
+                "actual_post_date TEXT DEFAULT ''," +
                 "status TEXT DEFAULT '在职'," +
                 "entry_date TEXT DEFAULT ''," +
+                "equiv_entry_date TEXT DEFAULT ''," +
                 "address TEXT DEFAULT ''," +
                 "photo TEXT DEFAULT ''," +
                 "remark TEXT DEFAULT ''," +
@@ -230,6 +404,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
+        // 旧档案和旧备份允许缺值，必填校验仅在正常保存/Excel导入入口执行。
+        ensureColumn("personnel", "military_id_no", "military_id_no TEXT DEFAULT ''");
         // 旧库迁移:补充新增列
         ensureColumn("personnel", "blood_type", "blood_type TEXT DEFAULT ''");
         ensureColumn("personnel", "nation", "nation TEXT DEFAULT ''");
@@ -251,6 +427,11 @@ public class SchemaInitializer implements CommandLineRunner {
         ensureColumn("personnel", "auto_leave", "auto_leave INTEGER DEFAULT 0");
         ensureColumn("personnel", "auto_leave_previous_status", "auto_leave_previous_status TEXT DEFAULT ''");
         ensureColumn("personnel", "location_point", "location_point TEXT DEFAULT ''");
+        ensureColumn("personnel", "post_date", "post_date TEXT DEFAULT ''");
+        // 编制岗位与实际在岗分离:实际单位/实际岗位/实际在岗开始时间(旧库幂等补列)
+        ensureColumn("personnel", "actual_department_id", "actual_department_id INTEGER DEFAULT 0");
+        ensureColumn("personnel", "actual_post", "actual_post TEXT DEFAULT ''");
+        ensureColumn("personnel", "actual_post_date", "actual_post_date TEXT DEFAULT ''");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_dept ON personnel(department_id)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_name ON personnel(name)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_idcard ON personnel(id_card)");
@@ -272,6 +453,7 @@ public class SchemaInitializer implements CommandLineRunner {
                 "start_date TEXT DEFAULT ''," +
                 "end_date TEXT DEFAULT ''," +
                 "days REAL DEFAULT 0," +
+                "leave_location TEXT DEFAULT ''," +
                 "reason TEXT DEFAULT ''," +
                 "remark TEXT DEFAULT ''," +
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
@@ -279,7 +461,7 @@ public class SchemaInitializer implements CommandLineRunner {
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_personnel ON leave_record(personnel_id)");
 
-        // 休假计划(年度安排,与实际休假记录互补)
+        // 休假计划(年度安排,与实际休假记录互补);保留已有数据并迁移旧表结构
         jdbc.execute("CREATE TABLE IF NOT EXISTS leave_plan (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
@@ -293,7 +475,18 @@ public class SchemaInitializer implements CommandLineRunner {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
+        ensureColumn("leave_plan", "personnel_id", "personnel_id INTEGER DEFAULT 0");
+        ensureColumn("leave_plan", "year", "year TEXT DEFAULT ''");
+        ensureColumn("leave_plan", "leave_type", "leave_type TEXT DEFAULT ''");
+        ensureColumn("leave_plan", "start_date", "start_date TEXT DEFAULT ''");
+        ensureColumn("leave_plan", "end_date", "end_date TEXT DEFAULT ''");
+        ensureColumn("leave_plan", "days", "days REAL DEFAULT 0");
+        ensureColumn("leave_plan", "status", "status TEXT DEFAULT '计划中'");
+        ensureColumn("leave_plan", "remark", "remark TEXT DEFAULT ''");
+        ensureColumn("leave_plan", "created_at", "created_at TEXT DEFAULT (datetime('now','localtime'))");
+        ensureColumn("leave_plan", "updated_at", "updated_at TEXT DEFAULT (datetime('now','localtime'))");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_plan_personnel ON leave_plan(personnel_id)");
+
 
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_record (" +
@@ -379,6 +572,10 @@ public class SchemaInitializer implements CommandLineRunner {
                 "svalue TEXT DEFAULT '')");
         jdbc.update("INSERT OR IGNORE INTO sys_setting(skey, svalue) VALUES('fitness_grade_rule', ?)",
                 "[{\"label\":\"优秀\",\"op\":\">=\",\"min\":90},{\"label\":\"良好\",\"op\":\">=\",\"min\":80},{\"label\":\"及格\",\"op\":\">=\",\"min\":60}]");
+        // 仪表盘布局设置(独立成表,备份页可单独勾选"仪表盘"模块)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS dash_setting (" +
+                "skey TEXT PRIMARY KEY," +
+                "svalue TEXT DEFAULT '')");
 
         // 老数据迁移:grade 存数字分数的 → 挪到 points,并按默认阈值换算成评定
         jdbc.update("UPDATE fitness_record SET points = CAST(TRIM(grade) AS REAL) " +
@@ -395,6 +592,9 @@ public class SchemaInitializer implements CommandLineRunner {
                 "display_name TEXT DEFAULT ''," +
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
+
+        // Security-critical migration must fail startup rather than silently weaken identity checks.
+        migrateAccounts();
 
         // 任职经历(人员的子记录)
         jdbc.execute("CREATE TABLE IF NOT EXISTS position_history (" +
@@ -475,7 +675,7 @@ public class SchemaInitializer implements CommandLineRunner {
         String[] extraCols = {"party_org_location", "party_post", "party_remark",
                 "divorce_date", "marriage_remark",
                 "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
-                "follow_army_date", "follow_army_status"};
+                "follow_army_date", "follow_army_status", "equiv_entry_date"};
         for (String col : extraCols) {
             try {
                 jdbc.execute("ALTER TABLE personnel ADD COLUMN " + col + " TEXT DEFAULT ''");
@@ -603,6 +803,7 @@ public class SchemaInitializer implements CommandLineRunner {
         for (String col : leaveCols) {
             try { jdbc.execute("ALTER TABLE leave_record ADD COLUMN " + col + " TEXT DEFAULT ''"); } catch (Exception ignore) {}
         }
+        ensureColumn("leave_record", "leave_location", "leave_location TEXT DEFAULT ''");
 
         // 节假日日历
         jdbc.execute("CREATE TABLE IF NOT EXISTS holiday_calendar (" +
@@ -651,7 +852,9 @@ public class SchemaInitializer implements CommandLineRunner {
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "code TEXT DEFAULT ''," +
+                "ident_code TEXT DEFAULT ''," +
                 "category TEXT DEFAULT ''," +
+                "brand TEXT DEFAULT ''," +
                 "model TEXT DEFAULT ''," +
                 "status TEXT DEFAULT ''," +
                 "keeper_id INTEGER DEFAULT 0," +
@@ -664,6 +867,10 @@ public class SchemaInitializer implements CommandLineRunner {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_equipment_keeper ON equipment(keeper_id)");
         // 装备时间(列装/配发时间,区别于购置日期)
         ensureColumn("equipment", "equip_date", "equip_date TEXT DEFAULT ''");
+        ensureColumn("equipment", "photo", "photo TEXT DEFAULT ''");
+        // 识别码(唯一识别,Excel导入按此查重更新)
+        ensureColumn("equipment", "ident_code", "ident_code TEXT DEFAULT ''");
+        ensureColumn("equipment", "brand", "brand TEXT DEFAULT ''");
 
         jdbc.execute("CREATE TABLE IF NOT EXISTS material (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -680,6 +887,8 @@ public class SchemaInitializer implements CommandLineRunner {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_material_keeper ON material(keeper_id)");
+        // 物资照片(每件一张,与装备一致)
+        ensureColumn("material", "photo", "photo TEXT DEFAULT ''");
 
         // 物资详细存放点
         try { jdbc.execute("ALTER TABLE material ADD COLUMN detail_location TEXT DEFAULT ''"); } catch (Exception ignore) {}
@@ -709,16 +918,112 @@ public class SchemaInitializer implements CommandLineRunner {
         }
         // 装备时间(列装时间,区别于购置日期)
         ensureColumn("vehicle", "equip_date", "equip_date TEXT DEFAULT ''");
+        // 车辆照片(每辆一张)
+        ensureColumn("vehicle", "photo", "photo TEXT DEFAULT ''");
+
+        initializeVehicleFaultHistory();
+        initializeItemLoans();
+        initializeDoubleExcellence();
+        initializeAnnualAppraisal();
 
         initDefaultDict();
+        // 将装备台账中已有的存放位置迁入字典,避免历史值在下拉框中无法选择
+        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                "SELECT 'equipment_location', location, 90, 1, '', 0 FROM equipment WHERE location IS NOT NULL AND TRIM(location) <> ''");
+        // 将装备台账中已有的非空品牌迁入字典,保留历史自定义值且可重复执行
+        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+                "SELECT DISTINCT 'equipment_brand', brand, 90, 1, '', 0 FROM equipment WHERE brand IS NOT NULL AND TRIM(brand) <> ''");
         seedRegionDict();
         migrateMunicipalityCity();
+        normalizeDictSortsOnce();
+        migrateEducationOptionsOnce();
 
-        if (adminUserDao.count() == 0) {
-            adminUserDao.insertAdmin("admin", PasswordUtil.hash("admin123"), "系统管理员");
-            log.info("已创建默认管理员账号: admin / admin123");
-            System.out.println("[初始化] 已创建默认管理员账号 admin / admin123,请登录后立即修改密码!");
+        initializeAdministrator();
+    }
+
+    /** 一次性压缩历史字典排序空号；之后由字典删除/拖动逻辑维持连续序号。 */
+    private void normalizeDictSortsOnce() {
+        Long done = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sys_setting WHERE skey='dict_sort_compact_v1'", Long.class);
+        if (done != null && done > 0) return;
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT id,dict_type,parent_id FROM sys_dict " +
+                        "ORDER BY dict_type,COALESCE(parent_id,0),sort,id");
+        String group = null;
+        int position = 1;
+        for (Map<String, Object> row : rows) {
+            String key = String.valueOf(row.get("dict_type")) + ":" +
+                    (row.get("parent_id") == null ? "0" : String.valueOf(row.get("parent_id")));
+            if (!key.equals(group)) {
+                group = key;
+                position = 1;
+            }
+            jdbc.update("UPDATE sys_dict SET sort=? WHERE id=?", position, row.get("id"));
+            position++;
         }
+        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('dict_sort_compact_v1','1')");
+        log.info("迁移:已压缩字典排序为连续序号");
+    }
+
+    /** 学历选项细化：删除“高中及以下”；如历史人员仍在使用则停用保留，避免清空档案。 */
+    private void migrateEducationOptionsOnce() {
+        Long done = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM sys_setting WHERE skey='education_options_v1'", Long.class);
+        if (done != null && done > 0) return;
+        Long used = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM personnel WHERE education='高中及以下'", Long.class);
+        if (used == null || used == 0) {
+            jdbc.update("DELETE FROM sys_dict WHERE dict_type='education' AND dict_label='高中及以下'");
+        } else {
+            jdbc.update("UPDATE sys_dict SET enabled=0 WHERE dict_type='education' AND dict_label='高中及以下'");
+            log.warn("学历选项已更新，{} 条历史人员仍使用“高中及以下”，该旧选项已停用并保留历史值", used);
+        }
+        String[] labels = {"博士", "硕士", "本科", "大专", "职高", "中专", "初中", "小学", "其他"};
+        for (int i = 0; i < labels.length; i++) {
+            jdbc.update("UPDATE sys_dict SET sort=? WHERE dict_type='education' AND dict_label=?",
+                    i + 1, labels[i]);
+        }
+        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('education_options_v1','1')");
+        log.info("迁移:学历选项已更新");
+    }
+
+    public void initializeAdministrator() {
+        if (adminUserDao.count() != 0) return;
+        String username = environment.getProperty("app.bootstrap.username", "admin").trim();
+        String password = environment.getProperty("app.bootstrap.password", "");
+        if (username.isEmpty() || username.length() > 64) {
+            throw new IllegalStateException("首次初始化的管理员账号不能为空且不能超过64位");
+        }
+        if (password.trim().isEmpty() || password.length() < 6 || password.length() > 256) {
+            throw new IllegalStateException("首次启动必须通过本机向导或 APP_BOOTSTRAP_PASSWORD 环境变量设置6至256位管理员密码；服务未开放，请完成初始化后重试");
+        }
+        adminUserDao.insertAdmin(username, PasswordUtil.hash(password), "系统管理员");
+        administratorCreated = true;
+        log.info("已使用本次初始化设置创建管理员，未使用固定默认口令");
+    }
+
+    public void migrateAccounts() {
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.execute(status -> {
+            List<Map<String, Object>> columns = jdbc.queryForList("PRAGMA table_info(admin_user)");
+            boolean parent = false, enabled = false;
+            for (Map<String, Object> column : columns) {
+                parent |= "parent_id".equals(column.get("name"));
+                enabled |= "enabled".equals(column.get("name"));
+            }
+            // Every legacy account remains a root administrator; never rename or reset passwords.
+            if (!parent) jdbc.execute("ALTER TABLE admin_user ADD COLUMN parent_id INTEGER NOT NULL DEFAULT 0");
+            if (!enabled) jdbc.execute("ALTER TABLE admin_user ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+            jdbc.execute("CREATE TABLE IF NOT EXISTS account_department (" +
+                    "user_id INTEGER NOT NULL REFERENCES admin_user(id)," +
+                    "department_id INTEGER NOT NULL REFERENCES department(id)," +
+                    "PRIMARY KEY(user_id,department_id))");
+            jdbc.execute("CREATE INDEX IF NOT EXISTS idx_admin_user_parent ON admin_user(parent_id)");
+            jdbc.execute("CREATE INDEX IF NOT EXISTS idx_account_department_department ON account_department(department_id)");
+            return null;
+        });
     }
 
     /**
@@ -727,7 +1032,10 @@ public class SchemaInitializer implements CommandLineRunner {
      * SQLite 无法直接删约束,检测到旧约束时整表重建(保留 id 与 parent_id)。
      */
     private void migrateDictUnique() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
         try {
+            tx.executeWithoutResult(status -> {
             boolean oldStyle = false;
             List<Map<String, Object>> idx = jdbc.queryForList("PRAGMA index_list(sys_dict)");
             for (Map<String, Object> ix : idx) {
@@ -755,12 +1063,13 @@ public class SchemaInitializer implements CommandLineRunner {
                     "updated_at TEXT DEFAULT (datetime('now','localtime'))," +
                     "UNIQUE(dict_type, dict_label, parent_id)" +
                     ")");
-            jdbc.update("INSERT OR IGNORE INTO sys_dict_mig(id, dict_type, dict_label, sort, enabled, remark, parent_id, created_at, updated_at) " +
+            jdbc.update("INSERT INTO sys_dict_mig(id, dict_type, dict_label, sort, enabled, remark, parent_id, created_at, updated_at) " +
                     "SELECT id, dict_type, dict_label, sort, enabled, remark, parent_id, created_at, updated_at FROM sys_dict");
             jdbc.execute("DROP TABLE sys_dict");
             jdbc.execute("ALTER TABLE sys_dict_mig RENAME TO sys_dict");
+            });
         } catch (Exception e) {
-            log.warn("sys_dict 唯一约束迁移失败:{}", e.getMessage());
+            throw new IllegalStateException("字典结构升级失败，已回滚，请检查日志后重试", e);
         }
     }
 

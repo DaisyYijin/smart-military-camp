@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.model.Vehicle;
@@ -50,10 +52,12 @@ public class VehicleController {
             "v.fuel_type AS fuelType, v.status, v.driver_id AS driverId, p.name AS driverName, " +
             "p.id_card AS driverIdCard, v.seats, v.mileage, v.purchase_date AS purchaseDate, " +
             "v.insurance_expiry AS insuranceExpiry, v.inspection_expiry AS inspectionExpiry, v.equip_date AS equipDate, " +
-            "v.remark, v.created_at AS createdAt, v.updated_at AS updatedAt " +
+            "v.remark, v.photo, v.created_at AS createdAt, v.updated_at AS updatedAt " +
             "FROM vehicle v LEFT JOIN personnel p ON v.driver_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM vehicle v LEFT JOIN personnel p ON v.driver_id = p.id WHERE 1=1");
+        sql.append(" AND ").append(DataScope.personSql("v.driver_id"));
+        csql.append(" AND ").append(DataScope.personSql("v.driver_id"));
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         java.util.List<Object> cargs = new java.util.ArrayList<Object>();
         if (plateNo != null && !plateNo.trim().isEmpty()) {
@@ -91,7 +95,24 @@ public class VehicleController {
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
     }
 
-    @PostMapping
+
+    @GetMapping("/{id:\\d+}/photo")
+    public org.springframework.http.ResponseEntity<byte[]> photo(@org.springframework.web.bind.annotation.PathVariable Long id) {
+        Vehicle vehicle = vehicleService.get(id);
+        if (vehicle == null || vehicle.getPhoto() == null || vehicle.getPhoto().isEmpty()) return org.springframework.http.ResponseEntity.notFound().build();
+        java.io.File file = vehicleService.photoFile(vehicle.getPhoto());
+        if (!file.isFile()) return org.springframework.http.ResponseEntity.notFound().build();
+        try {
+            byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+            org.springframework.http.MediaType type = file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".png")
+                    ? org.springframework.http.MediaType.IMAGE_PNG : org.springframework.http.MediaType.IMAGE_JPEG;
+            return org.springframework.http.ResponseEntity.ok().contentType(type).body(bytes);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("读取车辆照片失败", e);
+        }
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping
     public ApiResponse create(@RequestBody Vehicle v) {
         return ApiResponse.ok(vehicleService.create(v));
     }

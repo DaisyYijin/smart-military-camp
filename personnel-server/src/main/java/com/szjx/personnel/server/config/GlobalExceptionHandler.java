@@ -16,6 +16,18 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(com.szjx.personnel.server.auth.ForbiddenException.class)
+    public ResponseEntity<ApiResponse> handleForbidden(com.szjx.personnel.server.auth.ForbiddenException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(403, e.getMessage() == null ? "无权执行此操作" : e.getMessage()));
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse> handleConflict(org.springframework.dao.DataIntegrityViolationException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(409, "数据冲突，请刷新后重试"));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse> handleBadRequest(IllegalArgumentException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -39,7 +51,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse> handleUploadTooLarge(
             org.springframework.web.multipart.MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(400, "上传文件过大,请分批导入"));
+                .body(ApiResponse.error(400, "上传文件过大,单个文件不能超过100MB"));
     }
 
     @ExceptionHandler(Exception.class)

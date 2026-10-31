@@ -34,10 +34,11 @@ public final class ExcelUtils {
 
     /** 列顺序(与导入模板一致) */
     private static final String[] HEADERS = {
-            "姓名", "性别", "身份证号", "出生日期", "手机号", "部门", "军衔",
+            "姓名", "性别", "身份证号", "出生日期", "手机号", "单位", "军衔",
             "职务", "状态", "入伍日期", "家庭住址", "备注",
             "血型", "民族", "政治面貌", "婚姻状况", "学历", "是否独生子女", "籍贯", "身高(cm)", "体重(kg)", "党团时间",
-            "配偶姓名", "配偶工作单位", "配偶电话", "配偶身份证号", "配偶职业", "结婚日期"
+            "配偶姓名", "配偶工作单位", "配偶电话", "配偶身份证号", "配偶职业", "结婚日期",
+            "军人证件号", "单位完整路径（只读）"
     };
 
     private ExcelUtils() {
@@ -98,7 +99,7 @@ public final class ExcelUtils {
                         p.getWeight() == null ? "" : String.valueOf(p.getWeight()),
                         p.getPartyJoinDate(),
                         p.getSpouseName(), p.getSpouseWork(), p.getSpousePhone(),
-                        p.getSpouseIdCard(), p.getSpouseJob(), p.getMarriageDate()
+                        p.getSpouseIdCard(), p.getSpouseJob(), p.getMarriageDate(), p.getMilitaryIdNo(), p.getDepartmentPath()
                 };
                 for (int i = 0; i < cells.length; i++) {
                     Cell cell = row.createCell(i);
@@ -146,6 +147,7 @@ public final class ExcelUtils {
                 idx[i] = -1;
             }
             DataFormatter formatter = new DataFormatter();
+            ExcelDates dates = new ExcelDates(wb);
             for (int c = 0; c < headerRow.getLastCellNum(); c++) {
                 String h = formatter.formatCellValue(headerRow.getCell(c)).trim();
                 for (int i = 0; i < HEADERS.length; i++) {
@@ -156,6 +158,10 @@ public final class ExcelUtils {
             }
             if (idx[0] < 0) {
                 throw new IOException("未找到\"姓名\"列,请使用系统导出的模板");
+            }
+
+            if (idx[28] < 0) {
+                throw new IOException("缺少必填列「军人证件号」，请下载并使用新模板");
             }
 
             List<Personnel> result = new ArrayList<Personnel>();
@@ -171,13 +177,13 @@ public final class ExcelUtils {
                 p.setName(cellText(row, idx[0], formatter));
                 p.setGender(cellText(row, idx[1], formatter));
                 p.setIdCard(cellText(row, idx[2], formatter));
-                p.setBirthday(cellText(row, idx[3], formatter));
+                p.setBirthday(dateText(row, idx[3], dates, HEADERS[3]));
                 p.setPhone(cellText(row, idx[4], formatter));
                 p.setDepartmentName(cellText(row, idx[5], formatter));
                 p.setRank(cellText(row, idx[6], formatter));
                 p.setPost(cellText(row, idx[7], formatter));
                 p.setStatus(cellText(row, idx[8], formatter));
-                p.setEntryDate(cellText(row, idx[9], formatter));
+                p.setEntryDate(dateText(row, idx[9], dates, HEADERS[9]));
                 p.setAddress(cellText(row, idx[10], formatter));
                 p.setRemark(cellText(row, idx[11], formatter));
                 p.setBloodType(cellText(row, idx[12], formatter));
@@ -189,13 +195,18 @@ public final class ExcelUtils {
                 p.setNativePlace(cellText(row, idx[18], formatter));
                 p.setHeight(parseNumber(cellText(row, idx[19], formatter)));
                 p.setWeight(parseNumber(cellText(row, idx[20], formatter)));
-                p.setPartyJoinDate(cellText(row, idx[21], formatter));
+                p.setPartyJoinDate(dateText(row, idx[21], dates, HEADERS[21]));
                 p.setSpouseName(cellText(row, idx[22], formatter));
                 p.setSpouseWork(cellText(row, idx[23], formatter));
                 p.setSpousePhone(cellText(row, idx[24], formatter));
                 p.setSpouseIdCard(cellText(row, idx[25], formatter));
                 p.setSpouseJob(cellText(row, idx[26], formatter));
-                p.setMarriageDate(cellText(row, idx[27], formatter));
+                p.setMarriageDate(dateText(row, idx[27], dates, HEADERS[27]));
+                p.setMilitaryIdNo(cellText(row, idx[28], formatter));
+                if (p.getMilitaryIdNo().trim().isEmpty()) {
+                    throw new IOException("第" + (r + 1) + "行军人证件号不能为空");
+                }
+                // 单位完整路径只展示，不作为单位名称或持久化字段导入。
                 result.add(p);
             }
             return result;
@@ -206,7 +217,10 @@ public final class ExcelUtils {
 
     private static boolean isEmptyRow(Row row, DataFormatter formatter) {
         for (int c = 0; c < row.getLastCellNum(); c++) {
-            String v = cellText(row, c, formatter);
+            Cell cell = row.getCell(c);
+            // A formula is non-blank input even before evaluation; do not read a numeric cache as text.
+            String v = cell != null && cell.getCellType() == CellType.FORMULA
+                    ? formatter.formatCellValue(cell) : cellText(row, c, formatter);
             if (v != null && !v.trim().isEmpty()) {
                 return false;
             }
@@ -223,6 +237,11 @@ public final class ExcelUtils {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private static String dateText(Row row, int col, ExcelDates dates, String label) {
+        if (col < 0 || row == null) return "";
+        return dates.read(row.getCell(col), "第" + (row.getRowNum() + 1) + "行" + label);
     }
 
     private static String cellText(Row row, int col, DataFormatter formatter) {

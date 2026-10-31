@@ -1,6 +1,7 @@
 package com.szjx.personnel.server.dao;
 
 import com.szjx.personnel.server.model.Department;
+import com.szjx.personnel.server.auth.DataScope;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 部门数据访问
+ * 单位数据访问
  */
 @Repository
 public class DepartmentDao {
@@ -40,24 +41,24 @@ public class DepartmentDao {
     };
 
     public List<Department> findAll() {
-        return jdbc.query("SELECT * FROM department ORDER BY sort, id", MAPPER);
+        return jdbc.query("SELECT * FROM department WHERE " + DataScope.departmentSql("id") + " ORDER BY sort, id", MAPPER);
     }
 
-    /** 各部门直属人员数 */
+    /** 各单位直属人员数 */
     public Map<Long, Long> personnelCounts() {
         Map<Long, Long> m = new HashMap<Long, Long>();
         for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT department_id, COUNT(*) AS c FROM personnel WHERE department_id > 0 GROUP BY department_id")) {
+                "SELECT department_id, COUNT(*) AS c FROM personnel WHERE department_id > 0 AND " + DataScope.departmentSql("department_id") + " GROUP BY department_id")) {
             m.put(((Number) r.get("department_id")).longValue(), ((Number) r.get("c")).longValue());
         }
         return m;
     }
 
-    /** 各部门负责人姓名 */
+    /** 各单位负责人姓名 */
     public Map<Long, String> leaderNames() {
         Map<Long, String> m = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT d.id, p.name FROM department d JOIN personnel p ON d.leader_id = p.id WHERE d.leader_id > 0")) {
+                "SELECT d.id, p.name FROM department d JOIN personnel p ON d.leader_id = p.id WHERE d.leader_id > 0 AND " + DataScope.departmentSql("d.id") + " AND " + DataScope.departmentSql("p.department_id"))) {
             m.put(((Number) r.get("id")).longValue(), String.valueOf(r.get("name")));
         }
         return m;
@@ -89,6 +90,7 @@ public class DepartmentDao {
             Long c = cnt.get(d.getId());
             d.setCount(c == null ? 0L : c);
             d.setLeaderName(leaders.get(d.getId()));
+            if (DataScope.restricted() && d.getLeaderName() == null) d.setLeaderId(0L);
             d.setTotal(0L);
         }
         for (Department r : roots) {
@@ -110,7 +112,7 @@ public class DepartmentDao {
     }
 
     public Department findById(Long id) {
-        List<Department> list = jdbc.query("SELECT * FROM department WHERE id=?", MAPPER, id);
+        List<Department> list = jdbc.query("SELECT * FROM department WHERE id=? AND " + DataScope.departmentSql("id"), MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
 
@@ -139,13 +141,17 @@ public class DepartmentDao {
         jdbc.update("DELETE FROM department WHERE id=?", id);
     }
 
-    /** 子部门数量 */
+    public boolean assignedToAccount(Long id) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM account_department WHERE department_id=?", Long.class, id) > 0;
+    }
+
+    /** 子单位数量 */
     public long countChildren(Long id) {
         Long n = jdbc.queryForObject("SELECT COUNT(*) FROM department WHERE parent_id=?", Long.class, id);
         return n == null ? 0 : n;
     }
 
-    /** 部门下人员数量 */
+    /** 单位下人员数量 */
     public long countPersonnel(Long id) {
         Long n = jdbc.queryForObject("SELECT COUNT(*) FROM personnel WHERE department_id=?", Long.class, id);
         return n == null ? 0 : n;

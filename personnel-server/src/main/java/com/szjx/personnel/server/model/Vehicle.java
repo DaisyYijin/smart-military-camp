@@ -24,6 +24,8 @@ public class Vehicle {
     private String insuranceExpiry;   // 保险到期日
     private String inspectionExpiry;  // 年检到期日
     private String remark;
+    private String photo;        // 车辆照片文件名(服务端 data/photos/vehicle/ 下)
+    private String photoBase64;  // 上传用,不入库
     private String createdAt;
     private String updatedAt;
 
@@ -177,6 +179,22 @@ public class Vehicle {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public String getPhoto() {
+        return photo;
+    }
+
+    public void setPhoto(String photo) {
+        this.photo = photo;
+    }
+
+    public String getPhotoBase64() {
+        return photoBase64;
+    }
+
+    public void setPhotoBase64(String photoBase64) {
+        this.photoBase64 = photoBase64;
     }
 
     public String getCreatedAt() {

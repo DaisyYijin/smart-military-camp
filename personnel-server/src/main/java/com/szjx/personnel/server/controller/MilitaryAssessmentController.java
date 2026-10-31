@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.dao.MilitaryAssessmentDao;
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.MilitaryAssessment;
@@ -69,6 +71,7 @@ public class MilitaryAssessmentController {
     /** 新建/更新方案:body={id?, name, remark, items:[{name, weight, children:[{name,weight}]}]};顶级占比合计须为100,子项占其课目合计须为100 */
     @PostMapping("/schemes")
     public ApiResponse saveScheme(@RequestBody Map<String, Object> body) {
+        DataScope.requireAdmin();
         String name = str(body.get("name"));
         if (name.isEmpty()) {
             return ApiResponse.error("请填写方案名称");
@@ -109,15 +112,14 @@ public class MilitaryAssessmentController {
                     name, str(body.get("remark")), id);
             jdbc.update("DELETE FROM mil_scheme_item WHERE scheme_id=?", id);
         } else {
-            jdbc.update("INSERT INTO mil_scheme(name, remark) VALUES(?,?)", name, str(body.get("remark")));
-            id = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+            id = jdbc.queryForObject("INSERT INTO mil_scheme(name, remark) VALUES(?,?) RETURNING id",
+                    Long.class, name, str(body.get("remark")));
         }
         int sort = 0;
         for (Map<String, Object> it : items) {
             sort++;
-            jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,?)",
-                    id, str(it.get("name")), num(it.get("weight"), 0), sort);
-            Long parentId = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+            Long parentId = jdbc.queryForObject("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,?) RETURNING id",
+                    Long.class, id, str(it.get("name")), num(it.get("weight"), 0), sort);
             int csort = 0;
             for (Map<String, Object> c : castList(it.get("children"))) {
                 csort++;
@@ -130,6 +132,7 @@ public class MilitaryAssessmentController {
 
     @DeleteMapping("/schemes/{id:\\d+}")
     public ApiResponse deleteScheme(@PathVariable Long id) {
+        DataScope.requireAdmin();
         jdbc.update("DELETE FROM mil_scheme_item WHERE scheme_id=?", id);
         jdbc.update("DELETE FROM mil_scheme WHERE id=?", id);
         return ApiResponse.ok();

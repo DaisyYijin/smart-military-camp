@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.LeaveRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -33,6 +35,7 @@ public class LeaveDao {
             r.setTravelDays(rs.getObject("travel_days") == null ? null : rs.getDouble("travel_days"));
             r.setHolidayDays(rs.getObject("holiday_days") == null ? null : rs.getDouble("holiday_days"));
             r.setHolidayName(rs.getString("holiday_name"));
+            r.setLeaveLocation(rs.getString("leave_location"));
             r.setLeaveType(rs.getString("leave_type"));
             r.setStartDate(rs.getString("start_date"));
             r.setEndDate(rs.getString("end_date"));
@@ -51,6 +54,7 @@ public class LeaveDao {
 
     public List<LeaveRecord> query(String keyword, int page, int size) {
         StringBuilder sql = new StringBuilder(BASE).append(" WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("l.personnel_id")).append(" ");
         List<Object> args = new ArrayList<Object>();
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ? ");
@@ -65,6 +69,7 @@ public class LeaveDao {
     public long count(String keyword) {
         StringBuilder sql = new StringBuilder(
                 "SELECT COUNT(*) FROM leave_record l LEFT JOIN personnel p ON l.personnel_id=p.id WHERE 1=1 ");
+        sql.append(" AND ").append(DataScope.personSql("l.personnel_id")).append(" ");
         List<Object> args = new ArrayList<Object>();
         if (keyword != null && !keyword.trim().isEmpty()) {
             sql.append(" AND p.name LIKE ? ");
@@ -75,39 +80,44 @@ public class LeaveDao {
     }
 
     public LeaveRecord findById(Long id) {
+        DataScope.requireRecord(jdbc, "leave_record", "personnel_id", id);
         List<LeaveRecord> list = jdbc.query(BASE + " WHERE l.id=?", MAPPER, id);
         return list.isEmpty() ? null : list.get(0);
     }
 
     public long insert(LeaveRecord r) {
+        DataScope.requirePerson(jdbc, r.getPersonnelId());
         return jdbc.queryForObject(
                 "INSERT INTO leave_record(personnel_id, year, leave_type, start_date, end_date, days, " +
-                "travel_days, holiday_days, holiday_name, reason, remark) VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+                "travel_days, holiday_days, holiday_name, leave_location, reason, remark) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
                 Long.class,
                 r.getPersonnelId(), nvl(r.getYear()),
                 nvl(r.getLeaveType()), nvl(r.getStartDate()), nvl(r.getEndDate()),
                 r.getDays() == null ? 0 : r.getDays(),
                 r.getTravelDays() == null ? 0 : r.getTravelDays(),
                 r.getHolidayDays() == null ? 0 : r.getHolidayDays(),
-                nvl(r.getHolidayName()),
+                nvl(r.getHolidayName()), nvl(r.getLeaveLocation()),
                 nvl(r.getReason()), nvl(r.getRemark()));
     }
 
     public void update(LeaveRecord r) {
+        DataScope.requireRecord(jdbc, "leave_record", "personnel_id", r.getId());
+        DataScope.requirePerson(jdbc, r.getPersonnelId());
         jdbc.update(
                 "UPDATE leave_record SET personnel_id=?, year=?, leave_type=?, start_date=?, end_date=?, days=?, " +
-                "travel_days=?, holiday_days=?, holiday_name=?, reason=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
+                "travel_days=?, holiday_days=?, holiday_name=?, leave_location=?, reason=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
                 r.getPersonnelId(), nvl(r.getYear()),
                 nvl(r.getLeaveType()), nvl(r.getStartDate()), nvl(r.getEndDate()),
                 r.getDays() == null ? 0 : r.getDays(),
                 r.getTravelDays() == null ? 0 : r.getTravelDays(),
                 r.getHolidayDays() == null ? 0 : r.getHolidayDays(),
-                nvl(r.getHolidayName()),
+                nvl(r.getHolidayName()), nvl(r.getLeaveLocation()),
                 nvl(r.getReason()), nvl(r.getRemark()),
                 r.getId());
     }
 
     public void delete(Long id) {
+        DataScope.requireRecord(jdbc, "leave_record", "personnel_id", id);
         jdbc.update("DELETE FROM leave_record WHERE id=?", id);
     }
 

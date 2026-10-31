@@ -1,5 +1,7 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.auth.DataScope;
+import com.szjx.personnel.server.auth.ForbiddenException;
 import com.szjx.personnel.server.dao.DepartmentDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.Department;
@@ -10,7 +12,7 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 
 /**
- * 部门业务
+ * 单位业务
  */
 @Service
 public class DepartmentService {
@@ -28,36 +30,49 @@ public class DepartmentService {
     }
 
     public Department create(Department d) {
+        DataScope.requireDepartment(d.getParentId());
+        validateLeader(d);
         if (!StringUtils.hasText(d.getName())) {
-            throw new IllegalArgumentException("部门名称不能为空");
+            throw new IllegalArgumentException("单位名称不能为空");
         }
         if (d.getParentId() != null && d.getParentId() > 0 && departmentDao.findById(d.getParentId()) == null) {
-            throw new IllegalArgumentException("上级部门不存在");
+            throw new IllegalArgumentException("上级单位不存在");
         }
         long id = departmentDao.insert(d);
-        return departmentDao.findById(id);
+        d.setId(id);
+        return d;
     }
 
     public Department update(Long id, Department d) {
+        DataScope.requireDepartment(id);
+        validateLeader(d);
         if (!StringUtils.hasText(d.getName())) {
-            throw new IllegalArgumentException("部门名称不能为空");
+            throw new IllegalArgumentException("单位名称不能为空");
         }
         Department old = departmentDao.findById(id);
         if (old == null) {
-            throw new IllegalArgumentException("部门不存在");
+            throw new IllegalArgumentException("单位不存在");
+        }
+        if (DataScope.restricted()) {
+            long oldParent = old.getParentId() == null ? 0 : old.getParentId();
+            long newParent = d.getParentId() == null ? oldParent : d.getParentId();
+            if (newParent == 0 && !DataScope.allowsDepartment(old.getParentId())) newParent = oldParent;
+            if (newParent != oldParent) throw new ForbiddenException("子账号不能调整单位层级，请联系上级账号");
+            d.setParentId(oldParent);
         }
         if (d.getParentId() != null && d.getParentId() > 0) {
             if (d.getParentId().equals(id)) {
-                throw new IllegalArgumentException("上级部门不能是自己");
+                throw new IllegalArgumentException("上级单位不能是自己");
             }
-            if (departmentDao.findById(d.getParentId()) == null) {
-                throw new IllegalArgumentException("上级部门不存在");
+            if ((!DataScope.restricted() || DataScope.allowsDepartment(d.getParentId()))
+                    && departmentDao.findById(d.getParentId()) == null) {
+                throw new IllegalArgumentException("上级单位不存在");
             }
             // 防止环引用:新上级不能是自己的后代
             Department cursor = departmentDao.findById(d.getParentId());
             while (cursor != null && cursor.getParentId() != null && cursor.getParentId() > 0) {
                 if (cursor.getParentId().equals(id)) {
-                    throw new IllegalArgumentException("上级部门不能是自己的下级部门");
+                    throw new IllegalArgumentException("上级单位不能是自己的下级单位");
                 }
                 cursor = departmentDao.findById(cursor.getParentId());
             }
@@ -69,12 +84,23 @@ public class DepartmentService {
 
     @Transactional
     public void delete(Long id) {
+        DataScope.requireDepartment(id);
+        if (departmentDao.assignedToAccount(id)) {
+            throw new IllegalArgumentException("该单位已分配给账号，请先调整账号的管理单位");
+        }
         if (departmentDao.countChildren(id) > 0) {
-            throw new IllegalArgumentException("该部门下还有子部门,请先删除子部门");
+            throw new IllegalArgumentException("该单位下还有子单位,请先删除子单位");
         }
         if (departmentDao.countPersonnel(id) > 0) {
-            throw new IllegalArgumentException("该部门下还有人员,请先移走人员");
+            throw new IllegalArgumentException("该单位下还有人员,请先移走人员");
         }
         departmentDao.delete(id);
+    }
+
+    private void validateLeader(Department d) {
+        if (DataScope.restricted() && d.getLeaderId() != null && d.getLeaderId() > 0
+                && personnelDao.findById(d.getLeaderId()) == null) {
+            throw new ForbiddenException("负责人不在当前账号的管理范围内");
+        }
     }
 }

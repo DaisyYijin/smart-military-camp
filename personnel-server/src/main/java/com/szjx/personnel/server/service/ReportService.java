@@ -1,6 +1,8 @@
 package com.szjx.personnel.server.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.szjx.personnel.server.model.FitnessRecord;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +21,8 @@ public class ReportService {
     /** 合法表名白名单(防SQL注入) */
     public static final java.util.Set<String> SAFE_TABLES = new java.util.HashSet<String>(java.util.Arrays.asList(
             "personnel", "department", "equipment", "material", "vehicle",
-            "leave_record", "fitness_record", "position_history", "reward_punish",
+            "leave_record", "leave_plan", "fitness_record", "military_assessment",
+            "position_history", "reward_punish",
             "child_info", "family_member", "driver_license", "personal_card",
             "private_vehicle", "housing_info", "phone_device"));
 
@@ -38,8 +41,12 @@ public class ReportService {
     protected static final java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>> PROGRESS =
             new java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>>();
 
+    private final FitnessScoringService fitnessScoring;
+
     public ReportService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+        // 保留原构造签名,包括继承此服务的 Controller 和直接构造的隔离测试。
+        this.fitnessScoring = new FitnessScoringService(jdbc);
     }
 
     public Map<String, Object> getProgress(String id) {
@@ -68,7 +75,9 @@ public class ReportService {
         String[][] zh = {{"position_history", "任职经历"}, {"reward_punish", "奖惩情况"}, {"child_info", "子女信息"},
                 {"family_member", "家庭成员"}, {"driver_license", "驾驶证"}, {"personal_card", "个人卡号"},
                 {"private_vehicle", "私家车"}, {"housing_info", "住房情况"}, {"equipment", "装备"},
-                {"material", "物资"}, {"vehicle", "车辆"}};
+                {"material", "物资"}, {"vehicle", "车辆"}, {"leave_record", "休假"},
+                {"leave_plan", "休假计划"}, {"fitness_record", "体能"}, {"military_assessment", "军事考核"},
+                {"phone_device", "手机"}};
         for (String[] z : zh) {
             if (z[0].equals(table)) { return z[1]; }
         }
@@ -149,7 +158,7 @@ public class ReportService {
         Map<String, Object> meta = (Map<String, Object>) pkg.get("meta");
         int version = meta.get("version") instanceof Number ? ((Number) meta.get("version")).intValue() : 1;
         if (version < 1 || version > 2) { throw new IllegalArgumentException("不支持上报包版本: " + version); }
-        for (String module : Arrays.asList("personnel", "identities", "leave", "fitness", "phone", "equipment", "material", "vehicle")) {
+        for (String module : Arrays.asList("personnel", "identities", "leave", "leavePlan", "fitness", "phone", "military", "equipment", "material", "vehicle")) {
             pkg.put(module, rows(pkg, module));
         }
         if (pkg.get("scope") != null && !(pkg.get("scope") instanceof List)) { throw new IllegalArgumentException("scope必须为数组"); }
@@ -158,6 +167,7 @@ public class ReportService {
         Map<String, Object> subs = (Map<String, Object>) pkg.get("subs");
         for (String table : subs.keySet()) {
             if (!Arrays.asList(SUB_TABLES).contains(table)) { throw new IllegalArgumentException("非法上报子表: " + table); }
+            if (subs.get(table) == null) { throw new IllegalArgumentException("上报子表必须为数组: " + table); }
             rows(subs, table);
         }
         // 旧包可从人员清单恢复卡号,绝不将源端本地ID直接用到接收库。
@@ -165,7 +175,7 @@ public class ReportService {
         for (Map<String, Object> p : identityRows(pkg)) {
             if (p.get("id") instanceof Number) { sourceCards.put(((Number) p.get("id")).longValue(), card(p.get("id_card"))); }
         }
-        for (String module : Arrays.asList("leave", "fitness", "phone")) { attachCards(rows(pkg, module), sourceCards, "personnel_id", "_card"); }
+        for (String module : Arrays.asList("leave", "leavePlan", "fitness", "phone", "military")) { attachCards(rows(pkg, module), sourceCards, "personnel_id", "_card"); }
         for (String table : subs.keySet()) { attachCards(rows(subs, table), sourceCards, "personnel_id", "_card"); }
         for (String module : Arrays.asList("equipment", "material", "vehicle")) {
             attachCards(rows(pkg, module), sourceCards, "vehicle".equals(module) ? "driver_id" : "keeper_id",
@@ -219,6 +229,8 @@ public class ReportService {
         Set<String> allowed = new HashSet<String>();
         for (Map<String, Object> col : jdbc.queryForList("PRAGMA table_info(" + table + ")")) { allowed.add(text(col.get("name"))); }
         Set<String> ignore = new HashSet<String>(Arrays.asList(excluded));
+        // JSON 上报不携带照片二进制,源端路径不能替换本地照片或成为本地文件引用。
+        ignore.add("photo");
         Map<String, Object> row = new LinkedHashMap<String, Object>();
         for (String col : colsOf(incoming)) {
             if (!allowed.contains(col)) { throw new IllegalArgumentException("上报列与schema不兼容: " + table + "." + col); }
@@ -229,8 +241,8 @@ public class ReportService {
 
     private long insert(String table, Map<String, Object> row) {
         List<String> cols = new ArrayList<String>(row.keySet());
-        jdbc.update("INSERT INTO " + safeTable(table) + "(" + joinList(cols) + ") VALUES(" + marks(cols.size()) + ")", row.values().toArray());
-        return jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+        return jdbc.queryForObject("INSERT INTO " + safeTable(table) + "(" + joinList(cols) + ") VALUES(" + marks(cols.size()) + ") RETURNING id",
+                Long.class, row.values().toArray());
     }
 
     private void update(String table, long id, Map<String, Object> row) {
@@ -252,7 +264,7 @@ public class ReportService {
             else if (local.containsKey(c)) { mayReplace("personnel", p, local.get(c), warnings); }
         }
         List<List<Map<String, Object>>> collections = new ArrayList<List<Map<String, Object>>>();
-        for (String module : Arrays.asList("leave", "fitness", "phone")) { collections.add(rows(pkg, module)); }
+        for (String module : Arrays.asList("leave", "leavePlan", "fitness", "phone", "military")) { collections.add(rows(pkg, module)); }
         Map<String, Object> subs = (Map<String, Object>) pkg.get("subs");
         for (String table : subs.keySet()) { collections.add(rows(subs, table)); }
         for (List<Map<String, Object>> list : collections) {
@@ -284,6 +296,7 @@ public class ReportService {
         return out;
     }
 
+    @Transactional
     @SuppressWarnings("unchecked")
     public Map<String, Object> receivePackage(Map<String, Object> pkg, Long deptId, boolean createNew, Long parentId, String progressId) {
         List<String> warnings = new ArrayList<String>();
@@ -296,11 +309,11 @@ public class ReportService {
         long targetDept;
         if (createNew) {
             long parent = parentId == null ? 0 : parentId;
-            if (parent != 0 && jdbc.queryForList("SELECT id FROM department WHERE id=?", parent).isEmpty()) { throw new IllegalArgumentException("上级部门不存在"); }
-            jdbc.update("INSERT INTO department(name,parent_id,sort,remark) VALUES(?,?,50,'下级上报自动创建')", unit, parent);
-            targetDept = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class); deptName = unit;
+            if (parent != 0 && jdbc.queryForList("SELECT id FROM department WHERE id=?", parent).isEmpty()) { throw new IllegalArgumentException("上级单位不存在"); }
+            targetDept = jdbc.queryForObject("INSERT INTO department(name,parent_id,sort,remark) VALUES(?,?,50,'下级上报自动创建') RETURNING id",
+                    Long.class, unit, parent); deptName = unit;
         } else {
-            if (deptId == null) { throw new IllegalArgumentException("请选择接收部门"); }
+            if (deptId == null) { throw new IllegalArgumentException("请选择接收单位"); }
             targetDept = deptId; deptName = jdbc.queryForObject("SELECT name FROM department WHERE id=?", String.class, deptId);
         }
         prog(progressId, 12, "合并人员", null);
@@ -323,7 +336,9 @@ public class ReportService {
         int subRows = replaceSubs(pkg, ids, accepted, warnings);
         prog(progressId, 65, "合并休假体能手机", null);
         int leaveAdded = mergeRecords("leave_record", rows(pkg, "leave"), ids, new String[]{"leave_type", "start_date", "end_date"}, warnings);
+        int leavePlanAdded = mergeRecords("leave_plan", rows(pkg, "leavePlan"), ids, new String[]{"year", "leave_type", "start_date", "end_date"}, warnings);
         int fitnessAdded = mergeRecords("fitness_record", rows(pkg, "fitness"), ids, new String[]{"item", "test_date"}, warnings);
+        int militaryAdded = mergeRecords("military_assessment", rows(pkg, "military"), ids, new String[]{"category", "item", "score", "test_date"}, warnings);
         int phoneAdded = mergeRecords("phone_device", rows(pkg, "phone"), ids, new String[]{"device_type", "serial_no", "imei1", "imei2", "phone_number"}, warnings);
         if (!rows(pkg, "phone").isEmpty()) {
             Set<Long> phonePeople = new HashSet<Long>();
@@ -341,7 +356,9 @@ public class ReportService {
         result.put("deptName", deptName); result.put("created", createNew);
         result.put("added", added); result.put("updated", updated); result.put("skipped", skipped);
         result.put("subRows", subRows); result.put("leaveAdded", leaveAdded); result.put("fitnessAdded", fitnessAdded); result.put("phoneAdded", phoneAdded);
+        result.put("leavePlanAdded", leavePlanAdded); result.put("militaryAdded", militaryAdded);
         result.put("leaveTotal", rows(pkg, "leave").size()); result.put("fitnessTotal", rows(pkg, "fitness").size()); result.put("phoneTotal", rows(pkg, "phone").size());
+        result.put("leavePlanTotal", rows(pkg, "leavePlan").size()); result.put("militaryTotal", rows(pkg, "military").size());
         result.put("warnings", warnings);
         prog(progressId, 100, "导入完成", null); return result;
     }
@@ -384,7 +401,13 @@ public class ReportService {
         int count = 0;
         Map<String, Object> subs = (Map<String, Object>) pkg.get("subs");
         for (String table : SUB_TABLES) {
+            // 缺失键表示未上报该类;显式数组(即使为空)表示接受人员的该类完整快照。
+            if (!subs.containsKey(table)) { continue; }
             Map<Long, List<Map<String, Object>>> byPerson = new HashMap<Long, List<Map<String, Object>>>();
+            for (String c : accepted) {
+                Long id = ids.get(c);
+                if (id != null) { byPerson.put(id, new ArrayList<Map<String, Object>>()); }
+            }
             for (Map<String, Object> row : rows(subs, table)) {
                 String c = card(row.get("_card"));
                 if (c.isEmpty() || !accepted.contains(c)) { continue; }
@@ -415,6 +438,20 @@ public class ReportService {
             Long personId;
             try { personId = requiredPerson(row, ids); }
             catch (IllegalArgumentException e) { warnings.add(tableLabel(table) + ":" + e.getMessage()); continue; }
+            if ("fitness_record".equals(table)) {
+                FitnessRecord record = new FitnessRecord();
+                record.setPersonnelId(personId);
+                record.setItem(text(row.get("item")));
+                record.setTestDate(text(row.get("test_date")));
+                record.setScore(text(row.get("score")));
+                fitnessScoring.score(record);
+                row = new LinkedHashMap<String, Object>(row);
+                row.put("item", record.getItem());
+                row.put("test_date", record.getTestDate());
+                row.put("score", record.getScore());
+                row.put("points", record.getPoints());
+                row.put("grade", record.getGrade());
+            }
             List<String> keyValues = new ArrayList<String>();
             for (String col : keyCols) { keyValues.add(text(row.get(col))); }
             String batchKey = key(personId, (Object[]) keyValues.toArray(new String[0]));

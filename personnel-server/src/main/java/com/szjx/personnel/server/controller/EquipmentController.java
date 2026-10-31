@@ -1,9 +1,13 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.auth.DataScope;
+
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.Equipment;
 import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.service.EquipmentService;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +40,7 @@ public class EquipmentController {
     public ApiResponse query(@RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String name,
                              @RequestParam(required = false) String code,
+                             @RequestParam(required = false) String identCode,
                              @RequestParam(required = false) String category,
                              @RequestParam(required = false) String status,
                              @RequestParam(required = false) String keeperName,
@@ -47,12 +52,14 @@ public class EquipmentController {
         if (page < 1) page = 1;
         if (size < 1 || size > 200) size = 20;
         StringBuilder sql = new StringBuilder(
-            "SELECT e.id, e.name, e.code, e.category, e.model, e.status, e.keeper_id AS keeperId, " +
+            "SELECT e.id, e.name, e.code, e.ident_code AS identCode, e.category, e.brand, e.model, e.status, e.keeper_id AS keeperId, " +
             "p.name AS keeperName, p.id_card AS keeperIdCard, e.location, e.buy_date AS buyDate, " +
-            "e.equip_date AS equipDate, e.remark, e.created_at AS createdAt, e.updated_at AS updatedAt " +
+            "e.equip_date AS equipDate, e.remark, e.photo, e.created_at AS createdAt, e.updated_at AS updatedAt " +
             "FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
         StringBuilder csql = new StringBuilder(
             "SELECT COUNT(*) FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
+        sql.append(" AND ").append(DataScope.personSql("e.keeper_id"));
+        csql.append(" AND ").append(DataScope.personSql("e.keeper_id"));
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         java.util.List<Object> cargs = new java.util.ArrayList<Object>();
         if (keyword != null && !keyword.trim().isEmpty()) { keyword = keyword.trim(); }
@@ -63,6 +70,10 @@ public class EquipmentController {
         if (code != null && !code.trim().isEmpty()) {
             sql.append(" AND e.code LIKE ?"); args.add("%" + code.trim() + "%");
             csql.append(" AND e.code LIKE ?"); cargs.add("%" + code.trim() + "%");
+        }
+        if (identCode != null && !identCode.trim().isEmpty()) {
+            sql.append(" AND e.ident_code LIKE ?"); args.add("%" + identCode.trim() + "%");
+            csql.append(" AND e.ident_code LIKE ?"); cargs.add("%" + identCode.trim() + "%");
         }
         if (category != null && !category.trim().isEmpty()) {
             sql.append(" AND e.category = ?"); args.add(category.trim());
@@ -93,6 +104,23 @@ public class EquipmentController {
         args.add(size); args.add((long) (page - 1) * size);
         java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
         return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
+    }
+
+    @GetMapping("/{id:\\d+}/photo")
+    public ResponseEntity<byte[]> photo(@PathVariable Long id) {
+        Equipment equipment = equipmentService.get(id);
+        if (equipment == null || equipment.getPhoto() == null || equipment.getPhoto().isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        java.io.File file = equipmentService.photoFile(equipment.getPhoto());
+        if (file == null || !file.exists()) return ResponseEntity.notFound().build();
+        try {
+            byte[] bytes = java.nio.file.Files.readAllBytes(file.toPath());
+            MediaType type = equipment.getPhoto().toLowerCase().endsWith(".png") ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG;
+            return ResponseEntity.ok().contentType(type).body(bytes);
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @PostMapping

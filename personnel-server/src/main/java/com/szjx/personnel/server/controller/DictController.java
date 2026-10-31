@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -43,6 +44,21 @@ public class DictController {
     @PostMapping
     public ApiResponse create(@RequestBody DictItem d) {
         return ApiResponse.ok(dictService.create(d));
+    }
+
+    /** 同级字典选项拖动排序 */
+    @PutMapping("/reorder")
+    public ApiResponse reorder(@RequestBody(required = false) ReorderRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("排序信息不能为空");
+        }
+        dictService.reorder(request.dictType, request.ids);
+        return ApiResponse.ok();
+    }
+
+    public static class ReorderRequest {
+        public String dictType;
+        public List<Long> ids;
     }
 
     @PutMapping("/{id}")

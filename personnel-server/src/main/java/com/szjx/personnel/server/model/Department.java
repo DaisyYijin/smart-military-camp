@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 部门(树形)
+ * 单位(树形)
  */
 public class Department {
 

@@ -39,11 +39,16 @@ public final class TrayManager {
 
     public static void install(final int port, final String lanUrl, final String adminUser,
                                final PasswordChanger changer) {
+        install(port, "http://127.0.0.1:" + port, lanUrl, adminUser, changer);
+    }
+
+    public static void install(final int port, final String localUrl, final String lanUrl, final String adminUser,
+                               final PasswordChanger changer) {
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 try {
                     if (!SystemTray.isSupported()) {
-                        System.out.println("[托盘] 当前系统不支持托盘图标(不影响使用,浏览器访问 http://127.0.0.1:" + port + ")");
+                        System.out.println("[托盘] 当前系统不支持托盘图标(不影响使用,浏览器访问 " + localUrl + ")");
                         return;
                     }
                     SystemTray tray = SystemTray.getSystemTray();
@@ -54,7 +59,7 @@ public final class TrayManager {
                     java.awt.PopupMenu menu = new java.awt.PopupMenu();
                     menu.add(item("打开系统", new ActionListener() {
                         public void actionPerformed(java.awt.event.ActionEvent e) {
-                            openBrowser("http://127.0.0.1:" + port);
+                            openBrowser(localUrl);
                         }
                     }));
                     menu.add(item("复制局域网访问地址", new ActionListener() {
@@ -82,7 +87,7 @@ public final class TrayManager {
                     // 双击托盘 = 打开系统
                     icon.addActionListener(new ActionListener() {
                         public void actionPerformed(java.awt.event.ActionEvent e) {
-                            openBrowser("http://127.0.0.1:" + port);
+                            openBrowser(localUrl);
                         }
                     });
                     tray.add(icon);

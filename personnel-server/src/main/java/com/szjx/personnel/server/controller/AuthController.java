@@ -8,6 +8,8 @@ import com.szjx.personnel.server.service.LogService;
 import com.szjx.personnel.server.service.LoginGuard;
 import com.szjx.personnel.server.service.PasswordUtil;
 import com.szjx.personnel.server.service.TokenManager;
+import com.szjx.personnel.server.service.AccountService;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -31,16 +32,21 @@ public class AuthController {
     private final TokenManager tokenManager;
     private final LoginGuard loginGuard;
     private final LogService logService;
+    private final AccountService accounts;
+    private final OpLogInterceptor opLog;
 
     @Value("${app.auth.token-expire-hours:24}")
     private int tokenExpireHours;
 
     public AuthController(AdminUserDao adminUserDao, TokenManager tokenManager,
-                          LoginGuard loginGuard, LogService logService) {
+                          LoginGuard loginGuard, LogService logService, AccountService accounts,
+                          OpLogInterceptor opLog) {
         this.adminUserDao = adminUserDao;
         this.tokenManager = tokenManager;
         this.loginGuard = loginGuard;
         this.logService = logService;
+        this.accounts = accounts;
+        this.opLog = opLog;
     }
 
     @PostMapping("/login")
@@ -59,23 +65,28 @@ public class AuthController {
         if (locked > 0) {
             return ApiResponse.error("登录失败次数过多,请 " + (locked / 1000 / 60 + 1) + " 分钟后再试");
         }
+        long tokenVersion = tokenManager.version(key);
         String hash = adminUserDao.findPasswordHash(key);
         if (hash == null || !PasswordUtil.verify(password, hash)) {
             loginGuard.recordFailure(key);
             logService.record(key, "登录失败", "密码错误或账号不存在",
-                    OpLogInterceptor.clientIp(request));
+                    opLog.clientIp(request));
             return ApiResponse.error("用户名或密码错误");
         }
+        // Re-read the full ancestor chain before issuing any session.
+        Map<String, Object> data = accounts.profile(key);
         loginGuard.clear(key);
         tokenManager.setExpireMillis(tokenExpireHours * 3600L * 1000L);
-        String token = tokenManager.create(key);
-        Map<String, Object> data = new HashMap<String, Object>();
+        String token = tokenManager.create(key, tokenVersion);
         data.put("token", token);
-        data.put("displayName", adminUserDao.findDisplayName(key));
-        data.put("username", key);
         logService.record(key, "登录成功", "网页登录",
-                OpLogInterceptor.clientIp(request));
+                opLog.clientIp(request));
         return ApiResponse.ok(data);
+    }
+
+    @GetMapping("/me")
+    public ApiResponse me(HttpServletRequest request) {
+        return ApiResponse.ok(accounts.profile((String) request.getAttribute("authUser")));
     }
 
     @PostMapping("/logout")
@@ -83,7 +94,7 @@ public class AuthController {
                               javax.servlet.http.HttpServletRequest request) {
         String username = tokenManager.validate(token);
         tokenManager.remove(token);
-        logService.record(username, "退出登录", "", OpLogInterceptor.clientIp(request));
+        logService.record(username, "退出登录", "", opLog.clientIp(request));
         return ApiResponse.ok();
     }
 
@@ -102,11 +113,23 @@ public class AuthController {
         if (newPassword.length() < 6) {
             return ApiResponse.error("新密码长度不能少于 6 位");
         }
-        String hash = adminUserDao.findPasswordHash(username);
-        if (hash == null || !PasswordUtil.verify(oldPassword, hash)) {
-            return ApiResponse.error("旧密码错误");
+        accounts.changePassword(username, oldPassword, newPassword);
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/change-username")
+    public ApiResponse changeUsername(@RequestBody(required = false) Map<String, String> body,
+                                      HttpServletRequest request) {
+        if (body == null) {
+            return ApiResponse.error(400, "请求体不能为空");
         }
-        adminUserDao.updatePassword(username, PasswordUtil.hash(newPassword));
+        String username = (String) request.getAttribute("authUser");
+        String oldPassword = body.get("oldPassword");
+        String newUsername = body.get("newUsername");
+        if (!StringUtils.hasText(oldPassword) || !StringUtils.hasText(newUsername)) {
+            return ApiResponse.error("当前密码和新账号不能为空");
+        }
+        accounts.changeUsername(username, oldPassword, newUsername);
         return ApiResponse.ok();
     }
 }

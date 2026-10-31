@@ -1,8 +1,13 @@
 package com.szjx.personnel.server.launcher;
 
 import com.szjx.personnel.server.PersonnelServerApplication;
-import com.szjx.personnel.server.dao.AdminUserDao;
-import com.szjx.personnel.server.service.PasswordUtil;
+import com.szjx.personnel.server.service.LocalAdminService;
+import com.szjx.personnel.server.config.SchemaInitializer;
+import org.springframework.boot.web.context.WebServerApplicationContext;
+import org.springframework.core.env.MapPropertySource;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Arrays;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
@@ -75,7 +80,7 @@ public class Launcher {
         final String oldAdminUser = config.getAdminUser(); // 向导改账号时的改名源
         String pendingUsername = oldAdminUser;
         char[] pendingPassword = null;
-        boolean firstRun = !config.isSetupDone() || hasFlag(args, "--setup");
+        boolean firstRun = !config.isSetupDone() || !new File(dataDir, "personnel.db").exists() || hasFlag(args, "--setup");
 
         // ---- 端口决策与设置 ----
         if (!PortProbe.isFree(port) && PortProbe.isOurApp(port)) {
@@ -105,8 +110,6 @@ public class Launcher {
             pendingUsername = r.username;
             pendingPassword = r.newPassword;
             config.setPort(port);
-            config.setAdminUser(r.username);
-            config.setSetupDone(true);
             config.save();
         } else {
             if (!PortProbe.isFree(port)) {
@@ -119,10 +122,7 @@ public class Launcher {
                 return;
             }
             if (firstRun) {
-                // 无界面模式无法弹设置页:按默认管理员启动并明确提示
-                System.out.println("[提示] 无界面模式首次运行,未做初始设置。默认管理员 admin/admin123,请登录后尽快修改!");
-                config.setSetupDone(true);
-                config.save();
+                System.out.println("[提示] 新数据库须设置 APP_BOOTSTRAP_PASSWORD（可选 APP_BOOTSTRAP_USERNAME）；未设置时会拒绝启动，不再创建固定口令账号。");
             }
         }
 
@@ -138,42 +138,61 @@ public class Launcher {
             System.out.println("[开发模式] 网页文件直接读取源码目录,修改后浏览器刷新即可生效");
         }
         runArgs.addAll(springArgs);
-        ConfigurableApplicationContext ctx = new SpringApplicationBuilder(PersonnelServerApplication.class)
-                .headless(!ui)
-                .run(runArgs.toArray(new String[0]));
-
-        if (!PortProbe.waitReady(port, 90_000)) {
-            String msg = "服务启动超时(端口 " + port + "),详情请查看 logs/personnel-server.log";
-            System.err.println(msg);
-            if (ui) {
-                JOptionPane.showMessageDialog(OWNER_FRAME, msg, "启动失败", JOptionPane.ERROR_MESSAGE);
-            }
+        String bootstrapPasswordFromWizard = pendingPassword == null || pendingPassword.length == 0
+                ? null : new String(pendingPassword);
+        final Map<String, Object> bootstrap = new HashMap<String, Object>();
+        if (bootstrapPasswordFromWizard != null) {
+            bootstrap.put("app.bootstrap.username", pendingUsername);
+            bootstrap.put("app.bootstrap.password", bootstrapPasswordFromWizard);
+        }
+        ConfigurableApplicationContext ctx;
+        try {
+            ctx = new SpringApplicationBuilder(PersonnelServerApplication.class)
+                    .headless(!ui)
+                    .initializers(context -> context.getEnvironment().getPropertySources()
+                            .addFirst(new MapPropertySource("local-bootstrap", bootstrap)))
+                    .run(runArgs.toArray(new String[0]));
+        } catch (RuntimeException e) {
+            bootstrap.clear();
+            String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            System.err.println("[启动失败] " + reason);
+            if (ui) JOptionPane.showMessageDialog(OWNER_FRAME, reason, "启动失败", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
             return;
+        } finally {
+            bootstrap.clear();
+            if (pendingPassword != null) Arrays.fill(pendingPassword, '\0');
         }
-
-        // ---- 应用向导里设置的账号与密码(首次运行时数据库刚初始化为 admin/admin123,这里覆盖) ----
-        final String adminUser = pendingUsername;
+        port = ((WebServerApplicationContext) ctx).getWebServer().getPort();
+        String appliedAdminUser = oldAdminUser;
         try {
-            AdminUserDao adminDao = ctx.getBean(AdminUserDao.class);
-            if (!oldAdminUser.equals(adminUser)) {
-                adminDao.rename(oldAdminUser, adminUser); // 旧名不存在时为 0 行,无副作用
+            if (ctx.getBean(SchemaInitializer.class).isAdministratorCreated()) {
+                appliedAdminUser = pendingUsername;
+                if (!ui) appliedAdminUser = ctx.getEnvironment().getProperty("app.bootstrap.username", "admin").trim();
+            } else if (ui) {
+                // Existing installations may use the local recovery wizard, never bootstrap environment values.
+                String resetPassword = bootstrapPasswordFromWizard;
+                ctx.getBean(LocalAdminService.class).configureRoot(oldAdminUser, pendingUsername, resetPassword);
+                appliedAdminUser = pendingUsername;
             }
-            if (pendingPassword != null && pendingPassword.length > 0) {
-                adminDao.updatePassword(adminUser, PasswordUtil.hash(new String(pendingPassword)));
-            }
-            System.out.println("[启动] 管理员账号已按设置更新: " + adminUser);
+            config.setAdminUser(appliedAdminUser);
+            config.setSetupDone(true);
+            config.save();
         } catch (Exception e) {
-            System.err.println("[启动] 管理员账号/密码设置失败: " + e.getMessage());
-            if (ui) {
-                JOptionPane.showMessageDialog(OWNER_FRAME,
-                        "管理员账号设置失败:" + e.getMessage() + "\n可登录后在托盘菜单修改。",
-                        "账号设置失败", JOptionPane.WARNING_MESSAGE);
-            }
+            ctx.close();
+            System.err.println("[启动失败] 管理员账号设置未完成，服务已关闭；请检查本机配置和日志。");
+            if (ui) JOptionPane.showMessageDialog(OWNER_FRAME, "管理员账号设置未完成，服务已关闭。请检查本机配置。", "启动失败", JOptionPane.ERROR_MESSAGE);
+            throw new IllegalStateException("管理员账号设置未完成", e);
         }
 
-        String lanUrl = "http://" + firstLanIp() + ":" + port;
-        printBanner(port, lanUrl, adminUser);
+        final String adminUser = appliedAdminUser;
+        org.springframework.boot.autoconfigure.web.ServerProperties serverProperties =
+                ctx.getBean(org.springframework.boot.autoconfigure.web.ServerProperties.class);
+        boolean tls = serverProperties.getSsl() != null && serverProperties.getSsl().isEnabled();
+        String scheme = tls ? "https" : "http";
+        String localUrl = scheme + "://127.0.0.1:" + port;
+        String lanUrl = scheme + "://" + firstLanIp() + ":" + port;
+        printBanner(localUrl, lanUrl, adminUser, tls);
 
         if (ui) {
             if (firstRun) {
@@ -182,12 +201,11 @@ public class Launcher {
                                 + " 和你设置的密码登录。\n局域网其他电脑访问地址:" + lanUrl,
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
             }
-            TrayManager.openBrowser("http://127.0.0.1:" + port);
-            TrayManager.install(port, lanUrl, adminUser, new TrayManager.PasswordChanger() {
+            TrayManager.openBrowser(localUrl);
+            TrayManager.install(port, localUrl, lanUrl, adminUser, new TrayManager.PasswordChanger() {
                 public String change(String newPassword) {
                     try {
-                        ctx.getBean(AdminUserDao.class)
-                                .updatePassword(adminUser, PasswordUtil.hash(newPassword));
+                        ctx.getBean(LocalAdminService.class).configureRoot(adminUser, adminUser, newPassword);
                         return null;
                     } catch (Exception e) {
                         return e.getMessage();
@@ -198,10 +216,11 @@ public class Launcher {
         // main 返回后由 Tomcat 工作线程保持进程存活
     }
 
-    private static void printBanner(int port, String lanUrl, String adminUser) {
+    private static void printBanner(String localUrl, String lanUrl, String adminUser, boolean tls) {
         System.out.println("======================================================");
         System.out.println("  数智军营人员管理系统 已启动");
-        System.out.println("  本机访问:   http://127.0.0.1:" + port);
+        System.out.println("  本机访问:   " + localUrl);
+        if (!tls) System.out.println("  [安全提示] 当前为明文 HTTP；局域网正式使用请配置可信 HTTPS，勿直接暴露到互联网。");
         System.out.println("  局域网访问: " + lanUrl);
         System.out.println("  管理账号:   " + adminUser + "(密码为初始设置/托盘修改后的密码)");
         System.out.println("  退出方式:   托盘图标右键 → 退出(无界面模式按 Ctrl+C)");

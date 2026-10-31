@@ -1,5 +1,9 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.auth.DataScope;
+import com.szjx.personnel.server.util.ItemLoanSnapshots;
+import com.szjx.personnel.server.util.PersonnelExtraFilters;
+
 import com.szjx.personnel.server.dao.DepartmentDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.Department;
@@ -43,8 +47,24 @@ public class PersonnelService {
         return personnelDao.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size);
     }
 
+    public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd, int page, int size, boolean includeDescendants) {
+        return personnelDao.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size, includeDescendants);
+    }
+
     public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd) {
         return personnelDao.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd);
+    }
+
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd, boolean includeDescendants) {
+        return personnelDao.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, includeDescendants);
+    }
+
+    public List<Personnel> query(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd, int page, int size, boolean includeDescendants, PersonnelExtraFilters extraFilters) {
+        return personnelDao.query(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, page, size, includeDescendants, extraFilters);
+    }
+
+    public long count(String keyword, String name, String idCard, Long departmentId, String status, String gender, String politicalStatus, String category, String rank, String post, String nativePlace, String enlistPlace, String education, String maritalStatus, String nation, String bloodType, String onlyChild, String locationPoint, String entryDateStart, String entryDateEnd, boolean includeDescendants, PersonnelExtraFilters extraFilters) {
+        return personnelDao.count(keyword, name, idCard, departmentId, status, gender, politicalStatus, category, rank, post, nativePlace, enlistPlace, education, maritalStatus, nation, bloodType, onlyChild, locationPoint, entryDateStart, entryDateEnd, includeDescendants, extraFilters);
     }
 
     public Personnel findById(Long id) {
@@ -54,6 +74,7 @@ public class PersonnelService {
     @Transactional
     public Personnel create(Personnel p) {
         p.setId(null);
+        DataScope.requireDepartment(p.getDepartmentId());
         validate(p, null);
         p.setPhone("");
         String photoFile = savePhotoIfAny(p.getPhotoBase64());
@@ -74,6 +95,8 @@ public class PersonnelService {
         // null 字段保留旧值(避免部分更新丢数据;清空字段请传空串)
         mergeMissing(old, p);
         p.setId(id);
+        DataScope.requireDepartment(old.getDepartmentId());
+        DataScope.requireDepartment(p.getDepartmentId());
         validate(p, old);
         // 人员电话仅为设备模块的镜像，不接受人员表单直接覆盖。
         p.setPhone(personnelDao.devicePhone(id));
@@ -139,7 +162,8 @@ public class PersonnelService {
     private static final String[] CASCADE_TABLES = {
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info",
-            "phone_device", "leave_record", "fitness_record", "military_assessment"};
+            "phone_device", "leave_record", "leave_plan", "fitness_record", "military_assessment",
+            "double_excellence_record", "annual_appraisal_record"};
     /** 被解除的外键引用:表 → 引用列 */
     private static final String[][] DETACH_REFS = {
             {"department", "leader_id"}, {"equipment", "keeper_id"},
@@ -156,11 +180,23 @@ public class PersonnelService {
         if (old == null) {
             return;
         }
+        // 历史负责人引用可能跨单位，子账号不得借删除人员修改外域单位。
+        if (DataScope.restricted()) {
+            Long externalLeaders = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM department WHERE leader_id=? AND NOT (" + DataScope.departmentSql("id") + ")",
+                    Long.class, id);
+            if (externalLeaders != null && externalLeaders > 0) {
+                throw new com.szjx.personnel.server.auth.ForbiddenException("该人员仍被管理范围外的单位引用，请联系上级先调整负责人");
+            }
+        }
         // 打包快照:人员行 + 级联记录 + 被解除的引用 + 照片移入回收站
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("person", jdbc.queryForMap("SELECT * FROM personnel WHERE id=?", id));
         Map<String, List<Map<String, Object>>> cascades = new LinkedHashMap<String, List<Map<String, Object>>>();
         for (String table : CASCADE_TABLES) {
+            // 仅兼容新增表缺失的旧隔离fixture；已有表损坏或其它SQL错误仍须中止删除。
+            if (("double_excellence_record".equals(table) || "annual_appraisal_record".equals(table)) && jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", Integer.class, table) == 0) continue;
             cascades.put(table, jdbc.queryForList("SELECT * FROM " + table + " WHERE personnel_id=?", id));
         }
         payload.put("cascades", cascades);
@@ -192,7 +228,7 @@ public class PersonnelService {
         for (String[] ref : DETACH_REFS) {
             jdbc.update("UPDATE " + ref[0] + " SET " + ref[1] + "=0 WHERE " + ref[1] + "=?", id);
         }
-        for (String table : CASCADE_TABLES) {
+        for (String table : cascades.keySet()) {
             jdbc.update("DELETE FROM " + table + " WHERE personnel_id=?", id);
         }
         personnelDao.delete(id);
@@ -212,9 +248,13 @@ public class PersonnelService {
 
     static String tableZh(String table) {
         if ("phone_device".equals(table)) { return "手机设备"; }
+        if ("item_loan".equals(table)) { return "物品借还"; }
+        if ("leave_plan".equals(table)) { return "休假计划"; }
         if ("leave_record".equals(table)) { return "休假"; }
         if ("fitness_record".equals(table)) { return "体能"; }
         if ("military_assessment".equals(table)) { return "军事考核"; }
+        if ("double_excellence_record".equals(table)) { return "双争评比"; }
+        if ("annual_appraisal_record".equals(table)) { return "年度考评"; }
         if ("position_history".equals(table)) { return "任职经历"; }
         if ("reward_punish".equals(table)) { return "奖惩"; }
         if ("child_info".equals(table)) { return "子女"; }
@@ -249,6 +289,7 @@ public class PersonnelService {
 
     /** 可撤回的删除列表(新→旧) */
     public List<Map<String, Object>> undoList() {
+        DataScope.requireAdmin();
         return jdbc.queryForList(
                 "SELECT id, personnel_id, name, summary, created_at FROM delete_undo ORDER BY id DESC");
     }
@@ -256,6 +297,7 @@ public class PersonnelService {
     /** 撤回最近一次/指定记录的删除,恢复人员及全部级联数据 */
     @Transactional
     public Map<String, Object> undoDelete(Long undoId) {
+        DataScope.requireAdmin();
         List<Map<String, Object>> hits = jdbc.queryForList("SELECT * FROM delete_undo WHERE id=?", undoId);
         if (hits.isEmpty()) {
             throw new IllegalArgumentException("该撤回记录不存在或已被使用");
@@ -277,16 +319,32 @@ public class PersonnelService {
         // 级联记录按原ID恢复
         Map<String, List<Map<String, Object>>> cascades = (Map<String, List<Map<String, Object>>>) payload.get("cascades");
         for (Map.Entry<String, List<Map<String, Object>>> entry : cascades.entrySet()) {
+            if ("item_loan".equals(entry.getKey())) { continue; }
             for (Map<String, Object> row : entry.getValue()) {
                 restoreRow(entry.getKey(), row);
+            }
+        }
+        // 旧删除快照仍可能包含借还。人员已插入后再读取真实集合，不能使用删除前/覆盖前的本地人员。
+        if (cascades.containsKey("item_loan") && !cascades.get("item_loan").isEmpty()) {
+            List<Map<String, Object>> personnel = jdbc.queryForList("SELECT * FROM personnel");
+            List<Map<String, Object>> departments = jdbc.queryForList("SELECT * FROM department");
+            for (Map<String, Object> row : cascades.get("item_loan")) {
+                Map<String, Object> converted = ItemLoanSnapshots.convertLegacy(row, personnel, departments);
+                // Department snapshots are descriptive only; historical loans do not depend on a live department.
+                restoreRow("item_loan", converted);
             }
         }
         // 恢复被解除的引用;期间已被重新指派的跳过
         for (Map<String, Object> ref : (List<Map<String, Object>>) payload.get("detached")) {
             String table = (String) ref.get("table");
             String column = (String) ref.get("column");
-            Long current = jdbc.queryForObject(
+            List<Long> currentRefs = jdbc.queryForList(
                     "SELECT " + column + " FROM " + table + " WHERE id=?", Long.class, ref.get("rowId"));
+            if (currentRefs.isEmpty()) {
+                skipped.add(tableZh(table) + "(ID " + ref.get("rowId") + ")已删除,未恢复关联");
+                continue;
+            }
+            Long current = currentRefs.get(0);
             if (current == null) { continue; }
             if (current != 0) {
                 skipped.add(tableZh(table) + "(ID " + ref.get("rowId") + ")已重新指派他人,未覆盖");
@@ -315,6 +373,7 @@ public class PersonnelService {
     /** 放弃撤回:彻底删除快照与回收站照片 */
     @Transactional
     public void discardUndo(Long undoId) {
+        DataScope.requireAdmin();
         List<Map<String, Object>> hits = jdbc.queryForList("SELECT id, photo_trash FROM delete_undo WHERE id=?", undoId);
         if (hits.isEmpty()) {
             throw new IllegalArgumentException("该撤回记录不存在或已被使用");
@@ -357,7 +416,23 @@ public class PersonnelService {
         return photoService.getFile(fileName);
     }
 
-    /** 全部人员精简选项(下拉框用) */
+    public Map<String, Object> findByIdCard(String idCard) {
+        Personnel p = personnelDao.findByIdCard(idCard);
+        if (p == null) return null;
+        Map<String, Object> result = new LinkedHashMap<String, Object>();
+        result.put("id", p.getId());
+        result.put("name", p.getName());
+        result.put("idCard", p.getIdCard());
+        result.put("militaryIdNo", p.getMilitaryIdNo());
+        result.put("departmentId", p.getDepartmentId());
+        result.put("departmentName", p.getDepartmentName());
+        result.put("departmentPath", p.getDepartmentPath());
+        return result;
+    }
+
+    /** 全部人员精简选项(下拉框用)。
+     *  字段最小化:仅保留下拉显示与借还回填所需;身份证号供物品借还选人后回填,
+     *  军人证件号/军衔/职务无页面消费,不再随选项接口下发。 */
     public List<Map<String, Object>> findAllOptions() {
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> row : personnelDao.findAllSimple()) {
@@ -365,9 +440,9 @@ public class PersonnelService {
             m.put("id", row.get("id"));
             m.put("name", row.get("name"));
             m.put("idCard", row.get("id_card"));
+            m.put("departmentId", row.get("department_id"));
+            m.put("departmentPath", row.get("department_path"));
             m.put("departmentName", row.get("department_name"));
-            m.put("rank", row.get("rank"));
-            m.put("post", row.get("post"));
             result.add(m);
         }
         return result;
@@ -388,9 +463,10 @@ public class PersonnelService {
                     failed++;
                     continue;
                 }
+                requireText(row.getMilitaryIdNo(), "军人证件号");
                 row.setIdCard(normalizeIdCard(row.getIdCard()));
                 Personnel existing = personnelDao.findByIdCard(row.getIdCard());
-                // 解析部门名称 → 部门ID(找不到则自动创建顶级部门)
+                // 解析单位名称 → 单位ID(找不到则自动创建顶级单位)
                 if (StringUtils.hasText(row.getDepartmentName())) {
                     row.setDepartmentId(resolveDepartmentId(row.getDepartmentName()));
                 } else {
@@ -419,10 +495,30 @@ public class PersonnelService {
     }
 
     private void validate(Personnel p, Personnel old) {
-        if (!StringUtils.hasText(p.getName())) {
-            throw new IllegalArgumentException("姓名不能为空");
+        DataScope.requireDepartment(p.getDepartmentId());
+        if (old != null) { DataScope.requireDepartment(old.getDepartmentId()); }
+        requireText(p.getName(), "姓名");
+        requireText(p.getIdCard(), "身份证号");
+        p.setMilitaryIdNo(p.getMilitaryIdNo() == null ? "" : p.getMilitaryIdNo().trim());
+        requireText(p.getMilitaryIdNo(), "军人证件号"); // 恒必填:历史空的旧数据编辑时也必须补全(关键标识,见 PersonnelIntegrityTest);
+        requireFilled(p.getGender(), old == null ? null : old.getGender(), "性别");
+        requireFilled(p.getBirthday(), old == null ? null : old.getBirthday(), "出生日期");
+        requireFilled(p.getLocationPoint(), old == null ? null : old.getLocationPoint(), "所在点位");
+        requireFilled(p.getCategory(), old == null ? null : old.getCategory(), "人员类别");
+        requireFilled(p.getRank(), old == null ? null : old.getRank(), "军衔/职级");
+        requireFilled(p.getPost(), old == null ? null : old.getPost(), "职务/岗位");
+        requireFilled(p.getEntryDate(), old == null ? null : old.getEntryDate(), "入伍/入职日期");
+        requireFilled(p.getEquivEntryDate(), old == null ? null : old.getEquivEntryDate(), "相当入伍时间");
+        requireFilled(p.getNation(), old == null ? null : old.getNation(), "民族");
+        requireFilled(p.getNativePlace(), old == null ? null : old.getNativePlace(), "籍贯所在地");
+        requireFilled(p.getEnlistPlace(), old == null ? null : old.getEnlistPlace(), "入伍所在地");
+        requireFilled(p.getBloodType(), old == null ? null : old.getBloodType(), "血型");
+        requireFilled(p.getOnlyChild(), old == null ? null : old.getOnlyChild(), "是否独生子女");
+        requireFilled(p.getAddress(), old == null ? null : old.getAddress(), "详细地址");
+        if (!StringUtils.hasText(p.getStatus())) {
+            throw new IllegalArgumentException("状态不能为空");
         }
-        if (StringUtils.hasText(p.getStatus()) && p.getStatus().length() > 20) {
+        if (p.getStatus().length() > 20) {
             throw new IllegalArgumentException("状态内容过长");
         }
         String idCard = normalizeIdCard(p.getIdCard());
@@ -435,11 +531,42 @@ public class PersonnelService {
             throw new IllegalArgumentException("身份证号已存在");
         }
         Long departmentId = p.getDepartmentId();
-        if (departmentId == null) {
-            p.setDepartmentId(0L);
-        } else if (departmentId < 0 || (departmentId > 0 && departmentDao.findById(departmentId) == null
+        if (departmentId == null || departmentId <= 0) {
+            throw new IllegalArgumentException("单位不能为空");
+        }
+        if (departmentId < 0 || (departmentId > 0 && departmentDao.findById(departmentId) == null
                 && (old == null || !departmentId.equals(old.getDepartmentId())))) {
-            throw new IllegalArgumentException("所选部门不存在");
+            throw new IllegalArgumentException("所选单位不存在");
+        }
+        validateActualDuty(p);
+    }
+
+    /**
+     * 实际在岗字段独立校验:实际单位只要求真实存在(不要求在调用者数据范围内,
+     * 借岗单位本就可能属于上级或兄弟单位)。
+     */
+    private void validateActualDuty(Personnel p) {
+        Long actualDepartmentId = p.getActualDepartmentId();
+        if (actualDepartmentId == null || actualDepartmentId <= 0) {
+            p.setActualDepartmentId(0L); // null/<=0 归一存 0,统一表示未分离
+        } else {
+            Long exists = jdbc.queryForObject("SELECT COUNT(*) FROM department WHERE id=?", Long.class, actualDepartmentId);
+            if (exists == null || exists == 0) {
+                throw new IllegalArgumentException("实际单位不存在");
+            }
+        }
+    }
+
+    /** 编辑模式必填:历史值非空的字段仍必填;历史本就为空的字段允许继续为空(旧数据渐进完善),新增(old==null)保持强制 */
+    private static void requireFilled(String value, String oldValue, String label) {
+        if (!StringUtils.hasText(value) && (oldValue == null || StringUtils.hasText(oldValue))) {
+            throw new IllegalArgumentException(label + "不能为空");
+        }
+    }
+
+    private static void requireText(String value, String label) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(label + "不能为空");
         }
     }
 
@@ -472,7 +599,7 @@ public class PersonnelService {
         }
     }
 
-    /** 按部门名称查找或自动创建(仅用于导入) */
+    /** 按单位名称查找或自动创建(仅用于导入) */
     private Long resolveDepartmentId(String departmentName) {
         String name = departmentName.trim();
         for (Department d : departmentDao.findAll()) {
@@ -480,6 +607,7 @@ public class PersonnelService {
                 return d.getId();
             }
         }
+        DataScope.requireAdmin();
         Department d = new Department();
         d.setName(name);
         d.setParentId(0L);
@@ -495,9 +623,9 @@ public class PersonnelService {
         if (base64.startsWith("data:")) {
             base64 = base64.substring(base64.indexOf(',') + 1);
         }
-        // 解码前先按 base64 字符串长度预检,防止超大请求耗尽内存
-        if (base64.length() > 7 * 1024 * 1024) {
-            throw new IllegalArgumentException("照片不能超过 5MB");
+        // 100MB 为运行时防护上限,不是照片业务尺寸限制;避免超大 Base64 请求耗尽内存
+        if (base64.length() > 140 * 1024 * 1024) {
+            throw new IllegalArgumentException("照片请求过大,单张图片最多 100MB");
         }
         byte[] bytes;
         try {
@@ -505,8 +633,8 @@ public class PersonnelService {
         } catch (Exception e) {
             throw new IllegalArgumentException("照片数据格式错误");
         }
-        if (bytes.length > 5 * 1024 * 1024) {
-            throw new IllegalArgumentException("照片不能超过 5MB");
+        if (bytes.length > 100 * 1024 * 1024) {
+            throw new IllegalArgumentException("照片请求过大,单张图片最多 100MB");
         }
         String ext = guessExt(bytes);
         String fileName = UUID.randomUUID().toString().replace("-", "") + ext;
