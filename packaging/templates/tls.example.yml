@@ -1,0 +1,10 @@
+# 复制到运行目录 tls.yml；密码由本次进程的环境变量提供，不要写进此文件或仓库。
+server:
+  ssl:
+    enabled: true
+    key-store: ${APP_TLS_KEYSTORE}
+    key-store-type: PKCS12
+    key-store-password: ${APP_TLS_KEYSTORE_PASSWORD}
+    enabled-protocols: TLSv1.2
+# 启动参数：--spring.config.additional-location=file:./tls.yml
+# 证书须由受信任的内部 CA 签发，并包含客户端访问时使用的 DNS 名称/IP。

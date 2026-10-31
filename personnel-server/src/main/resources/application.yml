@@ -13,8 +13,8 @@ spring:
           no-store: true
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 20MB
+      max-file-size: 100MB
+      max-request-size: 120MB
   datasource:
     # SQLite 数据库文件(相对运行目录),可改用绝对路径
     url: jdbc:sqlite:file:data/personnel.db?busy_timeout=30000&journal_mode=WAL&foreign_keys=on
@@ -25,11 +25,13 @@ spring:
       connection-timeout: 10000
 
 app:
-  # 数据目录(数据库与照片存放于此)
+  # 照片与备份目录；数据库路径由 spring.datasource.url 单独指定，迁移时须同时检查
   data-dir: data
   auth:
     # 登录令牌有效期(小时)
     token-expire-hours: 24
+    # 可信反向代理地址(逗号分隔);仅当直连来源在列表内才采信 X-Forwarded-For 作为审计来源IP,留空=一律用直连地址
+    trusted-proxies: ""
 
 # 日志滚动策略见 logback-spring.xml:按天一个文件,保留30天,总量500MB
 logging:

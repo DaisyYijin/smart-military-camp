@@ -4,11 +4,10 @@
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"/>
     <property name="LOG_HOME" value="logs"/>
 
-    <!-- 控制台(开发/命令行启动可见) -->
+    <!-- 控制台(开发/命令行启动可见):跟随系统编码输出,中文Windows控制台为GBK,麒麟等Linux为UTF-8,避免乱码 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>${LOG_PATTERN}</pattern>
-            <charset>UTF-8</charset>
         </encoder>
     </appender>
 
