@@ -1,72 +1,85 @@
 package com.szjx.personnel.server.service;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * 备份模块清单完整性测试
- * 确保所有业务表都被备份覆盖
- */
+/** 检查生产模块清单,避免测试维护另一份清单而漏掉实际备份缺项。 */
 public class BackupCompletenessTest {
 
-    /** 系统全部业务表 */
+    /** 静态模块直接包含的业务表;account_department/旧fitness_standard按实际schema追加。 */
     private static final String[] ALL_TABLES = {
             "personnel", "department", "sys_dict", "sys_setting", "holiday_calendar",
-            "equipment", "material", "vehicle",
-            "leave_record", "fitness_record", "fitness_matrix", "fitness_standard",
+            "admin_user", "op_log", "dash_setting",
+            "equipment", "material", "item_loan", "vehicle", "vehicle_fault_history",
+            "leave_record", "leave_plan", "fitness_record", "fitness_matrix",
+            "military_assessment", "mil_scheme", "mil_scheme_item", "phone_device",
             "position_history", "reward_punish", "child_info", "family_member",
-            "driver_license", "personal_card", "private_vehicle", "housing_info"
+            "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo",
+            "double_excellence_record", "annual_appraisal_record"
     };
 
-    /** 备份模块对应的表(与 BackupService.MODULE_TABLES 一致) */
-    private static final String[][] MODULE_TABLES = {
-            {"personnel", "position_history", "reward_punish", "child_info", "family_member",
-                    "driver_license", "personal_card", "private_vehicle", "housing_info"},
-            {"department"},
-            {"sys_dict", "sys_setting", "holiday_calendar"},
-            {"equipment"},
-            {"material"},
-            {"vehicle"},
-            {"leave_record"},
-            {"fitness_record", "fitness_matrix", "fitness_standard"}
-    };
+    private Set<String> coveredTables() {
+        Set<String> covered = new HashSet<>();
+        for (String[] tables : BackupService.MODULE_TABLES.values()) {
+            covered.addAll(Arrays.asList(tables));
+        }
+        return covered;
+    }
 
     @Test
     public void testAllTablesCovered() {
-        // 收集所有备份覆盖的表
-        java.util.Set<String> covered = new java.util.HashSet<String>();
-        for (String[] tables : MODULE_TABLES) {
-            for (String t : tables) {
-                covered.add(t);
-            }
-        }
-        // 检查每个业务表都被覆盖
+        Set<String> covered = coveredTables();
         for (String table : ALL_TABLES) {
-            assertTrue(covered.contains(table),
-                    "表 [" + table + "] 未被任何备份模块覆盖!");
+            assertTrue(covered.contains(table), "表 [" + table + "] 未被任何备份模块覆盖!");
         }
     }
 
     @Test
     public void testNoExtraTables() {
-        // 收集所有备份覆盖的表
-        java.util.Set<String> covered = new java.util.HashSet<String>();
-        for (String[] tables : MODULE_TABLES) {
-            for (String t : tables) {
-                covered.add(t);
-            }
-        }
-        // 确保没有多出的表(可能与拼写错误有关)
-        java.util.Set<String> expected = new java.util.HashSet<String>();
-        for (String t : ALL_TABLES) { expected.add(t); }
-        for (String t : covered) {
-            assertTrue(expected.contains(t),
-                    "备份模块包含未知表 [" + t + "],请检查表名拼写");
+        Set<String> expected = new HashSet<>(Arrays.asList(ALL_TABLES));
+        for (String table : coveredTables()) {
+            assertTrue(expected.contains(table), "备份模块包含未知表 [" + table + "],请检查表名拼写");
         }
     }
 
     @Test
     public void testModuleCount() {
-        assertEquals(8, MODULE_TABLES.length, "备份模块数应为8");
+        assertEquals(14, BackupService.MODULE_TABLES.size(), "双争评比与年度考评模块加入后应为14个");
+        assertEquals(14, BackupService.allModuleKeys().size());
+        assertEquals("double-excellence", BackupService.allModuleKeys().get(12));
+        assertEquals("annual-appraisal", BackupService.allModuleKeys().get(13));
+    }
+
+    @Test
+    public void doubleExcellenceHasOneIndependentModuleAndChineseLabel() {
+        assertArrayEquals(new String[]{"double_excellence_record"}, BackupService.MODULE_TABLES.get("double-excellence"));
+        for (Map.Entry<String, String[]> module : BackupService.MODULE_TABLES.entrySet()) {
+            if (!"double-excellence".equals(module.getKey())) {
+                assertFalse(Arrays.asList(module.getValue()).contains("double_excellence_record"), module.getKey());
+            }
+        }
+        com.szjx.personnel.server.controller.BackupController controller = new com.szjx.personnel.server.controller.BackupController(
+                org.mockito.Mockito.mock(BackupService.class));
+        java.util.List<?> modules = (java.util.List<?>) controller.modules().getData();
+        Map<?, ?> module = modules.stream().map(value -> (Map<?, ?>) value)
+                .filter(value -> "double-excellence".equals(value.get("key"))).findFirst().get();
+        assertEquals("双争评比", module.get("label"));
+        assertEquals(Boolean.FALSE, module.get("includesPhotos"));
+    }
+
+    @Test
+    public void itemLoansHaveExactlyOneIndependentBackupModule() {
+        assertArrayEquals(new String[]{"item_loan"}, BackupService.MODULE_TABLES.get("item-loans"));
+        for (Map.Entry<String, String[]> module : BackupService.MODULE_TABLES.entrySet()) {
+            if (!"item-loans".equals(module.getKey())) {
+                assertFalse(Arrays.asList(module.getValue()).contains("item_loan"), module.getKey());
+            }
+        }
     }
 }

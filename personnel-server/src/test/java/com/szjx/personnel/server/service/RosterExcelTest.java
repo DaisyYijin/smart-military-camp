@@ -17,7 +17,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** 花名册 Excel 生成:验证勾选字段、部门分组与默认字段回退 */
+/** 花名册 Excel 生成:验证勾选字段、单位分组与默认字段回退 */
 public class RosterExcelTest {
 
     @Test
@@ -71,6 +71,29 @@ public class RosterExcelTest {
         assertTrue(data.length > 2000);
         assertEquals(0x50, data[0] & 0xFF);
         assertEquals(0x4B, data[1] & 0xFF);
+    }
+
+    @Test public void militaryIdentityAndFullDepartmentPathAreIndependentSelectableTextFields() throws Exception {
+        PersonnelService personnel = mock(PersonnelService.class);
+        DepartmentService departments = mock(DepartmentService.class);
+        when(departments.tree()).thenReturn(new ArrayList<Department>());
+        Personnel p = new Personnel(); p.setName("授权人员"); p.setMilitaryIdNo("00007-军证");
+        p.setIdCard("独立身份证"); p.setDepartmentName("一班"); p.setDepartmentPath("总队 / 营 / 连 / 一班");
+        when(personnel.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(Arrays.asList(p));
+        RosterExcelService service = new RosterExcelService(personnel, departments);
+        assertTrue(service.fieldOptions().stream().anyMatch(field -> "militaryIdNo".equals(field.get("key")) && "军人证件号".equals(field.get("label"))));
+        assertTrue(service.fieldOptions().stream().anyMatch(field -> "departmentPath".equals(field.get("key"))));
+        Map<String,String> q = new HashMap<>(); q.put("fields", "idCard,militaryIdNo,departmentPath");
+        try (org.apache.poi.ss.usermodel.Workbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(service.build(q)))) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.getSheetAt(0);
+            assertEquals("军人证件号", sheet.getRow(3).getCell(2).getStringCellValue());
+            assertEquals("独立身份证", sheet.getRow(4).getCell(1).getStringCellValue());
+            assertEquals("00007-军证", sheet.getRow(4).getCell(2).getStringCellValue());
+            assertEquals("总队 / 营 / 连 / 一班", sheet.getRow(4).getCell(3).getStringCellValue());
+        }
     }
 
     @Test
