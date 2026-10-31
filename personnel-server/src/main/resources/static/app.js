@@ -21,8 +21,9 @@ function h(tag, attrs) {
     if (v === null || v === undefined || v === false) return;
     if (k === 'class') el.className = v;
     else if (k === 'html') el.innerHTML = v;
-    else if (k === 'text') el.textContent = v;
-    else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+        else if (k === 'text') el.textContent = v;
+        else if (k === 'draggable') el.draggable = !!v;
+        else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
     else el.setAttribute(k, v === true ? '' : v);
   });
   for (var i = 2; i < arguments.length; i++) {
@@ -77,23 +78,107 @@ function showFieldBubble(el, text) {
 }
 
 function openModal(opt) {
+  var previousFocus = document.activeElement;
+  var closed = false;
   var mask = h('div', { class: 'mask' });
-  var closeBtn = h('button', { class: 'dialog-close', text: '×', onclick: function () { close(); } });
-  var head = h('div', { class: 'dialog-head' }, h('div', { class: 'ttl', text: opt.title || '' }), closeBtn);
+  var closeBtn = h('button', { type: 'button', class: 'dialog-close', 'aria-label': '关闭对话框', text: '×', onclick: function () { close(); } });
+  var titleId = 'dialog-title-' + (openModal.sequence = (openModal.sequence || 0) + 1);
+  var head = h('div', { class: 'dialog-head' }, h('div', { id: titleId, class: 'ttl', text: opt.title || '' }), closeBtn);
   var body = h('div', { class: 'dialog-body' });
   if (opt.body) body.appendChild(opt.body);
   var dlg = h('div', { class: 'dialog' + (opt.wide ? ' wide' : '') + (opt.xwide ? ' xwide' : '') + (opt.xxwide ? ' xxwide' : '') }, head, body);
   if (opt.footer) dlg.appendChild(h('div', { class: 'dialog-foot' }, opt.footer));
+  dlg.setAttribute('role', 'dialog');
+  dlg.setAttribute('aria-modal', 'true');
+  dlg.setAttribute('aria-labelledby', titleId);
+  dlg.setAttribute('tabindex', '-1');
   mask.appendChild(dlg);
   document.querySelectorAll('.scroll-btns').forEach(function (b) { b.style.display = 'none'; });
   mask.addEventListener('mousedown', function (e) { if (e.target === mask) close(); });
+  mask.addEventListener('keydown', function (e) {
+    if ($all('.mask').slice(-1)[0] !== mask) return;
+    if (e.key === 'Escape' || e.keyCode === 27) { e.preventDefault(); e.stopPropagation(); close(); }
+    if (e.key !== 'Tab' && e.keyCode !== 9) return;
+    var focusable = $all('button, input, select, textarea, a[href], [tabindex]', dlg).filter(function (el) {
+      return !el.disabled && el.type !== 'hidden' && el.getAttribute('tabindex') !== '-1' && el.getClientRects().length > 0;
+    });
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (!first) { e.preventDefault(); dlg.focus(); }
+    else if (e.shiftKey && (document.activeElement === first || document.activeElement === dlg)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || document.activeElement === dlg)) { e.preventDefault(); first.focus(); }
+  });
   document.body.appendChild(mask);
-  function close() {
+  dlg.focus();
+  function close(force) {
+    if (closed) return;
+    if (force !== true && opt.beforeClose && opt.beforeClose() === false) return;
+    closed = true;
     mask.remove();
-    document.querySelectorAll('.scroll-btns').forEach(function (b) { b.style.display = ''; });
+    if (!$('.mask')) document.querySelectorAll('.scroll-btns').forEach(function (b) { b.style.display = ''; });
+    if (previousFocus && document.body.contains(previousFocus) && previousFocus.focus) previousFocus.focus();
     if (opt.onClose) opt.onClose();
   }
   return { close: close, body: body, dialog: dlg };
+}
+
+/** 彩蛋:2.2秒内连点元素5次触发回调(绑定在侧栏品牌区,不影响任何业务;独立测试环境无定时器时降级为不自动重置) */
+function attachEasterEgg(el, fire) {
+  var scheduleReset = typeof setTimeout === 'function' ? setTimeout : null;
+  var cancelReset = typeof clearTimeout === 'function' ? clearTimeout : null;
+  var hits = 0, resetTimer = null;
+  el.style.cursor = 'pointer';
+  el.addEventListener('click', function () {
+    hits++;
+    if (resetTimer && cancelReset) { cancelReset(resetTimer); }
+    resetTimer = scheduleReset ? scheduleReset(function () { hits = 0; resetTimer = null; }, 2200) : null;
+    if (hits >= 5) {
+      hits = 0;
+      if (resetTimer && cancelReset) { cancelReset(resetTimer); resetTimer = null; }
+      fire();
+    }
+  });
+}
+
+/** 彩蛋弹窗:严密防范网络泄密"十二条禁令"警示教育(连点品牌区5次触发) */
+var EGG_RULES = [
+  '严禁涉密计算机联接国际互联网；',
+  '严禁涉密计算机安装、使用无线上网卡；',
+  '严禁涉密计算机开通红外、蓝牙等无线联接、传递功能；',
+  '严禁将使用无线上网卡的私人计算机和具有无线联网功能的可穿戴设备带入涉密场所；',
+  '严禁在联接国际互联网的计算机上使用涉密或者曾经涉密的移动存储载体；',
+  '严禁在联接国际互联网的计算机上存储、处理或者传递涉密信息；',
+  '严禁在联接国际互联网的计算机上存储显示军人身份的信息；',
+  '严禁在国际互联网上谈论、发布、传播、泄露涉密和敏感信息；',
+  '严禁违反规定在国际互联网上开设网站、网页以及博客、论坛、微博、微信公众号、贴吧、QQ群、头条号、网络直播、知乎、分答等新媒体账号；',
+  '严禁以部队番号、代号建立QQ、微信、微博等网络社群；',
+  '严禁计算机在军队内部网络和国际互联网之间交叉联接；',
+  '严禁存储载体在涉密计算机和联接国际互联网的计算机之间交叉使用。'
+];
+
+function openEasterEgg() {
+  var now = new Date();
+  var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+  var dateStr = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  var user = (typeof USER !== 'undefined' && USER && USER.username) ? USER.username : '—';
+  var list = h('ol', { class: 'egg-rules' });
+  for (var i = 0; i < EGG_RULES.length; i++) {
+    list.appendChild(h('li', { text: EGG_RULES[i] }));
+  }
+  var body = h('div', { class: 'egg' },
+    h('div', { class: 'egg-star', 'aria-hidden': 'true', text: '★' }),
+    h('div', { class: 'egg-title', text: '严密防范网络泄密「十二条禁令」' }),
+    h('div', { class: 'egg-text', text: '严守纪律 · 保守秘密，人人有责、时时牢记。' }),
+    list,
+    h('div', { class: 'egg-info' }, h('div', { text: '当前账号：' + user + ' · ' + dateStr })),
+    h('div', { class: 'egg-hint', text: '隐藏警示卡，仅此一枚，请牢记于心。' }));
+  var m = openModal({
+    title: '★ 严密防范网络泄密十二条禁令',
+    body: body,
+    footer: [h('button', {
+      class: 'btn btn-primary', text: '牢记',
+      onclick: function () { if (m) { m.close(true); } }
+    })]
+  });
 }
 
 function confirmBox(msg, danger) {
@@ -125,6 +210,28 @@ function badge(text) {
   return '<span class="' + cls + '">' + esc(t || '-') + '</span>';
 }
 
+/** 各模块 Excel 导入的匹配规则及日期列提示：不含日历日期的模板不显示日期说明。 */
+function importRuleText(key) {
+  if (key === 'equipment-large' || key === 'equipment-small') key = 'equipment';
+  var rules = {
+    personnel: '人员导入按「身份证号」匹配：身份证号已存在的人员会被本次数据更新，新的身份证号新增；任职经历、家庭成员等子表随人员归档，不会重复插入。请重新下载新模板并补齐必填「军人证件号」列（独立文本，不用身份证号代填）；历史空值原样保留，编辑时须补齐，旧备份仍可恢复。',
+    'equipment-gun': '枪支导入按「装备编号」匹配：装备编号已存在的枪支会被本次数据更新，新的装备号新增。',
+    equipment: '装备导入按「识别码」匹配（类别为枪支的按「装备编号」）：识别码已存在的装备会被本次数据更新，新的识别码新增。',
+    vehicle: '车辆导入按「车架号」匹配：车架号已存在的车辆会被本次数据更新，新的车架号新增。',
+    phone: '手机设备导入按「人员身份证号」匹配：该人员已有设备记录时会被本次数据更新，否则新增。',
+    fitness: '体能考核导入模板为宽行格式：一人一行，各考核项目为列，单元格填写该项目成绩，空白表示未参加该项目；旧的一项一行格式仍可导入。同一人员同一天同一项目重复导入时按覆盖更新处理原成绩（匹配：人员+项目+考核日期）。',
+    military: '军事考核为增量导入：每个有效行都新增一条成绩，不匹配旧记录、不覆盖已有成绩。',
+    leave: '休假登记为增量导入：每个有效行都新增一条登记，不匹配旧记录、不覆盖已有登记。',
+    'leave-plan': '休假计划为增量导入：每个有效行都新增一条计划，不匹配旧记录、不覆盖已有计划。',
+    material: '物资为增量导入：每个有效行都新增一条记录，不匹配旧记录、不修改已有库存数量。'
+  };
+  var text = rules[key] || '请先下载模板，按模板列头填写后导入。';
+  if (['personnel', 'equipment-gun', 'equipment', 'vehicle', 'phone', 'fitness', 'military', 'leave', 'leave-plan'].indexOf(key) >= 0) {
+    text += '\n日期列支持20160901、2016-09-01、2016.09.01、2016/9/1、2016年9月1日及Excel日期单元格，统一识别真实日期，非法日期会报错。';
+  }
+  return text;
+}
+
 /* ================= 扁平线性图标 ================= */
 
 var ICON_PATHS = {
@@ -151,21 +258,23 @@ var ICON_PATHS = {
  * 自绘日期组件:文本输入 + 页面内日历面板(不用浏览器原生弹窗,杜绝核显卡顿)。
  * 返回容器,.value 为规范的 yyyy-MM-dd(空串表示未选)。
  */
+function parseCalendarDay(s) {
+  var t = String(s == null ? '' : s).trim();
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t) || /^(\d{4})(\d{2})(\d{2})$/.exec(t);
+  if (!m || +m[1] < 1) return null;
+  var d = new Date(2000, +m[2] - 1, +m[3]);
+  d.setFullYear(+m[1]);
+  return d.getFullYear() === +m[1] && d.getMonth() === +m[2] - 1 && d.getDate() === +m[3] ? d : null;
+}
+
+function formatCalendarDay(d) {
+  return ('0000' + d.getFullYear()).slice(-4) + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
 function makeDateField() {
   function p2(n) { return n < 10 ? '0' + n : '' + n; }
-  function fmt(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
-  function parseDayText(s) {
-    var t = String(s == null ? '' : s).trim();
-    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t) || /^(\d{4})(\d{2})(\d{2})$/.exec(t);
-    if (!m) {
-      return null;
-    }
-    var d = new Date(+m[1], +m[2] - 1, +m[3]);
-    if (d.getFullYear() !== +m[1] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) {
-      return null;
-    }
-    return d;
-  }
+  function fmt(d) { return formatCalendarDay(d); }
+  function parseDayText(s) { return parseCalendarDay(s); }
 
   var input = h('input', { type: 'text', placeholder: '年/月/日', autocomplete: 'off' });
   var iconBtn = h('button', {
@@ -211,10 +320,11 @@ function makeDateField() {
     },
     set: function (v) {
       var d = parseDayText(v);
-      input.value = d ? fmt(d) : '';
-      input.classList.remove('bad');
+      input.value = d ? fmt(d) : String(v == null ? '' : v);
+      input.classList.toggle('bad', !!input.value && !d && !normMonthText(input.value));
     }
   });
+  Object.defineProperty(wrap, 'rawValue', { get: function () { return input.value; } });
 
   function ensurePanel() {
     if (panel) {
@@ -514,20 +624,26 @@ function makeDropdown(opts, placeholder) {
   var cur = '';
   var txt = h('span', { class: 'txt ph', text: ph });
   var arrow = h('span', { class: 'dd-arrow', text: '▾' });
-  var btn = h('button', { type: 'button', class: 'dd-btn' }, txt, arrow);
-  var list = h('div', { class: 'dd-list' });
+  var btn = h('button', { type: 'button', class: 'dd-btn', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, txt, arrow);
+  var list = h('div', { class: 'dd-list', role: 'listbox', tabindex: '-1', 'aria-label': ph });
 
   var wrap = h('div', { class: 'dd' }, btn, list);
 
+  function closeList() {
+    wrap.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+  function choose(v) {
+    wrap.value = v;
+    closeList();
+    wrap.dispatchEvent(new CustomEvent('change'));
+  }
+
   items.forEach(function (it) {
     list.appendChild(h('div', {
-      class: 'dd-item', text: it.t, 'data-v': it.v,
+      class: 'dd-item', text: it.t, 'data-v': it.v, role: 'option', tabindex: '-1',
       onclick: (function (v) {
-        return function () {
-          wrap.value = v;
-          wrap.classList.remove('open');
-          wrap.dispatchEvent(new CustomEvent('change'));
-        };
+        return function () { choose(v); };
       })(it.v)
     }));
   });
@@ -538,9 +654,13 @@ function makeDropdown(opts, placeholder) {
       if (items[i].v === cur) { found = items[i]; break; }
     }
     txt.textContent = found ? found.t : ph;
+    txt.title = txt.textContent;
+    btn.title = txt.textContent;
     txt.classList.toggle('ph', cur === '');
     $all('.dd-item', list).forEach(function (el2) {
-      el2.classList.toggle('cur', el2.getAttribute('data-v') === cur);
+      var isCur = el2.getAttribute('data-v') === cur;
+      el2.classList.toggle('cur', isCur);
+      el2.setAttribute('aria-selected', isCur ? 'true' : 'false');
     });
   }
 
@@ -564,13 +684,9 @@ function makeDropdown(opts, placeholder) {
     list.innerHTML = '';
     items.forEach(function (it) {
       list.appendChild(h('div', {
-        class: 'dd-item', text: it.t, 'data-v': it.v,
+        class: 'dd-item', text: it.t, 'data-v': it.v, role: 'option', tabindex: '-1',
         onclick: (function (v) {
-          return function () {
-            wrap.value = v;
-            wrap.classList.remove('open');
-            wrap.dispatchEvent(new CustomEvent('change'));
-          };
+          return function () { choose(v); };
         })(it.v)
       }));
     });
@@ -582,14 +698,38 @@ function makeDropdown(opts, placeholder) {
     refresh();
   };
 
+  // 键盘操作状态:打开时高亮当前值,方向键移动、Enter/空格选择、Esc 关闭并回焦按钮
+  var activeIndex = -1;
+  function highlight(scroll) {
+    var els = $all('.dd-item', list);
+    els.forEach(function (el2, i2) { el2.classList.toggle('dd-active', i2 === activeIndex); });
+    var act = els[activeIndex];
+    // 仅键盘导航需要滚动定位;打开时的初始高亮不滚动,避免 scrollIntoView 引发祖先容器滚动而触发全局滚动关闭
+    if (scroll && act && act.scrollIntoView) { try { act.scrollIntoView({ block: 'nearest' }); } catch (err) { /* 独立环境无滚动 */ } }
+  }
+
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    if (btn.disabled) return; // 禁用态(锁定字段)不展开
     var opening = !wrap.classList.contains('open');
-    $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
+    $all('.dd.open, .cal.open').forEach(function (d) {
+      d.classList.remove('open');
+      if (d !== wrap && typeof d.querySelector === 'function') {
+        var otherBtn = d.querySelector('button');
+        if (otherBtn && otherBtn.setAttribute) otherBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
     wrap.classList.toggle('open', opening);
     if (!opening) {
+      btn.setAttribute('aria-expanded', 'false');
       return;
     }
+    btn.setAttribute('aria-expanded', 'true');
+    activeIndex = 0;
+    for (var i = 0; i < items.length; i++) { if (items[i].v === cur) { activeIndex = i; break; } }
+    ddLastOpenedAt = Date.now();
+    highlight(false);
+    try { list.focus(); } catch (err) { /* 独立环境 */ }
     // 视口定位:避免被弹窗滚动区域裁剪
     var r = btn.getBoundingClientRect();
     list.style.position = 'fixed';
@@ -603,6 +743,38 @@ function makeDropdown(opts, placeholder) {
   });
   list.addEventListener('click', function (e) { e.stopPropagation(); });
   list.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  list.addEventListener('keydown', function (e) {
+    var els = $all('.dd-item', list);
+    if (!els.length) return;
+    var k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Home' || k === 'End') {
+      if (e.preventDefault) e.preventDefault();
+      if (k === 'ArrowDown') activeIndex = Math.min(els.length - 1, activeIndex + 1);
+      else if (k === 'ArrowUp') activeIndex = Math.max(0, activeIndex - 1);
+      else if (k === 'Home') activeIndex = 0;
+      else activeIndex = els.length - 1;
+      highlight(true);
+    } else if (k === 'Enter' || k === ' ') {
+      if (e.preventDefault) e.preventDefault();
+      var it = items[activeIndex];
+      if (it) { choose(it.v); try { btn.focus(); } catch (err) { /* 独立环境 */ } }
+    } else if (k === 'Escape') {
+      if (e.preventDefault) e.preventDefault();
+      closeList();
+      try { btn.focus(); } catch (err) { /* 独立环境 */ }
+    }
+  });
+  // 焦点离开列表(含页面其它位置点击被全局关闭)后纠正展开标记,读屏不会读到滞留的展开状态
+  list.addEventListener('blur', function () { btn.setAttribute('aria-expanded', 'false'); });
+
+  // 禁用态:锁定字段用(如双争矩阵单元格固定年度/季度),容器没有 readOnly,统一走 disabled
+  Object.defineProperty(wrap, 'disabled', {
+    get: function () { return btn.disabled; },
+    set: function (v) {
+      btn.disabled = !!v;
+      if (btn.disabled) wrap.classList.remove('open');
+    }
+  });
 
   return wrap;
 }
@@ -717,7 +889,8 @@ function makeRegionField() {
   }, true);
 })();
 
-// 全局:点空白/按 Esc 关闭所有下拉(一次注册,避免泄漏)
+// 全局:点空白/按 Esc 关闭所有下拉(一次注册,避免泄漏);ddLastOpenedAt 记录最近一次打开时间供滚动豁免
+var ddLastOpenedAt = 0;
 document.addEventListener('click', function () {
   $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
 });
@@ -725,6 +898,10 @@ document.addEventListener('scroll', function (e) {
   // 下拉列表/日历面板自身的滚动不关闭;只有页面或弹窗滚动才关闭(避免面板错位)
   var t = e.target;
   if (t && t.closest && t.closest('.dd.open, .cal.open')) {
+    return;
+  }
+  // 刚打开的下拉短时间豁免:打开时的聚焦/初始定位可能引发祖先容器连锁滚动,不应立即关闭刚展开的列表
+  if (Date.now() - ddLastOpenedAt < 200) {
     return;
   }
   $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
@@ -824,8 +1001,40 @@ function calcAgeFrom(bd) {
 /* ================= API 层 ================= */
 
 var TOKEN = sessionStorage.getItem('tk') || localStorage.getItem('tk') || '';
+// 本地 profile 只用于持久化,绝不作为启动权限依据;先经 /me 校验再渲染。
 var USER = null;
-try { USER = JSON.parse(sessionStorage.getItem('usr') || localStorage.getItem('usr') || 'null'); } catch (e) { USER = null; }
+
+function normalizeProfile(data) {
+  data = data || {};
+  return {
+    userId: data.userId, username: data.username || '', displayName: data.displayName || '',
+    isAdmin: data.isAdmin === true, parentId: data.parentId == null ? null : data.parentId,
+    departmentIds: Array.isArray(data.departmentIds) ? data.departmentIds.slice() : [],
+    departmentNames: Array.isArray(data.departmentNames) ? data.departmentNames.slice() : []
+  };
+}
+
+function preferenceKey(key) {
+  return 'user:' + (USER && USER.userId != null ? String(USER.userId) : 'anonymous') + ':' + key;
+}
+
+function hasGlobalAccess() { return !!(USER && USER.isAdmin === true); }
+
+function canAccessView(view) {
+  return hasGlobalAccess() || ['settings', 'backup', 'log', 'report', 'dict',
+    'fitness-std', 'fitness-standards', 'military-schemes'].indexOf(view) < 0;
+}
+
+function refreshSessionProfile() {
+  var token = TOKEN;
+  USER = null;
+  return GET('/api/auth/me').then(function (profile) {
+    if (!token || TOKEN !== token) throw new Error('登录状态已变更,请重新登录');
+    if (!profile || profile.userId == null || !profile.username) throw new Error('无法确认当前账号,请重新登录');
+    saveSession(token, normalizeProfile(profile), localStorage.getItem('tk') === token);
+    return USER;
+  });
+}
 
 function saveSession(token, user, remember) {
   TOKEN = token; USER = user;
@@ -850,15 +1059,16 @@ function clearSession() {
 var redirectingToLogin = false;
 
 function forceLogin(msg) {
-  // 并发的多个 401(如重启后页面启动时的字典/部门/选项三个请求)
+  // 并发的多个 401(如重启后页面启动时的字典/单位/选项三个请求)
   // 只弹一次提示、只渲染一次登录页
   if (redirectingToLogin) {
     return;
   }
   redirectingToLogin = true;
-  if ($('.login-wrap')) { if (msg) toast(msg, 'err'); return; }
   clearSession();
-  renderLogin(msg);
+  $all('.mask').forEach(function (mask) { mask.remove(); });
+  if ($('.login-wrap')) { if (msg) toast(msg, 'err'); }
+  else renderLogin(msg);
   setTimeout(function () { redirectingToLogin = false; }, 600);
 }
 
@@ -926,7 +1136,9 @@ function slideFrom(el, deltaX, duration) {
     el.removeEventListener('transitionend', clear);
   }
   el.addEventListener('transitionend', clear);
-  setTimeout(clear, ms + 100);
+  var timer = setTimeout(clear, ms + 100);
+  // 可选取消句柄供需要销毁/快速反向切换的视图使用，现有调用方可继续忽略返回值。
+  return function () { clearTimeout(timer); clear(); };
 }
 
 function apiBlob(path) {
@@ -950,11 +1162,34 @@ function downloadBlob(blob, filename) {
   setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 3000);
 }
 
+/**
+ * 照片 Blob URL 生命周期绑定:元素复用替换旧 URL、元素移出文档(弹窗关闭/表格重渲染)后自动释放。
+ * 避免长期使用中弹窗照片与列表缩略图的 ObjectURL 无限累积占内存。
+ * 轮询用短间隔定时器,在可 unref 的环境(测试)不阻塞进程退出;最长观察约5分钟后放弃回收。
+ */
+function bindBlobUrl(el, blob, asBackground) {
+  var old = el._blobUrl;
+  var url = URL.createObjectURL(blob);
+  el._blobUrl = url;
+  if (asBackground) { el.style.backgroundImage = 'url(' + url + ')'; }
+  else { el.src = url; }
+  if (old) { URL.revokeObjectURL(old); }
+  var checks = 0;
+  (function poll() {
+    var timer = setTimeout(function () {
+      if (el._blobUrl !== url) { return; }
+      if (!document.body.contains(el)) { el._blobUrl = null; URL.revokeObjectURL(url); return; }
+      if (++checks < 120) { poll(); }
+    }, 2500);
+    if (timer && typeof timer.unref === 'function') { timer.unref(); }
+  })();
+}
+
 /* ================= 全局缓存 ================= */
 
 var Ctx = {
   dictTypes: [],        // [{type,name,items:[DictItem]}]
-  deptTree: [],         // 嵌套部门树
+  deptTree: [],         // 嵌套单位树
   deptFlat: [],         // [{id,name,depth}]
   personnelOptions: [], // [{id,name,departmentName,rank,post}]
   photoUrls: {}
@@ -982,12 +1217,13 @@ function refreshDepts() {
   return GET('/api/departments').then(function (tree) {
     Ctx.deptTree = tree || [];
     Ctx.deptFlat = [];
-    (function walk(nodes, depth, parentId) {
+    (function walk(nodes, depth, parentId, parentPath) {
       (nodes || []).forEach(function (n) {
-        Ctx.deptFlat.push({ id: n.id, name: n.name, depth: depth, parentId: parentId });
-        walk(n.children, depth + 1, n.id);
+        var path = String(n.path || (parentPath || '') + n.name).replace(/\s*\/\s*/g, '');
+        Ctx.deptFlat.push({ id: n.id, name: n.name, path: path, depth: depth, parentId: parentId });
+        walk(n.children, depth + 1, n.id, path);
       });
-    })(Ctx.deptTree, 0, null);
+    })(Ctx.deptTree, 0, null, '');
   }).catch(function () { Ctx.deptTree = []; Ctx.deptFlat = []; });
 }
 
@@ -1008,6 +1244,7 @@ function loadRowPhotos(root) {
     if (Ctx.photoUrls[key]) { img.src = Ctx.photoUrls[key]; return; }
     apiBlob('/api/personnel/' + id + '/photo').then(function (r) {
       var url = URL.createObjectURL(r.blob);
+      if (Ctx.photoUrls[key]) { URL.revokeObjectURL(Ctx.photoUrls[key]); }
       Ctx.photoUrls[key] = url;
       img.src = url;
     }).catch(function () { /* 无照片,保持占底色 */ });
@@ -1022,6 +1259,7 @@ function buildForm(fields, values, extraPanels) {
   var inputs = {};
   var sectionOf = {};
   var datalistSeq = 0;
+  var fieldSeq = 0; // 字段ID序列:label 关联输入控件(读屏朗读/点击聚焦)用
   var pendingDepends = []; // 级联下拉字段,全部字段创建完毕后统一绑定
 
   // 按 section 分组;两组及以上渲染为标签页(切页仅隐藏面板,已填数据不丢失)
@@ -1057,7 +1295,8 @@ function buildForm(fields, values, extraPanels) {
       return;
     }
     var wrap = h('div', { class: 'form-item' + (f.span === 'full' ? ' full' : '') });
-    wrap.appendChild(h('label', { html: esc(f.label) + (f.required ? '<span class="req">*</span>' : '') }));
+    var fieldId = 'fitem' + (++fieldSeq) + '_' + f.key;
+    wrap.appendChild(h('label', { html: esc(f.label) + (f.required ? '<span class="req">*</span>' : ''), 'for': fieldId }));
 
     var val = values[f.key];
     var el;
@@ -1067,11 +1306,11 @@ function buildForm(fields, values, extraPanels) {
         ddOpts = (typeof f.options === 'function' ? f.options() : f.options) || [];
       } else if (f.type === 'personnel') {
         ddOpts = Ctx.personnelOptions.map(function (p) {
-          return { v: String(p.id), l: p.name + (p.departmentName ? ' (' + p.departmentName + ')' : '') };
+          return { v: String(p.id), l: p.name + ((p.departmentPath || p.departmentName) ? ' (' + (p.departmentPath || p.departmentName) + ')' : '') };
         });
       } else {
         ddOpts = Ctx.deptFlat.map(function (d) {
-          return { v: String(d.id), l: new Array(d.depth + 1).join('　') + d.name };
+          return { v: String(d.id), l: d.path || new Array(d.depth + 1).join('　') + d.name };
         });
       }
       el = makeDropdown(ddOpts, f.placeholder || (f.type === 'dept' && !f.required ? '(不指定)' : '请选择'));
@@ -1094,26 +1333,41 @@ function buildForm(fields, values, extraPanels) {
       el = h('input', { type: 'text', list: listId, placeholder: f.placeholder || '' });
       el.value = val || '';
     } else {
-      var type = f.type === 'number' ? 'number' : 'text';
+      var type = f.type === 'number' ? 'number' : (f.type === 'password' ? 'password' : 'text');
       el = h('input', { type: type, placeholder: f.placeholder || '' });
       if (f.step) el.setAttribute('step', f.step);
       if (f.min !== undefined) el.setAttribute('min', f.min);
       if (f.max !== undefined) el.setAttribute('max', f.max);
       if (val !== undefined && val !== null) el.value = val;
     }
+    if (f.required && el.tagName && /^(INPUT|TEXTAREA|SELECT)$/i.test(el.tagName)) {
+      el.setAttribute('required', 'required');
+      el.setAttribute('aria-required', 'true');
+    }
+    if (f.type === 'personnel' || f.type === 'dept') el.classList.add('personnel-path-dropdown');
     // 只读字段:自动计算/自动带出的值不允许手改
     if (f.readonly) {
-      if (el.classList && el.classList.contains('cal')) {
+      if (el.classList && el.classList.contains('dd')) {
+        el.disabled = true; // 下拉容器无 readOnly,禁用其按钮
+      } else if (el.classList && el.classList.contains('cal')) {
         var calInp = el.querySelector('input');
         if (calInp) calInp.readOnly = true;
         var calBtn = el.querySelector('.cal-icon');
         if (calBtn) calBtn.style.display = 'none';
-        el.classList.add('ro');
       } else {
         try { el.readOnly = true; } catch (e) { /* ignore */ }
-        el.classList.add('ro');
       }
+      el.classList.add('ro');
     }
+    // 关联 label:复合控件(dd/cal/region)把 id 落到内部第一个可聚焦元素,点击 label 可聚焦,读屏朗读字段名
+    var labelTarget = el;
+    if (el.classList && el.classList.contains('dd')) {
+      labelTarget = el.querySelector('button') || el;
+    } else if (typeof el.querySelector === 'function') {
+      var innerFocus = el.querySelector('input, button');
+      if (innerFocus) labelTarget = innerFocus;
+    }
+    if (labelTarget && labelTarget.setAttribute) labelTarget.setAttribute('id', fieldId);
     inputs[f.key] = el;
     wrap.appendChild(el);
     if (f.hint) {
@@ -1121,9 +1375,12 @@ function buildForm(fields, values, extraPanels) {
     }
     panel.appendChild(wrap);
 
-    // 人员下拉旁加"选择"按钮:弹窗按姓名/身份证/部门搜索选人
+    // 人员下拉旁加"选择"按钮:弹窗按姓名/身份证/单位搜索选人
     if (f.type === 'personnel') {
-      attachPersonPick(el, function (p) { el.value = String(p.id); });
+      attachPersonPick(el, function (p) {
+        el.value = String(p.id);
+        el.dispatchEvent(new CustomEvent('change'));
+      });
     }
 
     // 级联下拉:父字段选定后,本字段选项过滤为该父项的下级(如 品牌→型号)
@@ -1236,16 +1493,35 @@ function buildForm(fields, values, extraPanels) {
         if (f.type === 'number') {
           out[f.key] = el.value === '' ? null : Number(el.value);
         } else {
-          out[f.key] = String(el.value || '').trim();
+          out[f.key] = f.type === 'password' ? String(el.value || '') : String(el.value || '').trim();
         }
       });
+      // 先检查原始日期文本。可选字段的非法输入不能被组件的空值归一化吞掉。
+      for (var di = 0; di < fields.length; di++) {
+        var df = fields[di];
+        if (df.section || df.type !== 'date') continue;
+        var dateEl = inputs[df.key];
+        var rawDate = String(dateEl.rawValue === undefined ? dateEl.value : dateEl.rawValue).trim();
+        var parsedDate = parseCalendarDay(rawDate);
+        if (rawDate && !parsedDate) {
+          if (useTabs) activateTab(sectionOf[df.key]);
+          markBad(dateEl, '「' + df.label + '」不是有效日期');
+          this.setError('请检查日期「' + df.label + '」');
+          return null;
+        }
+        out[df.key] = parsedDate ? formatCalendarDay(parsedDate) : '';
+      }
+      if (this.validatePerson && !this.validatePerson()) return null;
       // 再校验(含条件必填)
       var firstBadLabel = '';
       fields.forEach(function (f) {
         if (f.section) { return; }
         var v = out[f.key];
         var need = f.required || (f.requiredIf && f.requiredIf(out));
-        if (need && !v) {
+        // 编辑模式:历史数据本就为空的必填项(含条件必填)不阻塞保存(旧数据渐进完善;清空原有值仍会被拦截;军人证件号为关键标识必须补全,不豁免)
+        // 仅对携带 id 的编辑行生效,新增表单(无 id)必填保持强制
+        var legacyBlank = values && values.id != null && f.key !== 'militaryIdNo' && !String(values[f.key] == null ? '' : values[f.key]).trim();
+        if (need && !v && !legacyBlank) {
           missing.push(f.label);
           if (!firstBadKey) { firstBadKey = f.key; firstBadLabel = f.label; }
         }
@@ -1268,9 +1544,18 @@ function buildForm(fields, values, extraPanels) {
 /**
  * 导入结果摘要(人员多Sheet / 普通模块 两种返回结构)
  */
-function importResultSummary(r) {
+function importFileErrorMessage(error, isPersonnel) {
+  var raw = String(error || '');
+  var subject = isPersonnel ? '人员' : '数据';
+  if (/Your InputStream was neither an OLE2 stream, nor an OOXML stream|文件解析失败/i.test(raw)) {
+    return '无法读取导入文件，未导入任何' + subject + '。请重新下载系统提供的导入模板，确认文件为 .xlsx 格式；不要使用 CSV、旧版 .xls，也不要只修改文件后缀。若仍失败，请重新下载模板后再试。';
+  }
+  return '导入未完成，未导入任何' + subject + '。请检查文件后重试；如果问题仍然存在，请联系系统管理员。';
+}
+
+function importResultSummary(r, isPersonnel) {
   r = r || {};
-  if (r.error) return '导入失败:' + r.error;
+  if (r.error) return importFileErrorMessage(r.error, isPersonnel);
   var msg;
   if (r.subTotal !== undefined) {
     msg = '导入完成:人员 ' + ((r.added || 0) + (r.updated || 0)) + ' 条(新增 ' + (r.added || 0) + ',更新 ' + (r.updated || 0) + '),子记录 ' + r.subTotal + ' 条';
@@ -1294,25 +1579,44 @@ function importResultSummary(r) {
 /**
  * 导入失败明细弹窗:汇总一行 + 逐条失败原因(行号+原因),滚动由弹窗体承担
  */
-function openImportResultModal(summary, errors) {
+function openImportResultModal(summary, errors, fileError) {
   var list = h('div', { class: 'import-err-list' });
   errors.forEach(function (e) {
     list.appendChild(h('div', { class: 'import-err-row', text: String(e) }));
   });
+  var body = h('div', {}, h('div', { style: 'margin-bottom:12px;font-size:14px;color:#26313d', text: summary }));
+  if (fileError) {
+    body.appendChild(h('details', { style: 'margin-top:12px;color:#64748b' },
+      h('summary', { style: 'cursor:pointer' }, '技术详情'),
+      h('div', { style: 'margin-top:8px;white-space:pre-wrap;word-break:break-word', text: String(fileError) })));
+  } else if (errors.length) {
+    body.appendChild(h('div', { style: 'font-size:13px;color:#d9463e;font-weight:600;margin-bottom:8px', text: '以下 ' + errors.length + ' 条记录未导入:' }));
+    body.appendChild(list);
+  }
   var m = openModal({
     title: '导入结果',
-    body: h('div', {},
-      h('div', { style: 'margin-bottom:12px;font-size:14px;color:#26313d', text: summary }),
-      h('div', { style: 'font-size:13px;color:#d9463e;font-weight:600;margin-bottom:8px', text: '以下 ' + errors.length + ' 条未导入:' }),
-      list),
+    body: body,
     footer: [h('button', { class: 'btn btn-ghost', text: '下载失败明细', onclick: function () {
-      var report = errors.map(function (e) { return String(e); }).join('\r\n');
-      downloadBlob(new Blob(['\uFEFF' + summary + '\r\n\r\n' + report], { type: 'text/plain;charset=utf-8' }), '导入失败明细.txt');
+      var report = errors.map(function (e) { return String(e); });
+      if (fileError) report.unshift('技术详情: ' + String(fileError));
+      downloadBlob(new Blob(['\uFEFF' + summary + '\r\n\r\n' + report.join('\r\n')], { type: 'text/plain;charset=utf-8' }), '导入失败明细.txt');
     } }), h('button', { class: 'btn btn-primary', text: '知道了', onclick: function () { m.close(); } })]
   });
 }
 
 /* ================= 分页 ================= */
+
+/** 体能汇总(宽行)单元格文本:成绩（分数/等级）,无该项目显示— */
+function summaryScoreText(rec) {
+  if (!rec) return '—';
+  var score = (rec.score === null || rec.score === undefined) ? '' : String(rec.score);
+  var sub = [];
+  if (rec.points !== null && rec.points !== undefined && rec.points !== '') { sub.push(rec.points + '分'); }
+  if (rec.grade) { sub.push(String(rec.grade)); }
+  var text = score;
+  if (sub.length) { text += '（' + sub.join('/') + '）'; }
+  return text || '—';
+}
 
 function renderPager(state, onChange) {
   var totalPages = Math.max(1, Math.ceil(state.total / state.size));
@@ -1344,13 +1648,14 @@ function renderPager(state, onChange) {
 
 /* ================= 通用 CRUD 视图 ================= */
 
-/** 人员选择弹窗:按姓名/身份证/部门搜索后点选,onPick({id,name,idCard,departmentName}) */
+/** 人员选择弹窗:按姓名/身份证/单位搜索后点选,onPick({id,name,idCard,departmentName}) */
 function openPersonPicker(onPick) {
   var selName = h('input', { type: 'text', placeholder: '姓名' });
   var selIdCard = h('input', { type: 'text', placeholder: '身份证号' });
   var selDept = makeDropdown(Ctx.deptFlat.map(function (d) {
-    return { v: String(d.id), l: new Array(d.depth + 1).join('　') + d.name };
-  }), '全部部门');
+    return { v: String(d.id), l: d.path || new Array(d.depth + 1).join('　') + d.name };
+  }), '全部单位');
+  selDept.classList.add('personnel-path-dropdown');
   var info = h('div', { class: 'picker-info', text: '' });
   var resultBox = h('div', { class: 'picker-result' });
 
@@ -1374,12 +1679,14 @@ function openPersonPicker(onPick) {
           class: 'picker-row',
           onclick: function () {
             m.close();
-            onPick({ id: p.id, name: p.name || '', idCard: p.idCard || '', departmentName: p.departmentName || '' });
+            onPick({ id: p.id, name: p.name || '', idCard: p.idCard || '', departmentId: p.departmentId,
+              departmentName: p.departmentName || '', departmentPath: p.departmentPath || p.departmentName || '' });
           }
         },
           h('b', { text: p.name || '' }),
           h('span', { text: p.idCard || '' }),
-          h('span', { text: ((p.departmentName || '') + (p.rank ? ' · ' + p.rank : '')).trim() })));
+          h('span', { class: 'personnel-department-path', title: p.departmentPath || p.departmentName || '',
+            text: (String(p.departmentPath || p.departmentName || '').replace(/\s*\/\s*/g, '') + (p.rank ? ' · ' + p.rank : '')).trim() })));
       });
     }).catch(function (e) {
       resultBox.innerHTML = '<div class="empty-row">' + esc(e.message) + '</div>';
@@ -1413,46 +1720,107 @@ function attachPersonPick(nameEl, onPick) {
 }
 
 /** 通用:身份证号反查人员,自动带出姓名(隐藏 pid 字段);姓名旁提供弹窗选人 */
-function setupPersonLookup(form, map) {
+function setupPersonLookup(form, map, options) {
+  options = options || {};
   var idCardEl = form.inputs[map.idCard];
   var nameEl = form.inputs[map.name];
   var pidEl = form.inputs[map.pid];
   if (!idCardEl) return;
-  function lookup() {
-    var v = String(idCardEl.value || '').trim();
-    if (!v) {
-      if (nameEl) nameEl.value = '';
-      if (pidEl) pidEl.value = '';
-      idCardEl.classList.remove('bad');
-      idCardEl.title = '';
-      return;
-    }
-    GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
-      if (p) {
-        if (nameEl) nameEl.value = p.name || '';
-        if (pidEl) pidEl.value = String(p.id);
-        idCardEl.classList.remove('bad');
-        idCardEl.title = p.departmentName || '';
-      } else {
-        if (nameEl) nameEl.value = '';
-        if (pidEl) pidEl.value = '';
-        idCardEl.classList.add('bad');
-        idCardEl.title = '未找到对应人员';
-        if (form.setError) form.setError('未找到身份证号「' + v + '」对应的人员,请核对后重新输入');
-      }
-    }).catch(function () { /* 网络异常保持现状 */ });
+  var departmentHint = nameEl && nameEl.parentElement ? h('div', { class: 'personnel-department-path person-lookup-summary' }) : null;
+  if (departmentHint) nameEl.parentElement.appendChild(departmentHint);
+  var loadId = 0, matchedCard = '', matchedId = '';
+  var previousValidator = form.validatePerson;
+  function card() { return String(idCardEl.value || '').trim(); }
+  function changed() { if (options.onChanged) options.onChanged(); }
+  function clear() {
+    loadId++;
+    matchedCard = ''; matchedId = '';
+    if (departmentHint) { departmentHint.textContent = ''; departmentHint.title = ''; }
+    if (nameEl) nameEl.value = '';
+    if (pidEl) pidEl.value = '';
+    idCardEl.classList.remove('bad');
+    idCardEl.title = '';
+    changed();
   }
+  function accept(p, v) {
+    if (!p || p.id === undefined || p.id === null || (p.idCard && String(p.idCard).trim() !== v)) return false;
+    matchedCard = v; matchedId = String(p.id);
+    if (nameEl) nameEl.value = p.name || '';
+    if (pidEl) pidEl.value = matchedId;
+    idCardEl.classList.remove('bad');
+    idCardEl.title = p.departmentPath || p.departmentName || '';
+    if (departmentHint) { departmentHint.textContent = idCardEl.title; departmentHint.title = idCardEl.title; }
+    form.setError('');
+    changed();
+    return true;
+  }
+  function lookup() {
+    clear();
+    var requestId = loadId, v = card();
+    if (!v) return;
+    GET((options.endpoint || '/api/personnel/by-idcard') + '?idCard=' + encodeURIComponent(v)).then(function (result) {
+      if (requestId !== loadId || card() !== v) return;
+      var p = options.list ? (result || [])[0] : result;
+      if (accept(p, v)) return;
+      idCardEl.classList.add('bad');
+      idCardEl.title = '未找到对应人员';
+      form.setError('未找到身份证号「' + v + '」对应的人员,请核对后重新输入');
+    }).catch(function (e) {
+      if (requestId !== loadId || card() !== v) return;
+      form.setError('人员查询失败，请重试：' + (e.message || '请求失败'));
+    });
+  }
+  form.validatePerson = function () {
+    if (previousValidator && !previousValidator()) return false;
+    var v = card();
+    if (!v && (!pidEl || !pidEl.value)) return true;
+    if (v && v === matchedCard && matchedId && pidEl && String(pidEl.value) === matchedId) return true;
+    form.setError('身份证号与关联人员尚未匹配，请完成查询或重新选择人员后保存');
+    return false;
+  };
+  idCardEl.addEventListener('input', clear);
   idCardEl.addEventListener('change', lookup);
   attachPersonPick(nameEl, function (p) {
-    idCardEl.value = p.idCard;
-    nameEl.value = p.name;
-    pidEl.value = String(p.id);
-    idCardEl.classList.remove('bad');
-    idCardEl.title = p.departmentName || '';
-    idCardEl.dispatchEvent(new Event('change', { bubbles: true }));
+    clear();
+    idCardEl.value = p.idCard || '';
+    if (card()) accept(p, card());
   });
-  // 编辑时预填了身份证号 → 自动带出校验
-  if (String(idCardEl.value || '').trim()) setTimeout(lookup, 60);
+  // 初始化立即清除未经反查确认的旧关联，不留可直接保存的时间窗口。
+  if (card()) lookup();
+  else clear();
+}
+
+/** 上报导入结果弹窗:展示人员/子表/休假(含计划)/体能/军事/手机/资产合并统计与告警 */
+function openReportResult(r) {
+  function stat(label, added, total) {
+    return h('div', { style: 'display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--c-line,#e3e9f2)' },
+      h('span', { text: label }),
+      h('b', { text: '新增 ' + (added || 0) + ' / 共 ' + (total || 0) + ' 条' }));
+  }
+  var body = h('div');
+  body.appendChild(h('div', { style: 'background:#eef4ff;border-radius:8px;padding:10px 14px;margin-bottom:12px;line-height:1.8;font-size:13.5px',
+    html: '数据已并入:<b>' + esc(r.deptName || '') + '</b>' + (r.created ? '(新建单位)' : '') +
+      ' · 人员 新增 ' + (r.added || 0) + ' / 更新 ' + (r.updated || 0) + (r.skipped ? ' / 跳过 ' + r.skipped : '') }));
+  body.appendChild(stat('档案子表', r.subRows, r.subRows));
+  body.appendChild(stat('休假记录', r.leaveAdded, r.leaveTotal));
+  body.appendChild(stat('休假计划', r.leavePlanAdded, r.leavePlanTotal));
+  body.appendChild(stat('体能考核', r.fitnessAdded, r.fitnessTotal));
+  body.appendChild(stat('军事考核', r.militaryAdded, r.militaryTotal));
+  body.appendChild(stat('手机设备', r.phoneAdded, r.phoneTotal));
+  body.appendChild(stat('装备', r.equipmentAdded, r.equipmentTotal));
+  body.appendChild(stat('物资', r.materialAdded, r.materialTotal));
+  body.appendChild(stat('车辆', r.vehicleAdded, r.vehicleTotal));
+  var warnList = r.warnings || [];
+  if (warnList.length) {
+    var wBox = h('div', { style: 'margin-top:12px;max-height:180px;overflow:auto;border:1px solid var(--c-warn,#e8960e);border-radius:8px;padding:8px 12px;font-size:12.5px;color:#8a5a00' });
+    wBox.appendChild(h('div', { style: 'font-weight:600;margin-bottom:4px', text: '告警(' + warnList.length + ' 条,均未静默覆盖):' }));
+    warnList.forEach(function (w) { wBox.appendChild(h('div', { style: 'margin:2px 0', text: '· ' + w })); });
+    body.appendChild(wBox);
+  }
+  var m = openModal({
+    title: '接收下级数据 · 结果', body: body,
+    footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+  });
 }
 
 /** 休假模块联动:身份证带出人员 + 路途年度限一次 + 结束日期/总天数自动计算 */
@@ -1475,59 +1843,19 @@ function setupLeaveAutoCalc(form, row) {
     return Math.round(n * 10) / 10;
   }
 
-  /* —— 身份证号 → 自动带出人员 —— */
-  function lookupIdCard() {
-    var v = idCardEl ? String(idCardEl.value || '').trim() : '';
-    if (!v) {
-      if (nameEl) nameEl.value = '';
-      if (personEl) personEl.value = '';
-      if (idCardEl) idCardEl.classList.remove('bad');
-      form.setError('');
-      refreshYear();
-      return;
-    }
-    GET('/api/leave/find-person?idCard=' + encodeURIComponent(v)).then(function (list) {
-      if (list && list.length) {
-        var p = list[0];
-        if (nameEl) nameEl.value = p.name || '';
-        if (personEl) personEl.value = String(p.id);
-        if (idCardEl) idCardEl.classList.remove('bad');
-        form.setError('');
-      } else {
-        if (nameEl) nameEl.value = '';
-        if (personEl) personEl.value = '';
-        if (idCardEl) {
-          idCardEl.classList.add('bad');
-          idCardEl.title = '未找到对应人员';
-        }
-        form.setError('未找到身份证号「' + v + '」对应的人员,请核对后重新输入');
-      }
-      refreshYear();
-    }).catch(function () { refreshYear(); });
-  }
-  if (idCardEl) {
-    idCardEl.addEventListener('change', lookupIdCard);
-    // 姓名旁提供弹窗选人
-    attachPersonPick(nameEl, function (p) {
-      idCardEl.value = p.idCard;
-      if (nameEl) nameEl.value = p.name;
-      if (personEl) personEl.value = String(p.id);
-      idCardEl.classList.remove('bad');
-      idCardEl.title = p.departmentName || '';
-      form.setError('');
-      refreshYear();
-    });
-    // 编辑时预填了身份证号 → 自动带出校验
-    if (String(idCardEl.value || '').trim()) setTimeout(lookupIdCard, 60);
-  }
+  /* 身份证反查复用统一的请求序号、输入快照及保存前匹配校验。 */
+  var travelLoadId = 0, refLoadId = 0;
 
   /* —— 路途天数每年度限一次 —— */
   function checkTravel() {
     if (!personEl || !yearEl || !travelEl) return;
+    var requestId = ++travelLoadId;
     var pid = personEl.value;
     var yr = String(yearEl.value || '').trim();
     if (!pid || !yr) { unlockTravel(); return; }
-    GET('/api/leave/check-travel?personnelId=' + pid + '&year=' + encodeURIComponent(yr)).then(function (used) {
+    function current() { return requestId === travelLoadId && personEl.value === pid && String(yearEl.value || '').trim() === yr; }
+    GET('/api/leave/check-travel?personnelId=' + encodeURIComponent(pid) + '&year=' + encodeURIComponent(yr)).then(function (used) {
+      if (!current()) return;
       // 编辑时排除自己
       var others = (used || []).filter(function (u) { return String(u.id) !== String(editId); });
       if (others.length > 0) {
@@ -1550,7 +1878,7 @@ function setupLeaveAutoCalc(form, row) {
       } else {
         unlockTravel();
       }
-    }).catch(function () { unlockTravel(); });
+    }).catch(function () { if (current()) unlockTravel(); });
   }
   function unlockTravel() {
     if (!travelEl) return;
@@ -1572,7 +1900,54 @@ function setupLeaveAutoCalc(form, row) {
     totalEl.value = fmtNum(bd + td + hd) + ' 天(基本 ' + fmtNum(bd) + ' + 路途 ' + fmtNum(td) + ' + 节假日 ' + fmtNum(hd) + ')';
   }
 
-  function refreshYear() { checkTravel(); updateTotal(); }
+  function refreshYear() { checkTravel(); updateTotal(); loadLeaveRef(); }
+
+  /* —— 休假参考:上次休假情况 + 本年度休假计划(新增/编辑登记时辅助判断) —— */
+  var leaveRefBox = h('div');
+  leaveRefBox.style.cssText = 'margin-top:14px;border:1px solid var(--c-line,#e3e9f2);border-radius:8px;background:var(--c-bg,#f6f8fb);padding:10px 12px;font-size:12.5px;line-height:1.8;color:var(--c-dark,#1d2c40)';
+  function refTitle(txt) {
+    return h('div', { style: 'font-weight:600;color:var(--pri-dark,#16437e);margin-bottom:2px', text: txt });
+  }
+  function loadLeaveRef() {
+    var requestId = ++refLoadId;
+    if (!form.el || !document.contains(form.el)) { return; }  // 弹窗已关闭则不再加载
+    var pid = personEl ? String(personEl.value || '').trim() : '';
+    if (!pid) { leaveRefBox.innerHTML = ''; return; }
+    if (!leaveRefBox.parentElement) { form.el.parentElement.appendChild(leaveRefBox); }
+    var yr = yearEl && String(yearEl.value || '').trim() ? String(yearEl.value).trim() : String(new Date().getFullYear());
+    Promise.all([
+      GET('/api/leave?personnelId=' + pid + '&page=1&size=1'),
+      GET('/api/leave-plan?personnelId=' + pid + '&year=' + encodeURIComponent(yr) + '&page=1&size=50')
+    ]).then(function (rs) {
+      if (requestId !== refLoadId || String(personEl.value || '').trim() !== pid || !document.contains(form.el)) { return; }
+      leaveRefBox.innerHTML = '';
+      var last = (rs[0] && rs[0].list && rs[0].list[0]) || null;
+      var lastSec = h('div');
+      lastSec.appendChild(refTitle('上次休假'));
+      if (last) {
+        var total = (Number(last.days) || 0) + (Number(last.travelDays) || 0) + (Number(last.holidayDays) || 0);
+        lastSec.appendChild(h('div', { text: (last.startDate || '—') + ' ~ ' + (last.endDate || '—') + ' · ' + (last.leaveType || '—') +
+          (total > 0 ? ' · 共' + (Math.round(total * 10) / 10) + '天' : '') }));
+      } else {
+        lastSec.appendChild(h('div', { style: 'color:var(--c-muted,#8a97a8)', text: '暂无休假记录' }));
+      }
+      leaveRefBox.appendChild(lastSec);
+      var plans = (rs[1] && rs[1].list) || [];
+      var planSec = h('div', { style: 'margin-top:6px' });
+      planSec.appendChild(refTitle(yr + '年度休假计划'));
+      if (plans.length) {
+        plans.forEach(function (p) {
+          planSec.appendChild(h('div', {
+            text: (p.start_date || '—') + ' ~ ' + (p.end_date || '—') + ' · ' + (p.leave_type || '—') +
+              (p.days ? ' · ' + p.days + '天' : '') + (p.remark ? ' · ' + p.remark : '')
+          }));
+        });
+      } else {
+        planSec.appendChild(h('div', { style: 'color:var(--c-muted,#8a97a8)', text: '暂无休假计划' }));
+      }
+      leaveRefBox.appendChild(planSec);
+    }).catch(function () { if (requestId === refLoadId) leaveRefBox.innerHTML = ''; });
+  }
 
   if (personEl) personEl.addEventListener('change', refreshYear);
   if (yearEl) {
@@ -1588,13 +1963,13 @@ function setupLeaveAutoCalc(form, row) {
     var bd = parseFloat(daysEl.value) || 0;
     var td = travelEl ? parseFloat(travelEl.value) || 0 : 0;
     var hd = holidayEl ? parseFloat(holidayEl.value) || 0 : 0;
-    if (sd && bd > 0 && endDateEl) {
+    if (endDateEl) {
+      endDateEl.value = '';
+      var d = parseCalendarDay(sd);
       var total = bd + hd + td;
-      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sd);
-      if (m) {
-        var d = new Date(+m[1], +m[2] - 1, +m[3]);
+      if (d && bd > 0 && td >= 0 && hd >= 0 && isFinite(total)) {
         d.setDate(d.getDate() + Math.ceil(total) - 1);
-        endDateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        endDateEl.value = formatCalendarDay(d);
       }
     }
     updateTotal();
@@ -1605,6 +1980,9 @@ function setupLeaveAutoCalc(form, row) {
   if (travelEl) travelEl.addEventListener('input', calc);
   if (holidayEl) holidayEl.addEventListener('input', calc);
   if (row) setTimeout(calc, 200);
+  setupPersonLookup(form, { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' }, {
+    endpoint: '/api/leave/find-person', list: true, onChanged: refreshYear
+  });
 }
 
 /** 人员删除撤回:列出最近删除的人员(含级联数据快照),可一键恢复或彻底删除 */
@@ -1614,7 +1992,7 @@ function openPersonnelUndo() {
     title: '删除撤回',
     body: h('div', {},
       h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:12px;line-height:1.7',
-        text: '可恢复最近删除的人员及其全部关联记录(手机、休假、体能、档案子表、装备/物资/车辆保管、部门负责人、照片)。快照保留 30 天,总量最多 1000 条,批量删除逐人保留。' }),
+        text: '可恢复最近删除的人员及其全部关联记录(手机、休假、体能、档案子表、装备/物资/车辆保管、单位负责人、照片)。快照保留 30 天,总量最多 1000 条,批量删除逐人保留。' }),
       listBox),
     wide: true,
     footer: [
@@ -1707,8 +2085,83 @@ function openPersonnelUndo() {
   load();
 }
 
+function saveSubRecordBatch(items, parentId) {
+  var failed = [], success = 0, chain = Promise.resolve();
+  (items || []).forEach(function (item) {
+    chain = chain.then(function () {
+      var body = {};
+      Object.keys(item.record).forEach(function (key) { body[key] = item.record[key]; });
+      var endpoint = item.endpoint;
+      if (endpoint) {
+        body[item.parentKey || 'personnelId'] = parentId;
+        if (typeof endpoint === 'function') { endpoint = endpoint(parentId); }
+        return POST(endpoint, body).then(function () { success++; })
+          .catch(function (e) { failed.push({ item: item, reason: e.message || '保存失败' }); });
+      }
+      body.personnelId = parentId;
+      return POST('/api/sub/' + encodeURIComponent(item.kind), body).then(function () { success++; })
+        .catch(function (e) { failed.push({ item: item, reason: e.message || '保存失败' }); });
+    });
+  });
+  return chain.then(function () { return { failed: failed, success: success }; });
+}
+
+/** 驾驶证筛选使用登记字典标签；基础选项与自定义项并存。 */
+function driverLicenseOptions(type) {
+  var options = type === 'license_type' ? ['军本', '地方本'] : ['有效', '过期', '吊销'];
+  dictLabels(type).forEach(function (label) {
+    if (options.indexOf(label) < 0) options.push(label);
+  });
+  return options;
+}
+
+/** 只接受仪表盘人员下钻的真实筛选参数，不把下载选项混入查询。 */
+function readPersonnelRouteFilters() {
+  var out = {}, hash = typeof location === 'undefined' ? '' : String(location.hash || '');
+  if (hash.indexOf('#personnel?') !== 0) return out;
+  hash.slice(hash.indexOf('?') + 1).split('&').forEach(function (part) {
+    var at = part.indexOf('='), key, value;
+    if (at < 0) return;
+    try { key = decodeURIComponent(part.slice(0, at)); value = decodeURIComponent(part.slice(at + 1)).trim(); } catch (e) { return; }
+    if (key === 'departmentId' && /^[1-9]\d*$/.test(value)) out.departmentId = value;
+    if (key === 'locationPoint' && value && value !== '未填写') out.locationPoint = value;
+    if (key === 'driverLicense' && (value === 'yes' || value === 'no')) out.driverLicense = value;
+    if (key === 'driverLicenseType' && driverLicenseOptions('license_type').indexOf(value) >= 0) out.driverLicenseType = value;
+    if (key === 'driverLicenseStatus' && driverLicenseOptions('license_status').indexOf(value) >= 0) out.driverLicenseStatus = value;
+    if (key === 'onDuty' && (value === 'yes' || value === 'no')) out.onDuty = value;
+    // 概况卡"在职/休假中"跳转:仅接受人员状态字典里真实存在的值
+    if (key === 'status' && value && typeof statusOptions === 'function' && statusOptions().indexOf(value) >= 0) out.status = value;
+    if (key === 'actualDepartmentId' && /^[1-9]\d*$/.test(value)) out.actualDepartmentId = value;
+    if (key === 'includeDescendants' && value === 'true') out.includeDescendants = value;
+  });
+  if (!out.departmentId) delete out.includeDescendants;
+  return out;
+}
+
 function crudView(cfg) {
-  var state = { page: 1, size: (SITE.pageSize || 20), total: 0, rows: [], filters: {}, loading: false, selected: {} };
+  var state = { page: 1, size: (SITE.pageSize || 20), total: 0, rows: [], filters: {}, loading: false, deleting: false, selected: {}, requestGeneration: 0 };
+  // 汇总视图(宽行:一人一行,项目为列)独立分页与请求代际,旧响应不回填
+  var summaryMode = false;
+  var summary = { page: 1, size: (SITE.pageSize || 20), total: 0, rows: [], items: [], loading: false, error: '', generation: 0 };
+  var summaryToggleBtn = null, summaryPanel = null, summaryTable = null, summaryPagerBox = null;
+  var recordTableEl = null, recordAddBtn = null, recordBatchBtn = null;
+  var selectionChanged = function () {};
+  function selectedIds() {
+    return state.rows.filter(function (r) { return state.selected[r.id]; }).map(function (r) { return String(r.id); });
+  }
+  function locked() { return state.loading || state.deleting; }
+  // 未配置时保留原编辑/删除行为；配置后仅允许当前行可见的动作。
+  function rowActions(row) {
+    return (cfg.rowActions || [{ key: 'edit', label: '编辑' }, { key: 'del', label: '删除', danger: true }])
+      .filter(function (action) { return !action.visible || action.visible(row); });
+  }
+  function canEdit(row) {
+    return rowActions(row).some(function (action) { return action.key === 'edit'; });
+  }
+  function viewRow(row) {
+    var onView = cfg.onView || function (rw, at) { openDetailModal(cfg, rw, at); };
+    onView(row, { edit: canEdit(row) ? function () { openForm(row); } : null, refresh: afterChange });
+  }
 
   function syncHeaderCheck() {
     var head = $('.cb-all', root);
@@ -1719,6 +2172,9 @@ function crudView(cfg) {
       if (!state.selected[boxes[i].getAttribute('data-id')]) { allOn = false; break; }
     }
     head.checked = allOn;
+    head.indeterminate = !allOn && selectedIds().length > 0;
+    head.disabled = locked() || !boxes.length;
+    boxes.forEach(function (b) { b.disabled = locked(); });
   }
   var root = h('div');
   var loadingMore = false;
@@ -1731,10 +2187,23 @@ function crudView(cfg) {
     $all('[data-fkey]', root).forEach(function (el) {
       out[el.getAttribute('data-fkey')] = el.value.trim();
     });
+    if (!out.departmentId) delete out.includeDescendants;
     return out;
   }
 
-  function buildQuery(append) {
+  function clearSubtreeFilter() {
+    if (cfg.key !== 'personnel') return;
+    var flag = root.querySelector('[data-fkey="includeDescendants"]');
+    if (flag) flag.value = '';
+    var note = root.querySelector('.subtree-filter-note');
+    if (note) note.style.display = 'none';
+    // 清除下钻书签，刷新后也不能重新扩大为子树；当前其他筛选控件不变。
+    if (typeof location !== 'undefined' && String(location.hash || '').indexOf('#personnel?') === 0) {
+      try { history.replaceState(null, '', '#personnel'); } catch (e) { /* 仅清除页面内标志 */ }
+    }
+  }
+
+  function buildQueryFrom(filters, page, size) {
     var q = {};
     // 分组视图固定筛选(如枪支管理固定类别=枪支),不受筛选面板影响
     if (cfg.fixedFilter) {
@@ -1742,29 +2211,40 @@ function crudView(cfg) {
         if (cfg.fixedFilter[k]) { q[k] = cfg.fixedFilter[k]; }
       });
     }
-    Object.keys(state.filters).forEach(function (k) {
-      if (state.filters[k] !== '') q[k] = state.filters[k];
+    Object.keys(filters).forEach(function (k) {
+      if (filters[k] !== '') q[k] = filters[k];
     });
-    q.page = append ? state.page + 1 : 1;
-    q.size = state.size;
+    q.page = page;
+    q.size = size;
     return Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
   }
 
+  function buildQuery(append) {
+    return buildQueryFrom(state.filters, append ? state.page + 1 : 1, state.size);
+  }
+
   function load() {
+    if (state.deleting) return;
+    var generation = ++state.requestGeneration;
     state.filters = collectFilters();
     state.page = 1;
+    state.selected = {};
+    loadingMore = false;
     allLoaded = false;
     state.loading = true;
     renderTable();
     GET(cfg.endpoint + '?' + buildQuery(false)).then(function (pageData) {
+      if (generation !== state.requestGeneration) return;
       state.rows = (pageData && pageData.list) || [];
       state.total = (pageData && pageData.total) || 0;
       allLoaded = state.rows.length >= state.total;
       updateIndicator();
     }).catch(function (e) {
+      if (generation !== state.requestGeneration) return;
       state.rows = []; state.total = 0; allLoaded = true;
       toast(e.message, 'err');
     }).then(function () {
+      if (generation !== state.requestGeneration) return;
       state.loading = false;
       renderTable();
       if (cfg.afterTable) cfg.afterTable(root);
@@ -1772,12 +2252,15 @@ function crudView(cfg) {
   }
 
   function loadMore() {
-    if (loadingMore || allLoaded || state.loading) return;
+    if (summaryMode || loadingMore || allLoaded || locked()) return;
+    var generation = state.requestGeneration;
+    var nextPage = state.page + 1;
     loadingMore = true;
     updateIndicator('加载中…');
     GET(cfg.endpoint + '?' + buildQuery(true)).then(function (pageData) {
+      if (generation !== state.requestGeneration) return;
       var list = (pageData && pageData.list) || [];
-      state.page++;
+      state.page = nextPage;
       state.rows = state.rows.concat(list);
       state.total = (pageData && pageData.total) || state.total;
       if (state.rows.length >= state.total || list.length === 0) {
@@ -1785,10 +2268,12 @@ function crudView(cfg) {
       }
       renderTable();
       updateIndicator();
-    }).catch(function () {
-      allLoaded = true;
+    }).catch(function (e) {
+      if (generation !== state.requestGeneration) return;
+      toast(e.message || '加载失败，请重试', 'err');
+      updateIndicator('加载失败，下拉重试');
     }).then(function () {
-      loadingMore = false;
+      if (generation === state.requestGeneration) loadingMore = false;
     });
   }
 
@@ -1808,16 +2293,129 @@ function crudView(cfg) {
     }
   }
 
+  /* ---------- 汇总视图(宽行):独立请求代际与分页,只读 ---------- */
+
+  function reloadCurrent() {
+    if (summaryMode) { loadSummary(true); return; }
+    state.page = 1;
+    load();
+  }
+
+  function loadSummary(reset) {
+    if (!cfg.summaryView) return;
+    var generation = ++summary.generation;
+    if (reset) { summary.page = 1; }
+    summary.loading = true;
+    summary.error = '';
+    renderSummary();
+    GET((cfg.summaryEndpoint || (cfg.endpoint + '/summary')) + '?' + buildQueryFrom(collectFilters(), summary.page, summary.size)).then(function (data) {
+      if (generation !== summary.generation) return;
+      summary.rows = (data && data.list) || [];
+      summary.total = (data && data.total) || 0;
+      summary.items = (data && data.items) || [];
+      summary.loading = false;
+      renderSummary();
+    }).catch(function (e) {
+      if (generation !== summary.generation) return;
+      summary.loading = false;
+      summary.rows = [];
+      summary.total = 0;
+      summary.error = e.message || '加载失败，请重试';
+      renderSummary();
+    });
+  }
+
+  function renderSummary() {
+    if (!summaryTable) return;
+    var cols = summary.items.length + 3;
+    var html = '<thead><tr><th>姓名</th><th>身份证号码</th><th>考核日期</th>' +
+      summary.items.map(function (name) { return '<th>' + esc(name) + '</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    if (summary.loading) {
+      html += '<tr><td colspan="' + cols + '" class="empty-row">加载中…</td></tr>';
+    } else if (summary.error) {
+      html += '<tr><td colspan="' + cols + '" class="empty-row">加载失败：' + esc(summary.error) + '</td></tr>';
+    } else if (!summary.rows.length) {
+      html += '<tr><td colspan="' + cols + '" class="empty-row">暂无数据</td></tr>';
+    } else {
+      summary.rows.forEach(function (row) {
+        html += '<tr data-summary-row="1"><td>' + esc(row.personnelName || '') + '</td>' +
+          '<td>' + esc(row.idCard || '—') + '</td><td>' + esc(row.testDate || '—') + '</td>';
+        summary.items.forEach(function (name) {
+          var cellText = summaryScoreText(row.items ? row.items[name] : null);
+          html += '<td title="' + esc(cellText) + '">' + esc(cellText) + '</td>';
+        });
+        html += '</tr>';
+      });
+    }
+    html += '</tbody>';
+    summaryTable.innerHTML = html;
+    if (summaryPagerBox) {
+      summaryPagerBox.innerHTML = '';
+      if (!summary.loading && !summary.error) {
+        summaryPagerBox.appendChild(renderPager({ total: summary.total, page: summary.page, size: summary.size }, function (page) {
+          if (summary.loading) return;
+          summary.page = page;
+          loadSummary(false);
+        }));
+      }
+    }
+  }
+
+  function applySummaryMode() {
+    if (!cfg.summaryView) return;
+    if (summaryToggleBtn) {
+      summaryToggleBtn.textContent = summaryMode ? '记录视图' : '汇总视图';
+      summaryToggleBtn.setAttribute('title', summaryMode ? '返回记录视图(逐条记录,可编辑)' : '切换到汇总视图:一人一行,各考核项目为列(只读)');
+    }
+    if (recordTableEl) { recordTableEl.style.display = summaryMode ? 'none' : ''; }
+    sentinel.style.display = summaryMode ? 'none' : '';
+    if (summaryPanel) { summaryPanel.style.display = summaryMode ? '' : 'none'; }
+    if (recordBatchBtn) { recordBatchBtn.style.display = summaryMode ? 'none' : ''; }
+    if (recordAddBtn) { recordAddBtn.style.display = summaryMode ? 'none' : ''; }
+  }
+
+  function enterSummary() {
+    if (summaryMode) return;
+    summaryMode = true;
+    // 废弃仍在途的记录请求,切回前不让旧响应回填记录列表
+    state.requestGeneration++;
+    loadingMore = false;
+    applySummaryMode();
+    loadSummary(true);
+  }
+
+  function exitSummary() {
+    if (!summaryMode) return;
+    summaryMode = false;
+    summary.generation++;
+    // 进入汇总时废弃的记录请求不会再回落,这里复位加载锁
+    state.loading = false;
+    loadingMore = false;
+    applySummaryMode();
+    if (JSON.stringify(collectFilters()) !== JSON.stringify(state.filters)) {
+      // 汇总视图期间筛选已变化,记录列表按当前条件重查
+      load();
+    } else {
+      renderTable();
+      updateIndicator();
+    }
+  }
+
   function renderTable() {
+    if (summaryMode) return;
     var tb = $('.grid tbody', root);
     if (!tb) return;
     var cols = cfg.columns.length + 2;
+    selectionChanged();
+    syncHeaderCheck();
     if (state.loading) {
       tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">加载中…</td></tr>';
       return;
     }
     if (!state.rows.length) {
       tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">暂无数据</td></tr>';
+      syncHeaderCheck();
       return;
     }
     tb.innerHTML = state.rows.map(function (row) {
@@ -1836,14 +2434,16 @@ function crudView(cfg) {
       return '<tr data-vrow="1"><td class="cb-cell"><input type="checkbox" class="cb-row" data-id="' + row.id + '"'
         + (state.selected[row.id] ? ' checked' : '') + '></td>' + tds +
         '<td class="actions" style="width:140px;white-space:nowrap">' +
-        '<button class="btn-link" data-act="edit" data-id="' + row.id + '">编辑</button>' +
-        '<button class="btn-link danger" data-act="del" data-id="' + row.id + '">删除</button>' +
+        rowActions(row).map(function (action) {
+          return '<button class="btn-link' + (action.danger ? ' danger' : '') + '" data-act="' + esc(action.key) + '" data-id="' + esc(row.id) + '">' + esc(action.label) + '</button>';
+        }).join('') +
         '</td></tr>';
     }).join('');
     syncHeaderCheck();
   }
 
   function openForm(row) {
+    if (row && !canEdit(row)) return;
     var subExtra = cfg.subPanels ? cfg.subPanels(row) : null;
     var form = buildForm(cfg.form, row || {}, subExtra ? subExtra.panels : null);
     // 分组视图新增时预填固定值(如枪支管理默认类别=枪支)
@@ -1884,6 +2484,8 @@ function crudView(cfg) {
       var el = form.inputs[fk];
       if (!el || !el.addEventListener) { return; }
       if (fk.toLowerCase().indexOf('idcard') < 0 && fk.toLowerCase().indexOf('id_card') < 0) { return; }
+      // 借用人证件为自定义文本，不套用系统人员的身份证格式校验。
+      if (cfg.key === 'item-loans' && fk === 'borrowerIdCard') { return; }
       if (el._idcardHooked) { return; }
       el._idcardHooked = true;
       function check() {
@@ -1913,55 +2515,115 @@ function crudView(cfg) {
       setupPersonLookup(form, cfg.personLookup);
     }
 
+    var formSnapshot = {};
+    function inputSnapshot(el) { return String(el.rawValue === undefined ? el.value || '' : el.rawValue); }
+    Object.keys(form.inputs).forEach(function (key) { formSnapshot[key] = inputSnapshot(form.inputs[key]); });
+    var extraDirty = false;
+    if (extra && extra.el) {
+      extra.el.addEventListener('input', function () { extraDirty = true; });
+      extra.el.addEventListener('change', function () { extraDirty = true; });
+    }
+    var formSaved = false;
+    var createdPersonId = null;
+    var parentSaved = false;
+    var retrySubRecords = null;
+    var savingForm = false;
     var m = openModal({
       title: (row ? '编辑 · ' : '新增 · ') + cfg.title + (row && cfg.rowTitle ? ' - ' + cfg.rowTitle(row) : ''),
       body: body,
       wide: cfg.wide,
+      beforeClose: function () {
+        if (savingForm) { form.setError('正在保存，请稍候'); return false; }
+        if (formSaved) return true;
+        if (parentSaved && retrySubRecords && retrySubRecords.length) return confirm('主档已保存，仍有子记录未保存。关闭将放弃这些失败项，确定关闭吗？');
+        var changed = extraDirty || Object.keys(form.inputs).some(function (key) {
+          return inputSnapshot(form.inputs[key]) !== formSnapshot[key];
+        });
+        if (!changed && subExtra && subExtra.staged) {
+          changed = Object.keys(subExtra.staged).some(function (kind) { return (subExtra.staged[kind]() || []).length > 0; });
+        }
+        return !changed || confirm('表单有未保存的修改，确定放弃并关闭吗？');
+      },
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', {
           class: 'btn btn-primary', text: '保存',
           onclick: function () {
-            var data = form.get();
-            if (!data) return;
+            if (savingForm) return;
+            if (parentSaved && !createdPersonId) { form.setError('主档已保存但未返回ID，请关闭后刷新核实，不要重复创建'); return; }
+            var data = parentSaved ? {} : form.get();
+            if (!data || (!parentSaved && form.validatePerson && !form.validatePerson())) return;
+            if (!parentSaved && subExtra && subExtra.panels) {
+              var invalidPanel = Object.keys(subExtra.panels).some(function (key) {
+                var panel = subExtra.panels[key];
+                if (panel.__validate && !panel.__validate()) { form.setError('请完善或修正「' + key + '」中的记录后保存'); return true; }
+                return false;
+              });
+              if (invalidPanel) return;
+            }
             // 保存前转换钩子(剔除仅用于展示的虚拟字段等)
-            if (cfg.beforeSave) {
+            if (!parentSaved && cfg.beforeSave) {
               var transformed = cfg.beforeSave(data, row);
               if (transformed === null || transformed === false) return;
               if (transformed !== undefined) data = transformed;
             }
-            if (extra && extra.get) {
+            if (!parentSaved && extra && extra.get) {
               var ex = extra.get();
               if (!ex) return;
               Object.keys(ex).forEach(function (k) { if (ex[k] !== undefined) data[k] = ex[k]; });
             }
-            var done = row ? PUT(cfg.endpoint + '/' + row.id, data) : POST(cfg.endpoint, data);
-            done.then(function (saved) {
-              // 新建时:暂存的子记录(任职经历/奖惩)随人员一并入库
-              var chain = Promise.resolve();
-              var subCount = 0;
-              if (!row && subExtra && subExtra.staged && saved && saved.id) {
-                Object.keys(subExtra.staged).forEach(function (kind) {
-                  (subExtra.staged[kind]() || []).forEach(function (rec) {
-                    chain = chain.then(function () {
-                      var body = {};
-                      for (var k in rec) {
-                        body[k] = rec[k];
-                      }
-                      body.personnelId = saved.id;
-                      return POST('/api/sub/' + kind, body).then(function () {
-                        subCount++;
-                      }).catch(function () { /* 单条失败不阻断 */ });
+            savingForm = true;
+            var lockedInputs = $all('input, button, select, textarea', body).map(function (el) {
+              var entry = { el: el, disabled: el.disabled };
+              el.disabled = true;
+              return entry;
+            });
+            body.style.pointerEvents = 'none';
+            var saveButton = m.dialog.querySelector('.dialog-foot .btn-primary');
+            if (saveButton) saveButton.disabled = true;
+            var parentRequest = createdPersonId ? Promise.resolve({ id: createdPersonId })
+              : (row ? PUT(cfg.endpoint + '/' + row.id, data) : POST(cfg.endpoint, data));
+            parentRequest.then(function (saved) {
+              if (saved && saved.id) createdPersonId = saved.id;
+              parentSaved = true;
+              // 主档已落库后禁止再编辑本次快照，重试只能发送失败子项。
+              body.style.pointerEvents = 'none';
+              $all('input, button, select, textarea', body).forEach(function (el) { el.disabled = true; });
+              if (!row && subExtra && subExtra.staged && !createdPersonId) throw new Error('主档已保存但未返回ID，请关闭后刷新核实，不要重复创建');
+              if (!row && subExtra && subExtra.staged && createdPersonId) {
+                if (!retrySubRecords) {
+                  retrySubRecords = [];
+                  Object.keys(subExtra.staged).forEach(function (kind) {
+                    (subExtra.staged[kind]() || []).forEach(function (rec) {
+                      var meta = subExtra.stagedMeta && subExtra.stagedMeta[kind];
+                      retrySubRecords.push({ kind: kind, endpoint: meta && meta.endpoint, parentKey: meta && meta.parentKey, record: rec });
                     });
                   });
-                });
+                }
               }
-              chain.then(function () {
-                m.close();
+              return saveSubRecordBatch(retrySubRecords, createdPersonId).then(function (result) {
+                var failed = result.failed, subCount = result.success;
+                if (failed.length) {
+                  retrySubRecords = failed.map(function (entry) { return entry.item; });
+                  form.setError(cfg.title + '主档已保存，本次子记录成功 ' + subCount + ' 条、失败 ' + failed.length + ' 条；表单已锁定，保留失败项，点击重试仅重发失败项。' +
+                    failed.map(function (entry) { return entry.item.kind + ': ' + entry.reason; }).join('；'));
+                  if (saveButton) saveButton.textContent = '重试子记录';
+                  afterChange();
+                  return;
+                }
+                formSaved = true;
+                m.close(true);
                 toast(subCount ? '保存成功(含 ' + subCount + ' 条子记录)' : '保存成功');
                 afterChange();
               });
-            }).catch(function (e) { form.setError(e.message); });
+            }).catch(function (e) { form.setError(e.message); }).then(function () {
+              savingForm = false;
+              if (!parentSaved) {
+                body.style.pointerEvents = '';
+                lockedInputs.forEach(function (entry) { entry.el.disabled = entry.disabled; });
+              }
+              if (saveButton) saveButton.disabled = false;
+            });
           }
         })
       ]
@@ -1969,7 +2631,7 @@ function crudView(cfg) {
   }
 
   function afterChange() {
-    load();
+    if (summaryMode) { loadSummary(true); } else { load(); }
     refreshDepts();
     refreshPersonnelOptions();
   }
@@ -1978,6 +2640,15 @@ function crudView(cfg) {
     var filterBtn = null;
     // 工具栏(只放操作按钮,不放筛选)
     var toolbar = h('div', { class: 'toolbar' });
+    if (cfg.summaryView) {
+      // 记录/汇总视图切换:汇总为宽行只读表,记录视图恢复原列表
+      summaryToggleBtn = h('button', {
+        class: 'btn btn-ghost', text: '汇总视图',
+        title: '切换到汇总视图:一人一行,各考核项目为列(只读)',
+        onclick: function () { if (summaryMode) { exitSummary(); } else { enterSummary(); } }
+      });
+      toolbar.appendChild(summaryToggleBtn);
+    }
 
     // 筛选面板构建函数
     function buildFilterField(f) {
@@ -1994,17 +2665,25 @@ function crudView(cfg) {
         }));
         el = makeDropdown(ddItems, '全部');
         el.setAttribute('data-fkey', f.key);
-        el.addEventListener('change', function () { state.page = 1; load(); });
+        el.addEventListener('change', function () {
+          if (f.key === 'departmentId') clearSubtreeFilter();
+          reloadCurrent();
+        });
       } else if (f.type === 'date') {
         el = makeDateField();
         el.setAttribute('data-fkey', f.key);
-        el.addEventListener('change', function () { state.page = 1; load(); });
+        el.addEventListener('change', function () { reloadCurrent(); });
       } else {
         el = h('input', { type: 'text', 'data-fkey': f.key, placeholder: f.placeholder || '回车搜索' });
         el.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') { state.page = 1; load(); }
+          if (e.key === 'Enter') { reloadCurrent(); }
         });
       }
+      if (cfg.key === 'item-loans') {
+        var filterInput = f.type === 'select' ? el.querySelector('.dd-btn') : f.type === 'date' ? el.querySelector('input') : el;
+        if (filterInput) filterInput.setAttribute('aria-label', f.label);
+      }
+      if (f.key === 'departmentId') el.classList.add('personnel-path-dropdown');
       wrap.appendChild(el);
       return wrap;
     }
@@ -2027,7 +2706,7 @@ function crudView(cfg) {
       inner.appendChild(h('div', { class: 'filter-actions' },
         h('button', {
           class: 'btn btn-primary', text: '查询',
-          onclick: function () { state.page = 1; load(); }
+          onclick: function () { reloadCurrent(); }
         }),
         h('button', {
           class: 'btn btn-ghost', text: '重置',
@@ -2035,9 +2714,24 @@ function crudView(cfg) {
             $all('[data-fkey]', filterPanel).forEach(function (el) {
               el.value = '';
             });
-            state.page = 1; load();
+            clearSubtreeFilter();
+            reloadCurrent();
           }
         })));
+      if (cfg.key === 'personnel') {
+        var routeFilters = readPersonnelRouteFilters();
+        Object.keys(routeFilters).forEach(function (key) {
+          if (key === 'includeDescendants') return;
+          var input = inner.querySelector('[data-fkey="' + key + '"]');
+          // 权限树外单位不添加为可选节点；只在当前人员视图传递后端校验的筛选ID。
+          if (input) input.value = routeFilters[key];
+        });
+        var subtree = h('input', { type: 'hidden', 'data-fkey': 'includeDescendants' });
+        subtree.value = routeFilters.includeDescendants || '';
+        inner.appendChild(subtree);
+        inner.appendChild(h('div', { class: 'subtree-filter-note', style: subtree.value ? '' : 'display:none',
+          text: '当前单位筛选包含全部可见下级；手动更换单位后恢复仅直属。' }));
+      }
       filterPanel.appendChild(inner);
 
       // 级联筛选(如 人员类别→军衔):父项选定后,子项选项过滤为其下级
@@ -2105,34 +2799,50 @@ function crudView(cfg) {
       onclick: function () { batchDelete(); }
     });
     toolbar.appendChild(batchBtn);
+    recordBatchBtn = batchBtn;
     function syncBatchBtn() {
-      var n = Object.keys(state.selected).length;
-      batchBtn.disabled = n === 0;
-      batchBtn.textContent = n ? '删除所选(' + n + ')' : '删除所选';
+      var n = selectedIds().length;
+      batchBtn.disabled = locked() || n === 0;
+      batchBtn.textContent = state.deleting ? '删除处理中…' : (n ? '删除所选(' + n + ')' : '删除所选');
     }
+    selectionChanged = syncBatchBtn;
     function batchDelete() {
-      var ids = Object.keys(state.selected);
+      if (locked()) return;
+      var ids = selectedIds();
       if (!ids.length) return;
+      state.deleting = true;
+      syncBatchBtn(); syncHeaderCheck();
       confirmBox('确定删除选中的 ' + ids.length + ' 条记录吗?删除后不可恢复。', true).then(function (yes) {
-        if (!yes) return;
-        var okCount = 0, failCount = 0;
+        if (!yes) return false;
+        // 删除开始即废弃仍在途的追加分页结果。
+        state.requestGeneration++;
+        var okCount = 0, failCount = 0, firstError = '';
         var chain = Promise.resolve();
         ids.forEach(function (id) {
           chain = chain.then(function () {
-            return DEL(cfg.endpoint + '/' + id)
+            return DEL(cfg.endpoint + '/' + encodeURIComponent(id))
               .then(function () { okCount++; })
-              .catch(function () { failCount++; });
+              .catch(function (e) { failCount++; if (!firstError) firstError = e.message || '请求失败'; });
           });
         });
-        chain.then(function () {
+        return chain.then(function () {
           state.selected = {};
-          toast('批量删除完成:成功 ' + okCount + ' 条' + (failCount ? ',失败 ' + failCount + ' 条' : ''),
-            failCount ? 'info' : 'ok');
-          afterChange();
+          toast('批量删除完成:成功 ' + okCount + ' 条' + (failCount ? ',失败 ' + failCount + ' 条。' + firstError : ''), failCount ? 'info' : 'ok');
+          return true;
         });
+      }).then(function (reload) {
+        state.deleting = false;
+        if (reload) afterChange();
+        syncBatchBtn(); syncHeaderCheck();
+      }).catch(function (e) {
+        state.deleting = false;
+        syncBatchBtn(); syncHeaderCheck();
+        toast(e.message || '请求失败', 'err');
       });
     }
-    // 导入:上传 xlsx(存在则更新,不存在则新增)
+    // 不支持 Excel 的模块不构建模板、导入、导出入口。
+    if (cfg.excel !== false) {
+    // 导入:按模块规则追加记录或匹配更新
     var importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
     importInput.addEventListener('change', function () {
       var f = importInput.files[0];
@@ -2142,7 +2852,7 @@ function crudView(cfg) {
       fd.append('file', f);
       var pm = showProgressModal('导入 Excel');
       pm.setStatus('正在上传 ' + f.name + '(' + (f.size / 1024).toFixed(1) + 'KB)…');
-      postFormWithProgress(cfg.endpoint + '/import-excel', fd,
+      postFormWithProgress((cfg.excelEndpoint || cfg.endpoint) + '/import-excel', fd,
         function (pct) {
           pm.setProgress(pct * 0.5); // 上传占前半
           pm.setStatus('正在上传… ' + pct + '%');
@@ -2151,13 +2861,16 @@ function crudView(cfg) {
         pm.setProgress(80);
         pm.setStatus('正在处理数据…');
         r = r || {};
-        var msg = importResultSummary(r);
+        var isPersonnelImport = cfg.key === 'personnel';
+        var msg = importResultSummary(r, isPersonnelImport);
         pm.setProgress(100);
         pm.setStatus(r.error ? '导入失败' : '处理完成');
         pm.close();
+        var fileError = r.error || '';
         var errors = (r.errors || []).slice();
-        if (r.error && errors.indexOf(r.error) < 0) errors.unshift(r.error);
-        if (errors.length) {
+        if (fileError) {
+          openImportResultModal(msg, [], fileError);
+        } else if (errors.length) {
           openImportResultModal(msg, errors);
         } else {
           toast(msg, r.error ? 'err' : ((r.failed || r.subFailed) ? 'info' : 'ok'));
@@ -2176,7 +2889,7 @@ function crudView(cfg) {
         onclick: function () {
           var pm = showProgressModal('下载模板');
           pm.setStatus('正在生成模板…');
-          apiBlobWithProgress(cfg.endpoint + '/template', function (pct) {
+          apiBlobWithProgress((cfg.excelEndpoint || cfg.endpoint) + '/template', function (pct) {
             pm.setProgress(pct);
           }).then(function (r) {
             pm.setProgress(100);
@@ -2191,15 +2904,23 @@ function crudView(cfg) {
       }));
     }
     // 导入导出合并按钮:下拉菜单选择操作
-    function doExport() {
-      var ids = Object.keys(state.selected);
+    var doExport = function () {
+      if (locked()) return;
+      if (summaryMode) {
+        toast('汇总视图为只读视图，请切回记录视图勾选记录后导出', 'info');
+        return;
+      }
+      var ids = selectedIds();
       if (!ids.length) {
         toast('请先勾选要导出的数据(可点表格左上角全选本页)', 'err');
         return;
       }
+      var exportUrl = (cfg.excelEndpoint || cfg.endpoint) + '/export?ids=' + encodeURIComponent(ids.join(','));
+      // 如体能考核宽行导出等模块级附加参数
+      if (cfg.exportParams) { exportUrl += '&' + cfg.exportParams; }
       var pm = showProgressModal('导出 Excel');
       pm.setStatus('正在导出 ' + ids.length + ' 条数据…');
-      apiBlobWithProgress(cfg.endpoint + '/export?ids=' + ids.join(','),
+      apiBlobWithProgress(exportUrl,
         function (pct) {
           pm.setProgress(pct * 0.9); // 留 10% 给处理
           pm.setStatus('正在下载… ' + pct + '%');
@@ -2213,12 +2934,17 @@ function crudView(cfg) {
         pm.close();
         toast(e.message, 'err');
       });
-    }
+    };
     var ioMenu = h('div', { class: 'dd-list io-menu' },
       h('div', {
         class: 'dd-item', text: '导入 Excel',
-        title: '导入 Excel(第一行为列头,建议用导出的文件作模板)',
-        onclick: function () { ioWrap.classList.remove('open'); importInput.click(); }
+        title: importRuleText(cfg.key),
+        onclick: function () {
+          ioWrap.classList.remove('open');
+          confirmBox(importRuleText(cfg.key) + '\n\n确定要继续选择文件导入吗？').then(function (yes) {
+            if (yes) importInput.click();
+          });
+        }
       }),
       h('div', {
         class: 'dd-item', text: '导出 Excel',
@@ -2239,6 +2965,7 @@ function crudView(cfg) {
     ioMenu.addEventListener('click', function (e) { e.stopPropagation(); });
     ioMenu.addEventListener('mousedown', function (e) { e.preventDefault(); });
     toolbar.appendChild(ioWrap);
+    }
     var actions = {
       load: load,
       openNew: function () { openForm(null); },
@@ -2251,20 +2978,27 @@ function crudView(cfg) {
     if (cfg.toolbarExtra) {
       cfg.toolbarExtra(toolbar, actions);
     }
-    toolbar.appendChild(h('button', {
+    var addBtn = h('button', {
       class: 'btn btn-primary',
       text: cfg.addLabel || '新增' + cfg.title.replace(/管理$/, ''),
       onclick: function () { openForm(null); }
-    }));
+    });
+    toolbar.appendChild(addBtn);
+    recordAddBtn = addBtn;
     // 筛选按钮已改为固定在右侧边缘的垂直标签(document.body 上),不在工具栏
 
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr>' +
       '<th class="cb-cell"><input type="checkbox" class="cb-all" title="全选本页"/></th>' +
       cfg.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') +
-      '<th style="width:110px">操作</th></tr></thead><tbody></tbody>';
+      '<th class="action-col" style="width:110px">操作</th></tr></thead><tbody></tbody>';
     table.addEventListener('change', function (e) {
       var t = e.target;
+      if (locked()) {
+        $all('.cb-row', table).forEach(function (b) { b.checked = !!state.selected[b.getAttribute('data-id')]; });
+        syncHeaderCheck();
+        return;
+      }
       if (t.classList.contains('cb-row')) {
         var id = t.getAttribute('data-id');
         if (t.checked) state.selected[id] = true; else delete state.selected[id];
@@ -2277,17 +3011,16 @@ function crudView(cfg) {
           if (t.checked) state.selected[bid] = true; else delete state.selected[bid];
         });
         syncBatchBtn();
+        syncHeaderCheck();
       }
     });
     table.addEventListener('click', function (e) {
+      if (locked()) return;
       var viewEl = e.target.closest('[data-view-id]');
       if (viewEl) {
         var vid = viewEl.getAttribute('data-view-id');
         var vrow = state.rows.filter(function (r) { return String(r.id) === String(vid); })[0];
-        if (vrow) {
-          var onView = cfg.onView || function (rw, at) { openDetailModal(cfg, rw, at); };
-          onView(vrow, { edit: function () { openForm(vrow); } });
-        }
+        if (vrow) viewRow(vrow);
         return;
       }
       var btnEl = e.target.closest('button[data-act]');
@@ -2295,22 +3028,55 @@ function crudView(cfg) {
       var id = btnEl.getAttribute('data-id');
       var row = state.rows.filter(function (r) { return String(r.id) === String(id); })[0];
       if (!row) return;
-      if (btnEl.getAttribute('data-act') === 'edit') {
+      var actionKey = btnEl.getAttribute('data-act');
+      var action = rowActions(row).filter(function (entry) { return entry.key === actionKey; })[0];
+      if (!action) return; // 未知/已隐藏的动作绝不能回落到删除。
+      if (action.onClick) {
+        action.onClick(row, { refresh: afterChange, view: function () { viewRow(row); } });
+      } else if (actionKey === 'view') {
+        viewRow(row);
+      } else if (actionKey === 'edit') {
         openForm(row);
-      } else {
+      } else if (actionKey === 'del') {
+        state.deleting = true;
+        syncBatchBtn(); syncHeaderCheck();
         confirmBox(cfg.delTip ? cfg.delTip(row) : '确定删除这条记录吗?删除后不可恢复。', true)
           .then(function (yes) {
-            if (!yes) return;
-            DEL(cfg.endpoint + '/' + id).then(function () {
-              toast('已删除');
-              if (state.rows.length === 1 && state.page > 1) state.page--;
-              afterChange();
-            }).catch(function (err) { toast(err.message, 'err'); });
+            if (!yes) return false;
+            state.requestGeneration++;
+            return DEL(cfg.endpoint + '/' + encodeURIComponent(id)).then(function () { toast('已删除'); return true; });
+          }).then(function (reload) {
+            state.deleting = false;
+            if (reload) afterChange();
+            syncBatchBtn(); syncHeaderCheck();
+          }).catch(function (err) {
+            state.deleting = false;
+            syncBatchBtn(); syncHeaderCheck();
+            toast(err.message || '请求失败', 'err');
           });
       }
     });
 
-    var panel = h('div', { class: 'panel' }, h('div', { class: 'table-wrap' }, table), sentinel);
+    recordTableEl = table;
+    var tableWrap = h('div', { class: 'table-wrap' }, table);
+    var panel = h('div', { class: 'panel' }, tableWrap, sentinel);
+    if (cfg.summaryView) {
+      // 汇总视图(宽行只读):项目列来自 summary.items,单元格为 成绩（分数/等级）
+      summaryTable = h('table', { class: 'grid fitness-summary-grid' });
+      summaryTable.addEventListener('click', function (e) {
+        var rowEl = e.target && e.target.closest ? e.target.closest('tr[data-summary-row]') : null;
+        if (rowEl) { toast('汇总视图为只读视图，编辑记录请切回记录视图', 'info'); }
+      });
+      summaryPagerBox = h('div');
+      summaryPanel = h('div', { class: 'fitness-summary-panel', style: 'display:none' },
+        h('div', {
+          style: 'padding:8px 12px 0;font-size:13px;color:#64748b',
+          text: '汇总视图为只读视图：一人一行、各考核项目为列，空白表示未参加；编辑或导出勾选记录请切回记录视图。'
+        }),
+        h('div', { class: 'table-wrap' }, summaryTable),
+        h('div', { style: 'padding:8px 12px' }, summaryPagerBox));
+      panel.appendChild(summaryPanel);
+    }
     // 布局:左侧主内容 + 右侧筛选面板
     var mainArea = h('div', { class: 'content-main' },
       h('div', { class: 'panel', style: 'margin-bottom:12px' }, toolbar),
@@ -2391,15 +3157,33 @@ function openDetailModal(cfg, row, act) {
     }
     if (f.type === 'hidden' || !f.label) return;
     var v = row[f.key];
+    if (f.key === 'militaryIdNo') v = String(v || '').trim();
     if (f.type === 'dept') {
-      v = row.departmentName || (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).name || v;
+      if (f.key === 'actualDepartmentId') {
+        // 实际单位:后端另带 actualDepartmentPath(完整路径);0/空 表示在编在岗,显示为空
+        v = Number(v) > 0
+          ? (row.actualDepartmentPath || row.actualDepartmentName ||
+            (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).path ||
+            (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).name || v)
+          : '';
+      } else {
+        v = row.departmentPath || row.departmentName || (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).path || (Ctx.deptFlat.filter(function (d) { return String(d.id) === String(v); })[0] || {}).name || v;
+      }
+      v = v == null ? v : String(v).replace(/\s*\/\s*/g, '');
     }
     grid.appendChild(h('div', { class: 'detail-item' },
       h('div', { class: 'dl', text: f.label }),
       h('div', {
-        class: 'dv',
-        text: (v === null || v === undefined || v === '') ? '—' : String(v)
+        class: 'dv' + (f.type === 'dept' ? ' personnel-department-path' : ''), title: v == null ? '' : String(v),
+        text: (v === null || v === undefined || v === '') ? (f.key === 'militaryIdNo' ? '未填写' : '—') : String(v)
       })));
+    // 人员详情:入伍日期旁自动展示军龄(优先按相当入伍时间折算,只读计算不进编辑表单)
+    if (cfg.key === 'personnel' && f.key === 'entryDate') {
+      var svc = calcServiceYears(row.equivEntryDate || row.entryDate || '');
+      grid.appendChild(h('div', { class: 'detail-item' },
+        h('div', { class: 'dl', text: '军龄' }),
+        h('div', { class: 'dv', text: svc ? svc + ' 年' : '—' })));
+    }
   });
 
   var body;
@@ -2407,7 +3191,7 @@ function openDetailModal(cfg, row, act) {
     var photo = h('div', { class: 'detail-photo', text: '无照片' });
     if (row.photo) {
       apiBlob('/api/personnel/' + row.id + '/photo').then(function (r) {
-        photo.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
+        bindBlobUrl(photo, r.blob, true);
         photo.textContent = '';
       }).catch(function () { /* 无照片保持占位 */ });
     }
@@ -2517,8 +3301,12 @@ var subUid = 0;
 function subRecordsPanel(kind, personnelId, opt) {
   var box = h('div', { style: 'grid-column: 1 / -1; padding: 2px 0 6px;' });
   var table = h('table', { class: 'grid sub-grid' });
-  var localMode = !personnelId; // 新建人员:全部暂存,随人员一并入库
+  var parentId = opt.parentId !== undefined ? opt.parentId : personnelId;
+  var localMode = !parentId; // 新建主记录:全部暂存,随主记录一并入库
   var serverMode = !localMode;
+  function endpoint(id) {
+    return opt.endpoint ? opt.endpoint(id) : '/api/sub/' + kind;
+  }
   var rows = [];
   var renderTimer = null;
 
@@ -2556,7 +3344,8 @@ function subRecordsPanel(kind, personnelId, opt) {
       render();
       return;
     }
-    GET('/api/sub/' + kind + '?personnelId=' + personnelId).then(function (list) {
+    var url = opt.endpoint ? endpoint(parentId) : '/api/sub/' + kind + '?personnelId=' + parentId;
+    GET(url).then(function (list) {
       rows = (list || []).map(function (r) {
         r.__id = 's' + r.id;
         r.__pending = false;
@@ -2632,7 +3421,7 @@ function subRecordsPanel(kind, personnelId, opt) {
       if (r[c.key]) {
         editor.value = r[c.key];
       }
-      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.value); });
+      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.rawValue === undefined ? editor.value : editor.rawValue); });
     } else if (c.type === 'select') {
       var ddOpts = typeof c.options === 'function' ? c.options() : (c.options || []);
       editor = makeDropdown(ddOpts, '请选择');
@@ -2643,7 +3432,12 @@ function subRecordsPanel(kind, personnelId, opt) {
       var btn = editor.querySelector('.dd-btn');
       if (btn) {
         btn.addEventListener('blur', function () {
-          setTimeout(function () { commitCellEdit(r, c, r[c.key]); }, 150);
+          setTimeout(function () {
+            // 下拉展开期间的失焦是打开动作的一部分(焦点移入列表),不是离开单元格,不应提交;提交会因值未变触发空行自动移除,表现为"卡类型刚点开就消失"
+            var holder = btn.closest && btn.closest('.dd');
+            if (holder && holder.classList.contains('open')) { return; }
+            commitCellEdit(r, c, r[c.key]);
+          }, 150);
         });
       }
     } else {
@@ -2686,6 +3480,11 @@ function subRecordsPanel(kind, personnelId, opt) {
 
   function commitCellEdit(r, c, value) {
     value = String(value == null ? '' : value).trim();
+    if (c.type === 'date' && value) {
+      var day = parseCalendarDay(value);
+      if (!day) { toast('「' + c.label + '」不是有效日期，请修正后保存', 'err'); return; }
+      value = formatCalendarDay(day);
+    }
     if (String(r[c.key] || '') === value) {
       autoRemoveIfEmpty(r);
       deferredRender();
@@ -2730,8 +3529,10 @@ function subRecordsPanel(kind, personnelId, opt) {
         deferredRender(); // 有部分内容但必填未齐,黄色行挂着
         return;
       }
-      body.personnelId = personnelId;
-      POST('/api/sub/' + kind, body).then(function (saved) {
+      if (opt.endpoint) { body[opt.parentKey || 'personnelId'] = parentId; }
+      else { body.personnelId = parentId; }
+      var createUrl = endpoint(parentId);
+      POST(createUrl, body).then(function (saved) {
         if (saved && saved.id) {
           r.id = saved.id;
           r.__id = 's' + saved.id;
@@ -2745,7 +3546,7 @@ function subRecordsPanel(kind, personnelId, opt) {
     } else {
       var backup = r.__backup || body;
       r.__backup = snapshot(r);
-      PUT('/api/sub/' + kind + '/' + r.id, body).then(function () {
+      PUT(endpoint(parentId) + '/' + r.id, body).then(function () {
         r.__backup = null;
         deferredRender();
       }).catch(function (e) {
@@ -2789,7 +3590,7 @@ function subRecordsPanel(kind, personnelId, opt) {
       if (!yes) {
         return;
       }
-      DEL('/api/sub/' + kind + '/' + r.id).then(function () {
+      DEL(endpoint(parentId) + '/' + r.id).then(function () {
         rows = rows.filter(function (x) { return x !== r; });
         render();
         toast('已删除');
@@ -2812,6 +3613,17 @@ function subRecordsPanel(kind, personnelId, opt) {
     h('span', { style: 'color:#a6b3c4;font-size:12px', text: '黄色行=必填未填完' })));
   box.appendChild(h('div', { class: 'table-wrap' }, table));
 
+  box.__validate = function () {
+    var badEditor = $all('.cal', box).some(function (el) {
+      var raw = String(el.rawValue === undefined ? el.value || '' : el.rawValue).trim();
+      return raw && !parseCalendarDay(raw);
+    });
+    return !badEditor && rows.every(function (r) {
+      return rowValid(r) && opt.columns.every(function (c) {
+        return c.type !== 'date' || !r[c.key] || !!parseCalendarDay(r[c.key]);
+      });
+    });
+  };
   box.__staged = function () {
     return rows.map(function (r) { return snapshot(r); });
   };
@@ -3000,9 +3812,9 @@ function batchImportPhotos(fileList) {
           }
           return null;
         }
-        if (f.size > 5 * 1024 * 1024) {
+        if (!/\.(jpe?g|png)$/i.test(f.name) || (f.type && !/^image\/(jpeg|png)$/i.test(f.type))) {
           failCount++;
-          failed.push(f.name + '(超过5MB)');
+          failed.push(f.name + '(仅支持 JPG 或 PNG)');
           return null;
         }
         return readAsDataURL(f).then(function (dataURL) {
@@ -3153,10 +3965,13 @@ function openPersonProfile(rw, act) {
       var age = t.getFullYear() - (+am[1]) - ((t.getMonth() + 1 < +am[2] || (t.getMonth() + 1 === +am[2] && t.getDate() < +am[3])) ? 1 : 0);
       if (age >= 0 && age < 130) { ageTxt = age + ' 岁'; profileAge = age; }
     }
+    var svcYears = calcServiceYears((p.equivEntryDate || p.entryDate) || '');
+    var svcTxt = svcYears ? svcYears + ' 年' : '';
     var info = h('div', { style: 'flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;align-content:start' },
       cell('姓名', p.name || rw.personnelName), cell('身份证号码', idc), cell('出生日期', birthday),
-      cell('年龄', ageTxt), cell('入伍时间', p.entryDate), cell('人员类别', p.category),
-      cell('军衔', p.rank), cell('职务', p.post), cell('所属单位', p.departmentName));
+      cell('年龄', ageTxt), cell('入伍时间', p.entryDate), cell('军龄', svcTxt),
+      cell('人员类别', p.category),
+      cell('军衔', p.rank), cell('职务', p.post), cell('所属单位', p.departmentPath || p.departmentName));
     body.appendChild(h('div', { style: 'display:flex;gap:16px;align-items:stretch' },
       h('div', { style: 'flex:none;width:300px;border:1px solid #edf1f6;border-radius:10px;padding:12px 10px;display:flex;justify-content:center' },
         buildBodyFigure(p.height, p.weight, p.gender, profileAge)),
@@ -3370,7 +4185,7 @@ function buildTrendChart(series, opts) {
     var pts = s.data.map(function (p) { return xAt(xi[p.date]).toFixed(1) + ',' + yAt(p.score).toFixed(1); });
     svg.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
     s.data.forEach(function (p) {
-      svg.push('<circle cx="' + xAt(xi[p.date]).toFixed(1) + '" cy="' + yAt(p.score).toFixed(1) + '" r="3.5" fill="' + color + '"><title>' + esc(s.name) + ' ' + p.date + ' : ' + p.score + '分</title></circle>');
+      svg.push('<circle cx="' + xAt(xi[p.date]).toFixed(1) + '" cy="' + yAt(p.score).toFixed(1) + '" r="3.5" fill="' + color + '"><title>' + esc(s.name) + ' ' + esc(p.date) + ' : ' + esc(p.score) + '分</title></circle>');
     });
   });
   svg.push('</svg>');
@@ -4328,15 +5143,26 @@ var personnelCfg = {
     { key: 'name', label: '姓名' },
     { key: 'idCard', label: '身份证号' },
     { key: 'status', label: '状态', type: 'select', options: statusOptions },
-    { key: 'departmentId', label: '部门', type: 'select', options: function () {
+    { key: 'departmentId', label: '编制单位', type: 'select', options: function () {
         return Ctx.deptFlat.map(function (d) {
           var prefix = '';
           for (var i = 0; i < d.depth; i++) { prefix += '　'; }
-          return { v: String(d.id), l: prefix + d.name };
+          return { v: String(d.id), l: d.path || prefix + d.name };
         });
       } }
   ],
   moreFilters: [
+    { key: 'driverLicense', label: '驾驶证', type: 'select', options: [{ v: 'yes', l: '有驾驶证' }, { v: 'no', l: '无驾驶证' }] },
+    { key: 'driverLicenseType', label: '驾驶证类型', type: 'select', options: function () { return driverLicenseOptions('license_type'); } },
+    { key: 'driverLicenseStatus', label: '驾驶证状态', type: 'select', options: function () { return driverLicenseOptions('license_status'); } },
+    { key: 'onDuty', label: '在岗情况', type: 'select', options: [{ v: 'yes', l: '在编在岗' }, { v: 'no', l: '借岗在外' }] },
+    { key: 'actualDepartmentId', label: '实际单位', type: 'select', options: function () {
+        return Ctx.deptFlat.map(function (d) {
+          var prefix = '';
+          for (var i = 0; i < d.depth; i++) { prefix += '　'; }
+          return { v: String(d.id), l: d.path || prefix + d.name };
+        });
+      } },
     { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
     { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'category', label: '人员类别', type: 'select', options: function () { return dictLabels('personnel_category'); } },
@@ -4364,7 +5190,19 @@ var personnelCfg = {
     },
     { key: 'gender', label: '性别' },
     { key: 'idCard', label: '身份证号' },
-    { key: 'departmentName', label: '部门' },
+    { key: 'militaryIdNo', label: '军人证件号', render: function (r) { return esc(String(r.militaryIdNo || '').trim() || '未填写'); } },
+    { key: 'departmentPath', label: '编制单位', render: function (r) {
+        var path = String(r.departmentPath || r.departmentName || '未分配').replace(/\s*\/\s*/g, '');
+        var html = '<span class="personnel-department-path" title="' + esc(path) + '">' + esc(path) + '</span>';
+        // 编制之外另有实际在岗单位时,追加灰色小标签(与编制相同或未设置则不显示)
+        if (Number(r.actualDepartmentId) > 0 && String(r.actualDepartmentId) !== String(r.departmentId)) {
+          var actualPath = r.actualDepartmentPath || '';
+          // 后端已直接提供末级名;旧响应无该字段时回退按'/'拆分
+          var leaf = r.actualDepartmentName || (actualPath ? actualPath.split('/').pop().trim() : '') || ('单位' + r.actualDepartmentId);
+          html += '<span style="font-size:12px;color:#8a97a8;margin-left:4px;white-space:nowrap" title="' + esc(actualPath || leaf) + '">实际：' + esc(leaf) + '</span>';
+        }
+        return html;
+      } },
     { key: 'locationPoint', label: '所在点位', render: function (r) { return r.locationPoint || '—'; } },
     { key: 'category', label: '人员类别', render: function (r) { return r.category || '—'; } },
     { key: 'rank', label: '军衔/职级' },
@@ -4372,14 +5210,14 @@ var personnelCfg = {
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'phone', label: '手机号' },
     { key: 'entryDate', label: '入伍日期' },
-    { key: '__service', label: '军龄', render: function (r) { var y = calcServiceYears(r.entryDate); return y ? y + '年' : '—'; } }
+    { key: '__service', label: '军龄', render: function (r) { var y = calcServiceYears(r.equivEntryDate || r.entryDate); return y ? y + '年' : '—'; } }
   ],
   rowTitle: function (r) { return r.name; },
   onView: function (row, act) { openDetailModal(personnelCfg, row, act); },
-  delTip: function (r) { return '确定删除人员「' + r.name + '」吗?其手机设备、休假、体能、档案子表记录将一并删除,装备/物资/车辆保管和部门负责人关联将解除。\n删除后可通过工具栏「删除撤回」完整恢复(快照保留 30 天)。'; },
+  delTip: function (r) { return '确定删除人员「' + r.name + '」吗?其手机设备、休假、体能、档案子表记录将一并删除,装备/物资/车辆保管和单位负责人关联将解除。\n删除后可通过工具栏「删除撤回」完整恢复(快照保留 30 天)。'; },
   afterTable: function (rootEl) { loadRowPhotos(rootEl); },
   formTop: personnelPhotoBlock,
-  addLabel: '新增人员',
+  addLabel: '新增人员信息',
   toolbarExtra: function (bar, act) {
     bar.appendChild(h('button', {
       class: 'btn btn-ghost', text: '删除撤回',
@@ -4405,35 +5243,36 @@ var personnelCfg = {
   form: [
     { section: '基本信息' },
     { key: 'name', label: '姓名', required: true },
-    { key: 'idCard', label: '身份证号', hint: '输入后自动校验并带出性别/出生日期/年龄' },
-    { key: 'gender', label: '性别', type: 'select', options: ['男', '女'] },
-    { key: 'birthday', label: '出生日期', type: 'date' },
-    { key: 'age', label: '年龄', readonly: true, placeholder: '自动计算' },
-    { key: 'phone', label: '手机号', readonly: true, placeholder: '在「手机管理」中添加设备后自动带出', hint: '由手机管理模块维护,取本人最新设备的号码' },
-    { key: 'departmentId', label: '部门', type: 'dept' },
-    { key: 'locationPoint', label: '所在点位', type: 'select', options: function () { return dictLabels('personnel_location'); }, hint: '人员当前所在地点,选项在数据字典「所在点位」中维护' },
+    { key: 'idCard', label: '身份证号', required: true, hint: '输入后自动校验并带出性别/出生日期/年龄' },
+    { key: 'militaryIdNo', label: '军人证件号', required: true },
+    { key: 'gender', label: '性别', type: 'select', required: true, options: ['男', '女'] },
+    { key: 'birthday', label: '出生日期', type: 'date', required: true },
+    { key: 'age', label: '年龄', required: true, readonly: true, placeholder: '自动计算' },
+    { key: 'phone', label: '手机号', readonly: true, placeholder: '在「手机管理」中添加设备后自动带出' },
+    { key: 'departmentId', label: '编制单位', type: 'dept', required: true },
+    { key: 'actualDepartmentId', label: '实际单位', type: 'dept', hint: '留空表示在编在岗；与编制单位并列对照' },
+    { key: 'locationPoint', label: '所在点位', type: 'select', required: true, options: function () { return dictLabels('personnel_location'); } },
     { key: 'status', label: '状态', type: 'select', required: true, options: statusOptions },
     { section: '军衔职务' },
-    { key: 'category', label: '人员类别', type: 'select', options: function () { return dictLabels('personnel_category'); } },
-    { key: 'rank', label: '军衔/职级', type: 'select', placeholder: '先选类别',
+    { key: 'category', label: '人员类别', type: 'select', required: true, options: function () { return dictLabels('personnel_category'); } },
+    { key: 'rank', label: '军衔/职级', type: 'select', required: true, placeholder: '先选类别',
       depends: { field: 'category', dict: 'rank', parentDict: 'personnel_category' } },
-    { key: 'post', label: '职务/岗位' },
-    { key: 'entryDate', label: '入伍/入职日期', type: 'date' },
+    { key: 'post', label: '职务/岗位', required: true },
+    { key: 'postDate', label: '任岗位时间', type: 'date' },
+    { key: 'entryDate', label: '入伍/入职日期', type: 'date', required: true },
+    { key: 'equivEntryDate', label: '相当入伍时间', type: 'date', required: true },
     { section: '更多资料' },
-    { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
-    { key: 'nativePlace', label: '籍贯所在地', type: 'region' },
-    { key: 'enlistPlace', label: '入伍所在地', type: 'region' },
-    { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
+    { key: 'nation', label: '民族', type: 'select', required: true, options: function () { return dictLabels('nation'); } },
+    { key: 'bloodType', label: '血型', type: 'select', required: true, options: function () { return dictLabels('blood_type'); } },
+    { key: 'enlistPlace', label: '入伍所在地', type: 'region', required: true },
+    { key: 'nativePlace', label: '籍贯所在地', type: 'region', required: true },
 
 
 
-    { key: 'education', label: '学历', type: 'select', options: function () { return dictLabels('education'); } },
-    { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
-    { key: 'height', label: '身高(cm)', type: 'number', step: '0.1' },
-    { key: 'weight', label: '体重(kg)', type: 'number', step: '0.1' },
-    { key: 'address', label: '详细地址', span: 'full', placeholder: '街道/门牌号等具体住址', hint: '独立填写,与籍贯/入伍所在地无关(不一定相同)' },
+    { key: 'onlyChild', label: '独生子女', type: 'select', required: true, options: function () { return dictLabels('only_child'); } },
+    { key: 'address', label: '详细地址', span: 'full', required: true, placeholder: '街道/门牌号等具体住址' },
     { section: '党团籍信息' },
-    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', required: true, options: function () { return dictLabels('political_status'); } },
     { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },
     { key: 'partyActivistDate', label: '积极分子时间', type: 'date' },
     { key: 'partyCandidateDate', label: '预备党员时间', type: 'date' },
@@ -4443,7 +5282,7 @@ var personnelCfg = {
     { key: 'partyPost', label: '党内职务', placeholder: '如:支部委员、党委书记' },
     { key: 'partyRemark', label: '党团备注', type: 'textarea', span: 'full' },
     { section: '婚姻状况' },
-    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', required: true, options: function () { return dictLabels('marital_status'); } },
     { key: 'marriageDate', label: '结婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '已婚' || v.maritalStatus === '离异'; } },
     { key: 'divorceDate', label: '离婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '离异'; } },
     { key: 'followArmyDate', label: '随军时间', type: 'date' },
@@ -4458,6 +5297,9 @@ var personnelCfg = {
     { section: '住房情况' }
   ],
   formSetup: function (form, row) {
+    // 实际单位:后端 0=无(在编在岗);下拉无 0 选项,归一为空串再展示/提交
+    var adEl = form.inputs['actualDepartmentId'];
+    if (adEl && String(adEl.value) === '0') { adEl.value = ''; }
     var idEl = form.inputs['idCard'];
     var gEl = form.inputs['gender'];
     var bEl = form.inputs['birthday'];
@@ -4550,7 +5392,7 @@ var personnelCfg = {
         '驾驶证': drv, '个人卡号': card, '私家车': pveh, '住房情况': hous, '体能考核': fit },
       staged: { 'position-history': pos.__staged, 'reward-punish': rew.__staged,
         'family': fam.__staged, 'driver': drv.__staged, 'card': card.__staged,
-        'pvehicle': pveh.__staged, 'housing': hous.__staged }
+        'pvehicle': pveh.__staged, 'housing': hous.__staged, 'fitness': fit.__staged }
     };
   }
 };
@@ -4565,17 +5407,22 @@ function personnelPhotoBlock(row) {
   var preview = h('div', { class: 'photo-preview', text: st.existing ? '' : '无照片' });
   if (st.existing) {
     apiBlob(st.existing).then(function (r) {
-      preview.style.backgroundImage = 'url(' + URL.createObjectURL(r.blob) + ')';
+      bindBlobUrl(preview, r.blob, true);
       preview.textContent = '';
     }).catch(function () { preview.textContent = '无照片'; });
   }
 
-  var fileInput = h('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+  var fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png', style: 'display:none' });
   fileInput.addEventListener('change', function () {
     var f = fileInput.files[0];
     fileInput.value = '';
     if (!f) return;
-    if (f.size > 5 * 1024 * 1024) { toast('照片不能超过 5MB', 'err'); return; }
+    var mime = String(f.type || '').toLowerCase();
+    if (!/\.(jpe?g|png)$/i.test(f.name) || (mime && !/^image\/(jpeg|png)$/.test(mime))) {
+      toast('仅支持 JPG 或 PNG 图片', 'err');
+      return;
+    }
+
     var reader = new FileReader();
     reader.onload = function () {
       st.base64 = reader.result;
@@ -4583,6 +5430,7 @@ function personnelPhotoBlock(row) {
       preview.style.backgroundImage = 'url(' + st.base64 + ')';
       preview.textContent = '';
     };
+    reader.onerror = function () { toast('读取图片失败', 'err'); };
     reader.readAsDataURL(f);
   });
 
@@ -4590,17 +5438,17 @@ function personnelPhotoBlock(row) {
   box.appendChild(h('label', { text: '人员照片' }));
   box.appendChild(h('div', { class: 'photo-box' }, preview,
     h('div', {}, fileInput,
-      h('div', { style: 'display:flex;flex-direction:column;gap:8px' },
-        h('button', { class: 'btn btn-ghost btn-sm', text: '选择照片', onclick: function () { fileInput.click(); } }),
+      h('div', { class: 'photo-actions' },
+        h('button', { class: 'btn btn-ghost btn-sm photo-action', text: '选择照片', onclick: function () { fileInput.click(); } }),
         h('button', {
-          class: 'btn btn-ghost btn-sm', text: '移除照片',
+          class: 'btn btn-ghost btn-sm photo-action', text: '移除照片',
           onclick: function () {
             st.base64 = null; st.removed = true; st.existing = null;
             preview.style.backgroundImage = '';
             preview.textContent = '无照片';
           }
-        }),
-        h('div', { style: 'color:#a6b3c4;font-size:12px', text: '支持 jpg/png,不超过 5MB' })))));
+        })),
+      h('div', { class: 'photo-hint', text: '支持 JPG、PNG 格式' }))));
 
   return {
     el: box,
@@ -4614,7 +5462,7 @@ function personnelPhotoBlock(row) {
 
 var equipmentCfg = {
   key: 'equipment', title: '装备管理', icon: 'shield', endpoint: '/api/equipment',
-  clickKey: 'name', addLabel: '新增装备',
+  clickKey: 'name', addLabel: '新增装备信息',
   personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
   filters: [
     { key: 'name', label: '名称' },
@@ -4623,35 +5471,34 @@ var equipmentCfg = {
   moreFilters: [
     { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
     { key: 'code', label: '编号' },
+    { key: 'identCode', label: '识别码' },
     { key: 'keeperName', label: '保管人' },
-    { key: 'location', label: '存放位置' },
-    { key: 'buyDateStart', label: '购置起', type: 'date' },
-    { key: 'buyDateEnd', label: '购置止', type: 'date' }
+    { key: 'location', label: '存放位置', type: 'select', options: function () { return dictLabels('equipment_location'); } }
   ],
   columns: [
     { key: 'name', label: '装备名称' },
     { key: 'code', label: '编号' },
+    { key: 'identCode', label: '识别码' },
     { key: 'category', label: '类别' },
     { key: 'model', label: '型号' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'keeperName', label: '保管人', render: function (r) { return r.keeperName || '—'; } },
     { key: 'location', label: '存放位置' },
-    { key: 'buyDate', label: '购置日期' },
     { key: 'equipDate', label: '装备时间' }
   ],
   rowTitle: function (r) { return r.name; },
   form: [
     { key: 'name', label: '装备名称', required: true },
     { key: 'code', label: '装备编号' },
+    { key: 'identCode', label: '识别码' },
     { key: 'category', label: '类别', type: 'select', options: function () { return dictLabels('equipment_category'); } },
     { key: 'model', label: '型号' },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('equipment_status'); } },
     { key: 'keeperIdCard', label: '保管人身份证', placeholder: '输入后自动带出姓名' },
     { key: 'keeperName', label: '保管人姓名', readonly: true, placeholder: '按身份证号自动获取' },
     { key: 'keeperId', type: 'hidden' },
-    { key: 'location', label: '存放位置' },
-    { key: 'buyDate', label: '购置日期', type: 'date' },
-    { key: 'equipDate', label: '装备时间', type: 'date', hint: '列装/配发到本单位的时间' },
+    { key: 'location', label: '存放位置', type: 'select', options: function () { return dictLabels('equipment_location'); } },
+    { key: 'equipDate', label: '装备时间', type: 'date' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   beforeSave: function (data) {
@@ -4664,8 +5511,56 @@ var equipmentCfg = {
 
 /** 装备分组子视图:同一装备台账,固定筛选某类别,新增时预填该类别 */
 function equipmentVariantCfg(key, title, category, icon) {
+  var isGun = category === '枪支';
+  var variantForm = equipmentCfg.form.filter(function (field) { return !isGun || field.key !== 'identCode'; });
+  var variantColumns = [
+    { key: 'name', label: '装备名称' },
+    { key: 'code', label: '编号' },
+    { key: 'category', label: '类别' },
+    { key: 'model', label: '型号' },
+    { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
+    { key: 'keeperName', label: '保管人', render: function (r) { return r.keeperName || '—'; } },
+    { key: 'location', label: '存放位置' },
+    { key: 'equipDate', label: '装备时间' }
+  ];
+  if (isGun) {
+    variantForm = [];
+    for (var i = 0; i < equipmentCfg.form.length; i++) {
+      var field = equipmentCfg.form[i];
+      if (field.key === 'identCode') continue;
+      if (field.key === 'code') {
+        var requiredCode = {};
+        for (var property in field) {
+          if (Object.prototype.hasOwnProperty.call(field, property)) requiredCode[property] = field[property];
+        }
+        requiredCode.required = true;
+        variantForm.push(requiredCode);
+      } else {
+        variantForm.push(field);
+      }
+    }
+  }
+  if (category === '大型装备' || category === '小型装备') {
+    variantColumns.splice(2, 0, { key: 'identCode', label: '识别码' });
+    for (var formIndex = 0; formIndex < variantForm.length; formIndex++) {
+      if (variantForm[formIndex].key === 'model') {
+        variantForm.splice(formIndex, 0, {
+          key: 'brand', label: '品牌', type: 'select',
+          options: function () { return dictLabels('equipment_brand'); }
+        });
+        break;
+      }
+    }
+    for (var columnIndex = 0; columnIndex < variantColumns.length; columnIndex++) {
+      if (variantColumns[columnIndex].key === 'model') {
+        variantColumns.splice(columnIndex, 0, { key: 'brand', label: '品牌' });
+        break;
+      }
+    }
+  }
   return {
     key: key, title: title, icon: icon || 'shield', endpoint: '/api/equipment',
+    excelEndpoint: isGun ? '/api/equipment-gun' : '/api/equipment',
     clickKey: 'name', addLabel: '新增' + title,
     personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
     fixedFilter: { category: category },
@@ -4677,23 +5572,11 @@ function equipmentVariantCfg(key, title, category, icon) {
     moreFilters: [
       { key: 'code', label: '编号' },
       { key: 'keeperName', label: '保管人' },
-      { key: 'location', label: '存放位置' },
-      { key: 'buyDateStart', label: '购置起', type: 'date' },
-      { key: 'buyDateEnd', label: '购置止', type: 'date' }
+      { key: 'location', label: '存放位置', type: 'select', options: function () { return dictLabels('equipment_location'); } }
     ],
-    columns: [
-      { key: 'name', label: '装备名称' },
-      { key: 'code', label: '编号' },
-      { key: 'category', label: '类别' },
-      { key: 'model', label: '型号' },
-      { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
-      { key: 'keeperName', label: '保管人', render: function (r) { return r.keeperName || '—'; } },
-      { key: 'location', label: '存放位置' },
-      { key: 'buyDate', label: '购置日期' },
-      { key: 'equipDate', label: '装备时间' }
-    ],
+    columns: variantColumns,
     rowTitle: function (r) { return r.name; },
-    form: equipmentCfg.form,
+    form: variantForm,
     beforeSave: equipmentCfg.beforeSave
   };
 }
@@ -4703,7 +5586,7 @@ var equipmentSmallCfg = equipmentVariantCfg('equipment-small', '小型装备', '
 
 var materialCfg = {
   key: 'material', title: '物资管理', icon: 'box', endpoint: '/api/material',
-  clickKey: 'name', addLabel: '新增物资',
+  clickKey: 'name', addLabel: '新增物资信息',
   personLookup: { idCard: 'keeperIdCard', name: 'keeperName', pid: 'keeperId' },
   filters: [
     { key: 'name', label: '名称' },
@@ -4754,9 +5637,19 @@ var materialCfg = {
   }
 };
 
+var VEHICLE_FAULT_SUB = {
+  name: '历史故障',
+  parentKey: 'vehicleId',
+  endpoint: function (vehicleId) { return '/api/vehicle/' + vehicleId + '/fault-history'; },
+  columns: [
+    { key: 'faultDate', label: '故障时间', type: 'date', required: true, w: 130 },
+    { key: 'description', label: '故障情况', required: true }
+  ]
+};
+
 var vehicleCfg = {
-  key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle',
-  clickKey: 'plateNo', addLabel: '新增车辆',
+  key: 'vehicle', title: '车辆管理', icon: 'truck', endpoint: '/api/vehicle', wide: true,
+  clickKey: 'plateNo', addLabel: '新增车辆信息',
   personLookup: { idCard: 'driverIdCard', name: 'driverName', pid: 'driverId' },
   filters: [
     { key: 'plateNo', label: '车牌号' },
@@ -4777,13 +5670,12 @@ var vehicleCfg = {
     { key: 'type', label: '车型' },
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'driverName', label: '驾驶员', render: function (r) { return r.driverName || '—'; } },
-    { key: 'insuranceExpiry', label: '保险到期', render: function (r) { return r.insuranceExpiry || '—'; } },
     { key: 'inspectionExpiry', label: '年检到期', render: function (r) { return r.inspectionExpiry || '—'; } },
-    { key: 'equipDate', label: '装备时间', render: function (r) { return r.equipDate || '—'; } },
-    { key: 'mileage', label: '里程(km)' }
+    { key: 'equipDate', label: '装备时间', render: function (r) { return r.equipDate || '—'; } }
   ],
   rowTitle: function (r) { return r.plateNo; },
   form: [
+    { section: '基本信息' },
     { key: 'plateNo', label: '车牌号', required: true },
     { key: 'vin', label: '车架号', placeholder: '17位车辆识别代码' },
     { key: 'engineNo', label: '发动机号' },
@@ -4792,24 +5684,29 @@ var vehicleCfg = {
       depends: { field: 'brand', dict: 'vehicle_model', parentDict: 'vehicle_brand' } },
     { key: 'type', label: '车型', type: 'select', options: function () { return dictLabels('vehicle_type'); } },
     { key: 'color', label: '车身颜色' },
-    { key: 'fuelType', label: '燃料类型', type: 'select', options: function () { return dictLabels('vehicle_fuel'); } },
     { key: 'status', label: '状态', type: 'select', required: true, options: function () { return dictLabels('vehicle_status'); } },
     { key: 'driverIdCard', label: '驾驶员身份证', placeholder: '输入后自动带出姓名' },
     { key: 'driverName', label: '驾驶员姓名', readonly: true, placeholder: '按身份证号自动获取' },
     { key: 'driverId', type: 'hidden' },
     { key: 'seats', label: '核定人数', type: 'number', step: '1' },
-    { key: 'mileage', label: '里程(km)', type: 'number', step: '0.1' },
-    { key: 'purchaseDate', label: '购置日期', type: 'date' },
-    { key: 'equipDate', label: '装备时间', type: 'date', hint: '列装/配发到本单位的时间' },
-    { key: 'insuranceExpiry', label: '保险到期日', type: 'date' },
+    { key: 'equipDate', label: '装备时间', type: 'date' },
     { key: 'inspectionExpiry', label: '年检到期日', type: 'date' },
-    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' },
+    { section: '历史故障' }
   ],
   beforeSave: function (data) {
     // driverIdCard/driverName 仅用于表单展示,不提交
     delete data.driverIdCard;
     delete data.driverName;
     return data;
+  },
+  subPanels: function (row) {
+    var panel = subRecordsPanel('vehicle-fault', row && row.id, VEHICLE_FAULT_SUB);
+    return {
+      panels: { '历史故障': panel },
+      staged: row ? null : { 'vehicle-fault': panel.__staged },
+      stagedMeta: { 'vehicle-fault': { endpoint: VEHICLE_FAULT_SUB.endpoint, parentKey: VEHICLE_FAULT_SUB.parentKey } }
+    };
   }
 };
 
@@ -4940,9 +5837,10 @@ function openLeaveHistory(rw, act) {
 
 var leaveCfg = {
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
-  clickKey: 'personnelName', addLabel: '新增休假',
+  clickKey: 'personnelName', addLabel: '新增休假记录',
   filters: [
     { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号' },
     { key: 'leaveType', label: '休假类型', type: 'select', options: function () { return dictLabels('leave_type'); } }
   ],
   moreFilters: [
@@ -4951,6 +5849,7 @@ var leaveCfg = {
     { key: 'endDate', label: '结束日期', type: 'date' }
   ],
   columns: [
+    { key: 'departmentPath', label: '单位' },
     { key: 'personnelName', label: '姓名' },
     { key: 'idCard', label: '身份证号', render: function (r) {
         return r.idCard ? '<span class="view-detail" data-view-id="' + r.id + '" title="点击查看休假档案"><b>' + esc(r.idCard) + '</b></span>' : '—';
@@ -4969,7 +5868,8 @@ var leaveCfg = {
         }
         return d > 0 ? d + '天' : '—';
       } },
-    { key: 'reason', label: '事由' }
+    { key: 'reason', label: '事由' },
+    { key: 'leaveLocation', label: '休假地点', render: function (r) { return esc(r.leaveLocation || '—'); } }
   ],
   rowTitle: function (r) { return r.personnelName; },
   delTip: function (r) { return '确定删除「' + r.personnelName + '」的这条休假记录吗?'; },
@@ -4988,7 +5888,8 @@ var leaveCfg = {
     { key: 'holidayDays', label: '节假日加假', type: 'number', step: '0.5', placeholder: '手动填写' },
     { key: 'endDate', label: '结束日期', type: 'date', placeholder: '自动计算', readonly: true },
     { key: 'totalDays', label: '总天数', readonly: true, placeholder: '自动计算' },
-    { key: 'reason', label: '事由', span: 'full' },
+    { key: 'reason', label: '事由' },
+    { key: 'leaveLocation', label: '休假地点', placeholder: '如：北京市', span: 'full' },
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ],
   beforeSave: function (data) {
@@ -5002,7 +5903,7 @@ var leaveCfg = {
 
 var phoneCfg = {
   key: 'phone', title: '手机管理', icon: 'smartphone', endpoint: '/api/phone',
-  clickKey: 'personnelName', addLabel: '新增设备',
+  clickKey: 'personnelName', addLabel: '新增手机设备',
   personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
   filters: [
     { key: 'personnelName', label: '姓名' },
@@ -5014,6 +5915,7 @@ var phoneCfg = {
     { key: 'status', label: '状态', type: 'select', options: function () { return dictLabels('device_status'); } }
   ],
   columns: [
+    { key: 'departmentPath', label: '单位' },
     { key: 'personnelName', label: '姓名' },
     { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
     { key: 'deviceType', label: '设备类型' },
@@ -5031,7 +5933,7 @@ var phoneCfg = {
     { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
     { key: 'personnelId', type: 'hidden', required: true },
     { key: 'deviceType', label: '设备类型', type: 'select', required: true, options: function () { return dictLabels('device_type'); } },
-    { key: 'brand', label: '品牌', type: 'select', required: true, options: function () { return dictLabels('phone_brand'); }, hint: '字典中不存在的品牌会自动登记' },
+    { key: 'brand', label: '品牌', type: 'select', required: true, options: function () { return dictLabels('phone_brand'); } },
     { key: 'model', label: '型号', placeholder: '如 小米17 Pro' },
     { key: 'serialNo', label: '序列号', placeholder: '设备SN码' },
     { key: 'imei1', label: 'IMEI1', placeholder: '15位国际移动设备识别码' },
@@ -5050,6 +5952,7 @@ var phoneCfg = {
 
 var fitnessCfg = {
   key: 'fitness', title: '体能考核', icon: 'activity', endpoint: '/api/fitness',
+  summaryView: true, summaryEndpoint: '/api/fitness/summary', exportParams: 'wide=true',
   clickKey: 'personnelName', addLabel: '新增考核记录',
   toolbarExtra: function (bar, act) {
     bar.appendChild(h('button', {
@@ -5121,16 +6024,23 @@ var fitnessCfg = {
       var age = ty - (+m[1]) - ((tm < +m[2] || (tm === +m[2] && td < +m[3])) ? 1 : 0);
       return (age >= 0 && age < 130) ? age : '';
     }
+    var lookupGeneration = 0;
     function lookup() {
+      var generation = ++lookupGeneration;
       var v = String(idEl.value || '').trim();
-      if (!v) { return; }
+      form.inputs['personnelId'].value = '';
+      form.inputs['personnelName'].value = '';
+      if (ageEl) ageEl.value = '';
+      if (!v) return;
       GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+        if (generation !== lookupGeneration || String(idEl.value || '').trim() !== v) return;
         if (p) {
           form.inputs['personnelId'].value = String(p.id);
           form.inputs['personnelName'].value = p.name || '';
           idEl.classList.remove('bad');
-          idEl.title = p.departmentName || '';
+          idEl.title = p.departmentPath || p.departmentName || '';
           GET('/api/personnel/' + p.id).then(function (full) {
+            if (generation !== lookupGeneration || String(idEl.value || '').trim() !== v) return;
             if (ageEl && full && full.birthday) {
               ageEl.value = calcAge(full.birthday);
               ageEl.dispatchEvent(new Event('change', { bubbles: true }));
@@ -5145,6 +6055,12 @@ var fitnessCfg = {
         }
       }).catch(function (err) { /* 忽略 */ });
     }
+    idEl.addEventListener('input', function () {
+      lookupGeneration++;
+      form.inputs['personnelId'].value = '';
+      form.inputs['personnelName'].value = '';
+      if (ageEl) ageEl.value = '';
+    });
     idEl.addEventListener('change', lookup);
     if (String(idEl.value || '').trim()) { setTimeout(lookup, 60); }
 
@@ -5257,7 +6173,7 @@ var militaryCfg = {
   }
 };
 
-/* ================= 部门管理视图(树) ================= */
+/* ================= 单位管理视图(树) ================= */
 
 function departmentView() {
   var root = h('div');
@@ -5296,7 +6212,7 @@ function departmentView() {
       body: body, wide: true,
       footer: [
         h('button', {
-          class: 'btn btn-ghost', text: '去人员管理筛选此部门',
+          class: 'btn btn-ghost', text: '去人员管理筛选此单位',
           onclick: function () {
             m.close();
             if (location.hash !== '#personnel') { location.hash = 'personnel'; }
@@ -5316,7 +6232,8 @@ function departmentView() {
       ]
     });
     body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-    GET('/api/personnel?departmentId=' + node.id + '&size=200').then(function (d) {
+    // 全量分页加载:单位直属人员不再截断在前200条,人数多的单位也能完整查看
+    loadAllRows('/api/personnel?departmentId=' + node.id).then(function (d) {
       var rows = (d && d.list) || [];
       body.innerHTML = '';
       var table = h('table', { class: 'grid', style: 'width:100%' });
@@ -5336,12 +6253,12 @@ function departmentView() {
       table.appendChild(tbody);
       body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:52vh;overflow:auto' }, table));
       if (!rows.length) {
-        body.appendChild(h('div', { class: 'empty-row', text: '该部门暂无直属人员' }));
+        body.appendChild(h('div', { class: 'empty-row', text: '该单位暂无直属人员' }));
       }
       if ((node.total || 0) > (node.count || 0)) {
         body.appendChild(h('div', {
           style: 'margin-top:12px;font-size:13px;color:var(--c-sub, #66788c)',
-          text: '含下级部门共 ' + node.total + ' 人,此处仅列出直属人员;点击"去人员管理筛选此部门"可查看并维护。'
+          text: '含下级单位共 ' + node.total + ' 人,此处仅列出直属人员;点击"去人员管理筛选此单位"可查看并维护。'
         }));
       }
     }).catch(function (e) {
@@ -5361,13 +6278,13 @@ function departmentView() {
     var row = h('div', { class: 'dept-row' }, expand,
       h('span', { class: 'dept-ic', html: iconSvg('building') }),
       h('span', {
-        class: 'name clickable', html: nameHtml, title: '点击查看该部门人员',
+        class: 'name clickable', html: nameHtml, title: '点击查看该单位人员',
         onclick: function () { openDeptPersonnel(node); }
       }),
       node.leaderName ? chip('负责人 ' + node.leaderName, 'var(--c-sub, #66788c)') : null,
       chip('直属 ' + (node.count || 0) + ' 人', (node.count || 0) > 0 ? 'var(--pri, #2f6fd6)' : ''),
       hasKids && (node.total || 0) !== (node.count || 0) ? chip('含下级 ' + (node.total || 0) + ' 人', 'var(--c-ok, #2ea44f)') : null,
-      hasKids ? chip(hasKids + ' 个子部门', '') : null,
+      hasKids ? chip(hasKids + ' 个子单位', '') : null,
       h('span', { class: 'acts' },
         (node.count || 0) > 0 ? h('button', { class: 'btn-link', text: '查看人员', onclick: function () { openDeptPersonnel(node); } }) : null,
         h('button', { class: 'btn-link', text: '加子级', onclick: function () { openForm(null, node.id); } }),
@@ -5375,7 +6292,7 @@ function departmentView() {
         h('button', {
           class: 'btn-link danger', text: '删除',
           onclick: function () {
-            confirmBox('确定删除部门「' + node.name + '」吗?若其下有子部门或人员将无法删除。', true).then(function (yes) {
+            confirmBox('确定删除单位「' + node.name + '」吗?若其下有子单位或人员将无法删除。', true).then(function (yes) {
               if (!yes) return;
               DEL('/api/departments/' + node.id).then(function () {
                 toast('已删除');
@@ -5392,7 +6309,7 @@ function departmentView() {
     var box = $('.dept-tree', root);
     box.innerHTML = '';
     if (!Ctx.deptTree.length) {
-      box.appendChild(h('div', { class: 'empty-row', text: '暂无部门,点击上方按钮创建' }));
+      box.appendChild(h('div', { class: 'empty-row', text: '暂无单位,点击上方按钮创建' }));
       return;
     }
     if (kw) { filterTree(Ctx.deptTree); }
@@ -5406,7 +6323,7 @@ function departmentView() {
       });
     })(Ctx.deptTree, 0);
     if (kw && !found) {
-      box.appendChild(h('div', { class: 'empty-row', text: '没有名称包含「' + kw + '」的部门' }));
+      box.appendChild(h('div', { class: 'empty-row', text: '没有名称包含「' + kw + '」的单位' }));
     }
   }
 
@@ -5414,10 +6331,10 @@ function departmentView() {
     statsEl.innerHTML = '';
     var unassigned = Math.max(0, stats.personTotal - stats.assigned);
     [
-      { num: stats.depts, lbl: '部门总数', ic: 'building', bg: 'var(--c-pribg, #e8f0fd)', fg: 'var(--pri, #2f6fd6)' },
+      { num: stats.depts, lbl: '单位总数', ic: 'building', bg: 'var(--c-pribg, #e8f0fd)', fg: 'var(--pri, #2f6fd6)' },
       { num: stats.personTotal, lbl: '人员总数', ic: 'users', bg: '#e9f7ef', fg: 'var(--c-ok, #2ea44f)' },
-      { num: stats.assigned, lbl: '已分配部门', ic: 'check', bg: '#eef4ff', fg: 'var(--pri-dark, #16437e)' },
-      { num: unassigned, lbl: '未分配部门', ic: 'shield', bg: '#fdf1e7', fg: '#e8743b' }
+      { num: stats.assigned, lbl: '已分配单位', ic: 'check', bg: '#eef4ff', fg: 'var(--pri-dark, #16437e)' },
+      { num: unassigned, lbl: '未分配单位', ic: 'shield', bg: '#fdf1e7', fg: '#e8743b' }
     ].forEach(function (c) {
       statsEl.appendChild(h('div', { class: 'dept-stat-card' },
         h('span', { class: 'dept-stat-ic', style: 'background:' + c.bg + ';color:' + c.fg, html: iconSvg(c.ic) }),
@@ -5441,16 +6358,18 @@ function departmentView() {
 
   function openForm(node, parentId) {
     var form = buildForm([
-      { key: 'name', label: '部门名称', required: true },
-      { key: 'parentId', label: '上级部门', type: 'dept' },
+      { key: 'name', label: '单位名称', required: true },
+      { key: 'parentId', label: '上级单位', type: node && !hasGlobalAccess() ? 'hidden' : 'dept', required: !node && !hasGlobalAccess() },
       { key: 'leaderId', label: '负责人', type: 'personnel' },
       { key: 'sort', label: '排序号', type: 'number', step: '1', placeholder: '小的排前面' },
       { key: 'remark', label: '备注', span: 'full' }
     ], node
       ? { name: node.name, parentId: node.parentId, leaderId: node.leaderId > 0 ? node.leaderId : null, sort: node.sort, remark: node.remark }
       : { parentId: parentId || null });
+    if (!hasGlobalAccess()) form.el.appendChild(h('p', { class: 'account-hint',
+      text: node ? '子账号不可变更单位的上级关系。' : '只能在本人授权范围内的单位下新建子单位。' }));
     var m = openModal({
-      title: node ? '编辑部门 · ' + node.name : '新增部门',
+      title: node ? '编辑单位 · ' + node.name : '新增单位',
       body: form.el,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
@@ -5460,6 +6379,12 @@ function departmentView() {
             var data = form.get();
             if (!data) return;
             if (data.parentId === '') data.parentId = null;
+            if (!hasGlobalAccess()) {
+              if (node) data.parentId = node.parentId || 0; // 剪裁树授权根的 parent=0 由服务端保留原父级
+              else if (!Ctx.deptFlat.some(function (dept) { return String(dept.id) === String(data.parentId); })) {
+                form.setError('请选择本人授权范围内的上级单位'); return;
+              }
+            }
             if (data.leaderId === '' || data.leaderId == null) data.leaderId = 0;
             if (data.sort === null) data.sort = 0;
             var done = node ? PUT('/api/departments/' + node.id, data) : POST('/api/departments', data);
@@ -5476,7 +6401,7 @@ function departmentView() {
 
   var searchTimer = null;
   var searchInput = h('input', {
-    type: 'text', class: 'dept-search', placeholder: '搜索部门名称…',
+    type: 'text', class: 'dept-search', placeholder: '搜索单位名称…',
     style: 'margin-left:8px'
   });
   searchInput.addEventListener('input', function () {
@@ -5491,7 +6416,7 @@ function departmentView() {
     root.appendChild(statsEl);
     root.appendChild(h('div', { class: 'panel', style: 'margin-top:16px' },
       h('div', { class: 'dept-toolbar' },
-        h('button', { class: 'btn btn-primary', text: '新增部门', onclick: function () { openForm(null, null); } }),
+        h('button', { class: 'btn btn-primary', text: '新增单位信息', onclick: function () { openForm(null, null); } }),
         h('button', {
           class: 'btn btn-ghost', text: '全部展开', style: 'margin-left:8px',
           onclick: function () { walk(Ctx.deptTree, function (n) { n._open = true; }); renderTree(); }
@@ -5611,11 +6536,17 @@ function dictView() {
       return best;
     }
 
+    var groupCounts = {};
+    ordered.forEach(function (d) {
+      var key = String(d.parentId || 0);
+      groupCounts[key] = (groupCounts[key] || 0) + 1;
+    });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th style="width:150px">操作</th></tr></thead><tbody>' +
+    table.innerHTML = '<thead><tr><th class="dict-drag-col" style="width:32px"></th><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th class="action-col" style="width:150px">操作</th></tr></thead><tbody>' +
       (ordered.length ? ordered.map(function (d, ri) {
         var isChild = !!d.parentId;
         var childCount = globalChildCount(d);
+        var groupKey = String(d.parentId || 0);
         var rowFlash = (pendingHighlightPid && String(d.parentId) === String(pendingHighlightPid)) ? ' class="row-flash"' : '';
         var label;
         if (d._parentLabel) {
@@ -5628,15 +6559,93 @@ function dictView() {
             ? ' <span class="badge blue dict-child-link" data-ctype="' + esc(ct || '') + '" data-pid="' + d.id + '" title="点击查看下级">' + childCount + '个下级 ›</span>'
             : '');
         }
-        return '<tr' + rowFlash + '><td>' + label + '</td><td>' + esc(d.sort) + '</td>' +
+        var dragCell = groupCounts[groupKey] > 1
+          ? '<td class="dict-sort-cell" title="按住拖动排序"><span class="dict-drag-handle" aria-hidden="true">⠿</span></td>'
+          : '<td class="dict-drag-col"></td>';
+        return '<tr' + rowFlash + ' data-id="' + d.id + '" data-parent="' + groupKey + '">' + dragCell +
+          '<td>' + label + '</td><td>' + esc(d.sort) + '</td>' +
           '<td>' + (d.enabled === false ? '<span class="badge gray">停用</span>' : '<span class="badge green">启用</span>') + '</td>' +
           '<td>' + esc(d.remark) + '</td>' +
           '<td class="actions" style="width:140px;white-space:nowrap">' +
           (isChild ? '' : '<button class="btn-link" data-sub="' + d.id + '">添加下级</button>') +
           '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
-      }).join('') : '<tr><td colspan="5" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
+      }).join('') : '<tr><td colspan="6" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
     pendingHighlightPid = null;
+    var dictDragRow = null, dictDropRow = null, dictDropAfter = false, dictDragMoved = false, dictOrderSaving = false;
+    function clearDictDropMarks() {
+      $all('tr.dict-drop-before, tr.dict-drop-after', table).forEach(function (row) {
+        row.classList.remove('dict-drop-before', 'dict-drop-after');
+      });
+    }
+    function endDictDrag(commit) {
+      var moved = dictDragRow;
+      var parentKey = moved ? moved.getAttribute('data-parent') : '';
+      if (moved) moved.classList.remove('dict-dragging');
+      clearDictDropMarks();
+      dictDragRow = null;
+      dictDropRow = null;
+      if (!commit || !moved || !dictDragMoved) { dictDragMoved = false; return; }
+      dictDragMoved = false;
+      var ids = [];
+      $all('tbody tr[data-id]', table).forEach(function (row) {
+        if (row.getAttribute('data-parent') === parentKey) ids.push(Number(row.getAttribute('data-id')));
+      });
+      if (ids.length < 2 || dictOrderSaving) return;
+      dictOrderSaving = true;
+      PUT('/api/dict/reorder', { dictType: currentType, ids: ids }).then(function () {
+        toast('排序已保存');
+        return refreshDicts();
+      }).then(renderAll).catch(function (e) {
+        toast(e.message || '排序保存失败', 'err');
+        refreshDicts().then(renderAll);
+      }).then(function () { dictOrderSaving = false; });
+    }
+    $all('tbody tr[data-id]', table).forEach(function (tr) {
+      var groupKey = tr.getAttribute('data-parent');
+      if ((groupCounts[groupKey] || 0) < 2) return;
+      tr.setAttribute('draggable', 'true');
+      tr.addEventListener('dragstart', function (e) {
+        if (dictOrderSaving) { if (e.preventDefault) e.preventDefault(); return; }
+        dictDragRow = tr;
+        dictDragMoved = false;
+        dictDropRow = null;
+        tr.classList.add('dict-dragging');
+        if (e.dataTransfer) {
+          try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', tr.getAttribute('data-id'));
+          } catch (err) { /* 忽略不支持数据传输的浏览器 */ }
+        }
+      });
+      tr.addEventListener('dragover', function (e) {
+        if (!dictDragRow || dictDragRow === tr) return;
+        if (dictDragRow.getAttribute('data-parent') !== groupKey) {
+          clearDictDropMarks();
+          dictDropRow = null;
+          return;
+        }
+        if (e.preventDefault) e.preventDefault();
+        if (e.dataTransfer) { try { e.dataTransfer.dropEffect = 'move'; } catch (err) { /* 忽略 */ } }
+        var rect = tr.getBoundingClientRect();
+        var middle = rect.top + (rect.bottom - rect.top) / 2;
+        dictDropAfter = typeof e.clientY === 'number' && e.clientY > middle;
+        clearDictDropMarks();
+        tr.classList.add(dictDropAfter ? 'dict-drop-after' : 'dict-drop-before');
+        dictDropRow = tr;
+      });
+      tr.addEventListener('drop', function (e) {
+        if (!dictDragRow || !dictDropRow || dictDragRow === dictDropRow) return;
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        var reference = dictDropAfter ? dictDropRow.nextSibling : dictDropRow;
+        while (reference && reference.nodeType !== 1) reference = reference.nextSibling;
+        dictDropRow.parentNode.insertBefore(dictDragRow, reference);
+        dictDragMoved = true;
+        endDictDrag(true);
+      });
+      tr.addEventListener('dragend', function () { endDictDrag(false); });
+    });
     table.addEventListener('click', function (e) {
       // 点击"N个下级"徽标 → 跳到下级所在类型并高亮
       var link = e.target.closest('.dict-child-link');
@@ -5676,13 +6685,18 @@ function dictView() {
       h('div', { class: 'toolbar' },
         h('strong', { text: (g.name || currentType) + '(' + currentType + ')' }),
         h('div', { class: 'spacer' }),
-        h('button', { class: 'btn btn-primary', text: '新增选项', onclick: function () { openForm(null); } })),
+        h('button', { class: 'btn btn-primary', text: '新增字典选项', onclick: function () { openForm(null); } })),
       h('div', { class: 'table-wrap' }, table)));
   }
 
   /** item=编辑对象;parentItem=新增下级时的父项 */
   function openForm(item, parentItem) {
     var items = (typeGroup(currentType) || {}).items || [];
+    var nextSort = 1;
+    items.forEach(function (d) {
+      var sort = Number(d.sort);
+      if (isFinite(sort) && sort >= nextSort) nextSort = sort + 1;
+    });
     // 检测上级引用类型:本类型下级的父项若属于其他类型(如 车辆型号→车辆品牌),表单提供上级下拉
     var refType = null;
     items.forEach(function (d) {
@@ -5716,7 +6730,7 @@ function dictView() {
       { key: 'dictLabel', label: '选项内容', required: true },
       { key: '_parent', label: '上级', type: 'select', options: function () { return parentOptions; },
         placeholder: parentTypeForForm === currentType ? '无(顶级)' : ('请选择' + ((typeGroup(parentTypeForForm) || {}).name || '')) },
-      { key: 'sort', label: '排序号', type: 'number', step: '1' },
+      { key: 'sort', label: '排序号', type: 'number', step: '1', hint: '数字越小越靠前；也可在列表中拖动调整' },
       { key: 'enabled', label: '状态', type: 'select', required: true, options: [{ v: '1', l: '启用' }, { v: '0', l: '停用' }] },
       { key: 'remark', label: '备注', span: 'full' }
     ];
@@ -5724,7 +6738,7 @@ function dictView() {
 
     var preset = item
       ? { dictLabel: item.dictLabel, sort: item.sort, enabled: item.enabled === false ? '0' : '1', remark: item.remark }
-      : { enabled: '1', sort: 0 };
+      : { enabled: '1', sort: nextSort };
     if (hasHierarchy) {
       preset._parent = item && item.parentId ? labelForId(item.parentId)
         : (parentItem ? (parentItem.dictType === parentTypeForForm ? parentItem.dictLabel : labelForId(parentItem.id)) : '');
@@ -5744,7 +6758,7 @@ function dictView() {
             if (!data) return;
             data.dictType = currentType;
             data.enabled = data.enabled !== '0';
-            if (data.sort === null) data.sort = 0;
+            if (data.sort === null) data.sort = item ? item.sort : nextSort;
             if (hasHierarchy) {
               data.parentId = data._parent ? idForLabel(data._parent) : 0;
             } else {
@@ -5792,8 +6806,10 @@ var DASH_COLORS = ['var(--pri, #2f6fd6)', 'var(--c-ok, #2ea44f)', 'var(--c-warn,
 
 /** 仪表盘数据维度:cat=所属模块 group=接口分组 trend=按年趋势 gauge=仪表 drill=点击下钻 */
 var DASH_DIMS = {
-  department:       { cat: '人员管理', label: '各部门人数',  group: 'department', unit: '人', drill: { api: '/api/personnel', param: 'departmentId' } },
+  department:       { cat: '人员管理', label: '各单位人数（含下级）', hierarchy: true, group: 'department', unit: '人', drill: { api: '/api/personnel', param: 'departmentId' } },
+  locationPoint:    { cat: '人员管理', label: '所在点位', group: 'locationPoint', unit: '人', drill: { api: '/api/personnel', param: 'locationPoint' } },
   status:           { cat: '人员管理', label: '人员状态',    group: 'status', drill: { api: '/api/personnel', param: 'status' } },
+  driverLicense:    { cat: '人员管理', label: '驾驶证持有情况', group: 'driverLicense', unit: '人', drill: { api: '/api/personnel', param: 'driverLicense' } },
   gender:           { cat: '人员管理', label: '性别分布',    group: 'gender', drill: { api: '/api/personnel', param: 'gender' } },
   category:         { cat: '人员管理', label: '人员类别',    group: 'category', drill: { api: '/api/personnel', param: 'category' } },
   rank:             { cat: '人员管理', label: '军衔分布',    group: 'rank', unit: '人', drill: { api: '/api/personnel', param: 'rank' } },
@@ -5802,21 +6818,24 @@ var DASH_DIMS = {
   nativePlace:      { cat: '人员管理', label: '籍贯省份分布', group: 'nativePlace', unit: '人', drill: { api: '/api/personnel', param: 'nativePlace' } },
   enlistPlace:      { cat: '人员管理', label: '入伍地省份分布', group: 'enlistPlace', unit: '人', drill: { api: '/api/personnel', param: 'enlistPlace' } },
   entryTrend:       { cat: '人员管理', label: '入伍趋势',    trend: true, unit: '人', drill: { api: '/api/personnel', param: 'entryYear' } },
-  onDuty:           { cat: '人员管理', label: '人员在位率',  gauge: true, drill: { api: '/api/personnel', param: 'status', fixedVal: '在职' } },
+  onDuty:           { cat: '人员管理', label: '人员在位率',  gauge: true },
+  actualDuty:       { cat: '人员管理', label: '实际在岗分布', group: 'actualDuty', unit: '人', drill: { api: '/api/personnel', param: 'actualDepartmentId' } },
   equipmentCategory:{ cat: '装备管理', label: '装备类别',    group: 'equipmentCategory', unit: '件', drill: { api: '/api/equipment', param: 'category' } },
   equipmentStatus:  { cat: '装备管理', label: '装备状态',    group: 'equipmentStatus', drill: { api: '/api/equipment', param: 'status' } },
   materialCategory: { cat: '物资管理', label: '物资分类',    group: 'materialCategory', drill: { api: '/api/material', param: 'category' } },
   vehicleStatus:    { cat: '车辆管理', label: '车辆状态',    group: 'vehicleStatus', drill: { api: '/api/vehicle', param: 'status' } },
+  vehicleType:      { cat: '车辆管理', label: '车辆类型',    group: 'vehicleType', unit: '辆', drill: { api: '/api/vehicle', param: 'type' } },
   vehicleBrand:     { cat: '车辆管理', label: '车辆品牌',    group: 'vehicleBrand', unit: '辆', drill: { api: '/api/vehicle', param: 'brand' } },
   leaveType:        { cat: '休假管理', label: '今年休假类型', group: 'leaveType', unit: '次', drill: { api: '/api/leave', param: 'leaveType' } },
   fitnessGrade:     { cat: '体能考核', label: '今年体能评定', group: 'fitnessGrade', drill: { api: '/api/fitness', param: 'grade' } }
 };
 
 /** 图表类型中文名 */
-var DASH_KINDS = { bar: '条形图', donut: '环形图', rose: '玫瑰图', treemap: '树状图', columns: '柱状图', line: '折线图', gauge: '仪表图' };
+var DASH_KINDS = { hierarchy: '单位层级条形图', bar: '条形图', donut: '环形图', rose: '玫瑰图', treemap: '树状图', columns: '柱状图', line: '折线图', gauge: '仪表图' };
 
 /** 每个维度可选的图表类型 */
 function kindsForDim(dim) {
+  if (dim.hierarchy) { return ['hierarchy']; }
   if (dim.gauge) { return ['gauge']; }
   if (dim.trend) { return ['columns', 'line']; }
   return ['bar', 'donut', 'rose', 'treemap'];
@@ -5831,10 +6850,12 @@ function dashCardLabel(dimKey, kind) {
 
 /** 默认布局:[{dim,kind,size}] */
 var DASH_DEFAULT = [
-  { dim: 'department', kind: 'bar', size: 'm' },
+  { dim: 'department', kind: 'hierarchy', size: 'm' },
+  { dim: 'locationPoint', kind: 'bar', size: 'm' },
   { dim: 'status', kind: 'donut', size: 'm' },
   { dim: 'entryTrend', kind: 'columns', size: 'l' },
-  { dim: 'leaveType', kind: 'bar', size: 'm' }
+  { dim: 'leaveType', kind: 'bar', size: 'm' },
+  { dim: 'driverLicense', kind: 'donut', size: 'm' }
 ];
 
 /** 旧版目录 id → {dim,kind} 映射(配置迁移用) */
@@ -5855,8 +6876,12 @@ var DASH_OLD_WIDGET = {
 /** 旧版(纯id数组 / {id,size}) → 新版({dim,kind,size}) 兼容迁移 */
 function dashMigrate(saved) {
   var out = [];
-  (saved || []).forEach(function (w) {
-    if (typeof w === 'string' && DASH_OLD_WIDGET[w]) {
+  (Array.isArray(saved) ? saved : []).forEach(function (w) {
+    if ((w && w.dim === 'department') || (typeof w === 'string' && DASH_OLD_WIDGET[w] && DASH_OLD_WIDGET[w][0] === 'department') ||
+        (w && w.id && DASH_OLD_WIDGET[w.id] && DASH_OLD_WIDGET[w.id][0] === 'department')) {
+      // 累计单位数不可用面积/环形相加；旧布局仅迁移此卡片，保留顺序、尺寸及其余指标。
+      out.push({ dim: 'department', kind: 'hierarchy', size: w.size === 's' || w.size === 'l' ? w.size : 'm' });
+    } else if (typeof w === 'string' && DASH_OLD_WIDGET[w]) {
       out.push({ dim: DASH_OLD_WIDGET[w][0], kind: DASH_OLD_WIDGET[w][1], size: 'm' });
     } else if (w && w.dim && DASH_DIMS[w.dim] && kindsForDim(DASH_DIMS[w.dim]).indexOf(w.kind) >= 0) {
       out.push({ dim: w.dim, kind: w.kind, size: w.size === 's' || w.size === 'l' ? w.size : 'm' });
@@ -5865,6 +6890,74 @@ function dashMigrate(saved) {
     }
   });
   return out;
+}
+
+/** 在现有数组偏好中保存一次迁移标记；删除驾驶证卡后也保留，不新增服务端偏好键。 */
+function markDashDriverLayout(widgets) {
+  widgets.forEach(function (w) { delete w.driverLicenseDefaultVersion; });
+  if (widgets.length) widgets[0].driverLicenseDefaultVersion = 1;
+  return widgets;
+}
+
+/** 本地和远端使用同一规则：仅未处理的精确旧默认补一张卡，自定义布局原样保留。 */
+function dashDriverLayout(saved) {
+  var widgets = dashMigrate(saved);
+  var previous = [
+    { dim: 'department', kind: 'hierarchy', size: 'm' },
+    { dim: 'locationPoint', kind: 'bar', size: 'm' },
+    { dim: 'status', kind: 'donut', size: 'm' },
+    { dim: 'entryTrend', kind: 'columns', size: 'l' },
+    { dim: 'leaveType', kind: 'bar', size: 'm' }
+  ];
+  var handled = Array.isArray(saved) && saved.some(function (w) { return w && w.driverLicenseDefaultVersion === 1; });
+  var exact = Array.isArray(saved) && saved.length === previous.length && widgets.length === previous.length;
+  if (exact) {
+    exact = saved.every(function (w, i) {
+      // 先验证原条目，避免无效条目经规范化后伪装成旧默认。
+      var legacy = typeof w === 'string' ? DASH_OLD_WIDGET[w] : w && w.id ? DASH_OLD_WIDGET[w.id] : null;
+      var valid = !!legacy || (w && w.dim && DASH_DIMS[w.dim] &&
+        (w.dim === 'department' ? ['hierarchy', 'bar', 'donut', 'rose', 'treemap'].indexOf(w.kind) >= 0 : kindsForDim(DASH_DIMS[w.dim]).indexOf(w.kind) >= 0));
+      if (w && typeof w === 'object' && w.size != null && ['s', 'm', 'l'].indexOf(w.size) < 0) valid = false;
+      return valid && widgets[i].dim === previous[i].dim && widgets[i].kind === previous[i].kind && widgets[i].size === previous[i].size;
+    });
+  }
+  if (!handled && exact) widgets.push({ dim: 'driverLicense', kind: 'donut', size: 'm' });
+  return markDashDriverLayout(widgets);
+}
+
+/** 每个真实层级使用独立色相；未分配不属于树，固定灰色。 */
+function departmentDepthColor(depth) {
+  return 'hsl(' + ((210 + Math.max(0, depth) * 137.508) % 360).toFixed(2) + ',58%,43%)';
+}
+
+/** 单位接口已经是稳定树前序，不能按累计人数排序、截前15项或把各行相加。 */
+function drawDepartmentHierarchy(items) {
+  if (!items || !items.length) { return h('div', { class: 'empty-row', text: '暂无数据' }); }
+  var box = h('div', { class: 'department-hierarchy' });
+  var max = 1;
+  items.forEach(function (item) {
+    if (+item.count > max) max = +item.count;
+  });
+  items.forEach(function (item) {
+    var isUnassigned = String(item.id) === '0';
+    var depth = Math.max(0, +item.depth || 0);
+    var path = item.path || item.name || '未分配';
+    var detail = path + (isUnassigned ? '' : ' [ID ' + item.id + ']') + '；含下级 ' + item.count + ' 人，直属 ' + item.directCount + ' 人';
+    var attrs = { type: 'button', class: 'department-hierarchy-row' + (isUnassigned ? ' unassigned' : ' drillable'),
+      title: detail, 'data-department-id': String(item.id), 'data-depth': String(depth),
+      style: 'padding-left:' + (8 + Math.min(depth, 8) * 12) + 'px' };
+    if (!isUnassigned && +item.id > 0) {
+      attrs['data-api'] = '/api/personnel';
+      attrs['data-param'] = 'departmentId';
+      attrs['data-val'] = String(item.id);
+      attrs['data-title'] = path;
+    } else { attrs.disabled = true; }
+    box.appendChild(h('button', attrs,
+      h('span', { class: 'department-hierarchy-label', text: path }),
+      h('span', { class: 'department-hierarchy-track' }, h('span', { style: 'display:block;height:100%;width:' + Math.max(0, +item.count / max * 100) + '%;background:' + (isUnassigned ? '#8a97a8' : departmentDepthColor(depth)) })),
+      h('b', { class: 'department-hierarchy-count', text: item.count + ' 人' })));
+  });
+  return box;
 }
 
 function dashBarList(list, unit, colorClass, drill) {
@@ -5877,6 +6970,10 @@ function dashBarList(list, unit, colorClass, drill) {
     var val = drill ? drill.valOf(x.name) : null;
     var attrs = { class: 'bar-row ' + (colorClass || '') + (val != null ? ' drillable' : '') };
     if (val != null) {
+      // 键盘可达:条形可聚焦,Enter/Space 触发与点击相同的下钻(属性名用小写,与其余 data-* 一致)
+      attrs['tabindex'] = '0';
+      attrs['role'] = 'button';
+      attrs['aria-label'] = drill.title + ' - ' + x.name;
       attrs['data-api'] = drill.api;
       attrs['data-param'] = drill.param;
       attrs['data-val'] = String(val);
@@ -5905,7 +7002,7 @@ function drawDonut(items, drill) {
     svg.push('<circle cx="75" cy="75" r="' + R + '" fill="none" stroke="' + color + '" stroke-width="' + SW +
       '" stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) +
       '" transform="rotate(' + deg.toFixed(2) + ' 75 75)"' +
-      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      (val != null ? ' class="seg" tabindex="0" role="button" aria-label="' + esc(drill.title + ' - ' + x.name) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + ': ' + x.count + (val != null ? '(点击查看)' : '') + '</title></circle>');
     deg += x.count / total * 360;
   });
@@ -5946,7 +7043,7 @@ function drawColumns(items, unit, drill) {
     var hgt = (H - padB) - y;
     var val = drill ? drill.valOf(String(x.name)) : null;
     svg.push('<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(hgt, 1).toFixed(1) + '" rx="2" fill="' + PRI() + '" opacity="0.88"' +
-      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      (val != null ? ' class="seg" tabindex="0" role="button" aria-label="' + esc(drill.title + ' - ' + x.name) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
     svg.push('<text x="' + cx.toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle" font-size="10" fill="var(--c-body, #445262)" pointer-events="none">' + x.count + '</text>');
     svg.push('<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" text-anchor="middle" font-size="9.5" fill="var(--c-muted, #8a97a8)" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
@@ -5977,7 +7074,7 @@ function drawLine(items, unit, drill) {
   items.forEach(function (x, i) {
     var val = drill ? drill.valOf(String(x.name)) : null;
     svg.push('<circle cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(x.count).toFixed(1) + '" r="4.5" fill="' + PRI() + '" stroke="#fff" stroke-width="1.5"' +
-      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      (val != null ? ' class="seg" tabindex="0" role="button" aria-label="' + esc(drill.title + ' - ' + x.name) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + '年: ' + x.count + ' ' + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></circle>');
     svg.push('<text x="' + xAt(i).toFixed(1) + '" y="' + (H - padB + 15) + '" text-anchor="middle" font-size="9.5" fill="var(--c-muted, #8a97a8)" pointer-events="none">' + esc(String(x.name).slice(2)) + '</text>');
   });
@@ -6018,7 +7115,7 @@ function drawTreemap(items, unit, drill) {
     var x = cell.x + 1, y = cell.y + 1, w = Math.max(cell.w - 2, 2), hgt = Math.max(cell.h - 2, 2);
     var val = drill ? drill.valOf(cell.c.name) : null;
     svg.push('<g class="tm-cell' + (val != null ? ' seg' : '') + '"' +
-      (val != null ? ' data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + cell.c.name) + '"' : '') + '>');
+      (val != null ? ' tabindex="0" role="button" aria-label="' + esc(drill.title + ' - ' + cell.c.name) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + cell.c.name) + '"' : '') + '>');
     svg.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hgt.toFixed(1) + '" rx="4" fill="' + color + '"><title>' + esc(cell.c.name) + ': ' + cell.c.count + (unit || '') + (val != null ? '(点击查看)' : '') + '</title></rect>');
     var nameMax = Math.floor(w / 13);
     if (w >= 60 && hgt >= 36) {
@@ -6051,7 +7148,7 @@ function drawRose(items, drill) {
     var color = DASH_COLORS[i % DASH_COLORS.length];
     var val = drill ? drill.valOf(x.name) : null;
     svg.push('<path d="M ' + cx + ' ' + cy + ' L ' + x1 + ' ' + y1 + ' A ' + r.toFixed(1) + ' ' + r.toFixed(1) + ' 0 0 1 ' + x2 + ' ' + y2 + ' Z" fill="' + color + '" stroke="#fff" stroke-width="1.5"' +
-      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
+      (val != null ? ' class="seg" tabindex="0" role="button" aria-label="' + esc(drill.title + ' - ' + x.name) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title + ' - ' + x.name) + '"' : '') +
       '><title>' + esc(x.name) + ': ' + x.count + '(' + Math.round(x.count / total * 100) + '%)' + (val != null ? '(点击查看)' : '') + '</title></path>');
   });
   svg.push('<circle cx="' + cx + '" cy="' + cy + '" r="22" fill="#fff"/>');
@@ -6068,7 +7165,7 @@ function drawRose(items, drill) {
   return h('div', { class: 'donut-box' }, h('div', { html: svg.join('') }), legend);
 }
 
-/** 仪表图:人员在位率等;圆环可点击下钻 */
+/** 仪表图:人员在职率等;圆环可点击下钻 */
 function drawGauge(d, drill) {
   var total = d.total || 0;
   var onDuty = d.onDuty || 0;
@@ -6089,11 +7186,11 @@ function drawGauge(d, drill) {
   svg.push('<path d="' + arc(start, start + sweep) + '" fill="none" stroke="var(--c-bg, #edf1f6)" stroke-width="' + SW + '" stroke-linecap="round"/>');
   if (pct > 0) {
     svg.push('<path d="' + arc(start, start + sweep * pct / 100) + '" fill="none" stroke="' + color + '" stroke-width="' + SW + '" stroke-linecap="round"' +
-      (val != null ? ' class="seg" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title) + '"' : '') +
-      '><title>在职 ' + onDuty + ' / 共 ' + total + '(' + pct + '%)' + (val != null ? '(点击查看在职名单)' : '') + '</title></path>');
+      (val != null ? ' class="seg" tabindex="0" role="button" aria-label="' + esc(drill.title) + '" data-api="' + drill.api + '" data-param="' + drill.param + '" data-val="' + esc(String(val)) + '" data-title="' + esc(drill.title) + '"' : '') +
+      '><title>在位 ' + onDuty + ' / 共 ' + total + '(' + pct + '%)' + (val != null ? '(点击查看在位名单)' : '') + '</title></path>');
   }
   svg.push('<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="30" font-weight="700" fill="var(--c-dark, #1d2c40)">' + pct + '%</text>');
-  svg.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11.5" fill="var(--c-muted, #8a97a8)">在职 ' + onDuty + ' / 共 ' + total + '</text>');
+  svg.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="11.5" fill="var(--c-muted, #8a97a8)">在位 ' + onDuty + ' / 共 ' + total + '</text>');
   svg.push('</svg>');
   return h('div', { html: svg.join('') });
 }
@@ -6109,12 +7206,29 @@ var DRILL_COLS = {
 };
 
 function openDrillModal(title, api, param, val) {
+  if (api === '/api/personnel' && (param === 'departmentId' || param === 'locationPoint' || param === 'driverLicense' || param === 'actualDepartmentId')) {
+    if (param === 'driverLicense' && val !== 'yes' && val !== 'no') return;
+    if ((param === 'departmentId' && !(+val > 0)) || val == null || val === '' || val === '未填写') return;
+    // 实际在岗下钻按实际单位精确匹配,不挂编制的下级包含标志
+    if (param === 'actualDepartmentId' && !(+val > 0)) return;
+    location.hash = 'personnel?' + param + '=' + encodeURIComponent(val) + (param === 'departmentId' ? '&includeDescendants=true' : '');
+    return;
+  }
   var params = {};
   if (param === 'entryYear') {
     params.entryDateStart = val + '-01-01';
     params.entryDateEnd = val + '-12-31';
   } else {
     params[param] = val;
+  }
+  // 年度维度与仪表盘统计口径对齐:休假按开始日期在本年,体测按考核日期在本年;不带年份会混入往年记录
+  var year = new Date().getFullYear();
+  if (api === '/api/leave' && param === 'leaveType') {
+    params.startDate = year + '-01-01';
+    params.startDateMax = year + '-12-31';
+  } else if (api === '/api/fitness' && param === 'grade') {
+    params.startDate = year + '-01-01';
+    params.endDate = year + '-12-31';
   }
   var qs = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
   var cols = DRILL_COLS[api] || [['name', '名称']];
@@ -6125,55 +7239,114 @@ function openDrillModal(title, api, param, val) {
     footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
   });
   body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
-  GET(api + '?' + qs + '&size=500').then(function (d) {
-    var rows = (d && d.list) || [];
-    body.innerHTML = '';
-    var table = h('table', { class: 'grid', style: 'width:100%' });
-    var thead = h('tr', {});
-    cols.forEach(function (c) { thead.appendChild(h('th', { text: c[1] })); });
-    table.appendChild(h('thead', {}, thead));
-    var tbody = h('tbody');
-    rows.forEach(function (r) {
-      var tr = h('tr', {});
-      cols.forEach(function (c) {
-        var v = r[c[0]];
-        if (c[0] === 'status' || c[0] === 'grade') {
-          tr.appendChild(h('td', { html: badge(v) }));
-        } else {
-          tr.appendChild(h('td', { text: (v === null || v === undefined || v === '') ? '—' : String(v) }));
-        }
+  // 后端单页上限200:逐页取全量,避免只取首页漏记录(原 size=500 会被后端重置)
+  function loadDrillPage(page, acc) {
+    GET(api + '?' + qs + '&page=' + page + '&size=200').then(function (d) {
+      var rows = acc.concat((d && d.list) || []);
+      var total = d && d.total != null ? +d.total : rows.length;
+      if (rows.length && rows.length < total && page < 200) { loadDrillPage(page + 1, rows); return; }
+      body.innerHTML = '';
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      var thead = h('tr', {});
+      cols.forEach(function (c) { thead.appendChild(h('th', { text: c[1] })); });
+      table.appendChild(h('thead', {}, thead));
+      var tbody = h('tbody');
+      rows.forEach(function (r) {
+        var tr = h('tr', {});
+        cols.forEach(function (c) {
+          var v = c[0] === 'departmentName' ? (r.departmentPath || r.departmentName) : r[c[0]];
+          // 单位路径显示与全局一致去斜杠
+          if (c[0] === 'departmentName' && v != null) { v = String(v).replace(/\s*\/\s*/g, ''); }
+          if (c[0] === 'status' || c[0] === 'grade') {
+            tr.appendChild(h('td', { html: badge(v) }));
+          } else {
+            tr.appendChild(h('td', { text: (v === null || v === undefined || v === '') ? '—' : String(v) }));
+          }
+        });
+        tbody.appendChild(tr);
       });
-      tbody.appendChild(tr);
+      table.appendChild(tbody);
+      body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:56vh;overflow:auto' }, table));
+      body.appendChild(h('div', { style: 'margin-top:12px;font-size:13px;color:var(--c-sub, #66788c)', text: '共 ' + rows.length + ' 条' }));
+      if (!rows.length) {
+        body.appendChild(h('div', { class: 'empty-row', text: '没有符合条件的记录' }));
+      }
+    }).catch(function (e) {
+      body.innerHTML = '';
+      body.appendChild(h('div', { class: 'empty-row', text: e.message }));
     });
-    table.appendChild(tbody);
-    body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:56vh;overflow:auto' }, table));
-    body.appendChild(h('div', { style: 'margin-top:12px;font-size:13px;color:var(--c-sub, #66788c)', text: '共 ' + rows.length + ' 条' + (rows.length >= 200 ? '(仅显示前200条,可用筛选缩小范围)' : '') }));
-    if (!rows.length) {
-      body.appendChild(h('div', { class: 'empty-row', text: '没有符合条件的记录' }));
-    }
-  }).catch(function (e) {
-    body.innerHTML = '';
-    body.appendChild(h('div', { class: 'empty-row', text: e.message }));
-  });
+  }
+  loadDrillPage(1, []);
 }
 
 function dashboardView() {
+  var prefUserId = USER && USER.userId, prefToken = TOKEN;
+  var widgetsKey = preferenceKey('dashWidgets'), cardsKey = preferenceKey('dashStatCards');
+  function currentPrefs() { return !!prefToken && TOKEN === prefToken && USER && USER.userId === prefUserId; }
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
   var widgets;
-  try { widgets = JSON.parse(localStorage.getItem('dashWidgets') || 'null'); } catch (e) { widgets = null; }
-  widgets = dashMigrate(widgets);
+  try { widgets = JSON.parse(localStorage.getItem(widgetsKey) || 'null'); } catch (e) { widgets = null; }
+  widgets = dashDriverLayout(widgets);
   if (!widgets.length) {
-    widgets = DASH_DEFAULT.map(function (w) { return { dim: w.dim, kind: w.kind, size: w.size }; });
+    widgets = markDashDriverLayout(DASH_DEFAULT.map(function (w) { return { dim: w.dim, kind: w.kind, size: w.size }; }));
+  }
+  if (currentPrefs()) {
+    try { localStorage.setItem(widgetsKey, JSON.stringify(widgets)); } catch (e) { }
   }
   var lastData = null;
   var lastEvents = [];
+  var lastEventsTotal = 0;
   var evFilter = '全部';
+  /* 事件接口返回 {list,total}(旧版为数组):list 为截断后事件,total 为窗口内总数 */
+  function adoptEvents(evs) {
+    lastEvents = evs && evs.list ? evs.list : (evs || []);
+    lastEventsTotal = evs && evs.total != null ? +evs.total : lastEvents.length;
+  }
   var chartsGrid = h('div', { class: 'dash-grid' });
   var eventsBox = h('div');
-  var dragEl = null;
+  var dragState = null;
+  var dashUserTouched = false;   // 用户已手动改过布局后,不再用服务端旧值覆盖
+
+  /* 账号布局双存：不读取无来源的旧共享键，服务端只访问当前认证用户偏好。 */
+  function adoptServerDashPrefs() {
+    GET('/api/preferences/dashWidgets').then(function (saved) {
+      if (!currentPrefs() || dashUserTouched) { return; }
+      var remote = null;
+      try { remote = dashDriverLayout(JSON.parse(saved || 'null')); } catch (e) { remote = null; }
+      if (remote && remote.length) {
+        if (JSON.stringify(remote) !== JSON.stringify(widgets)) {
+          widgets = remote;
+          try { localStorage.setItem(widgetsKey, JSON.stringify(widgets)); } catch (e) { }
+          renderCharts();
+        }
+        // 将一次迁移标记写回同一账号偏好，换浏览器后也不会恢复手工删掉的卡。
+        if (JSON.stringify(remote) !== saved) PUT('/api/preferences/dashWidgets', remote).catch(function () { });
+      } else if (widgets.length) {
+        PUT('/api/preferences/dashWidgets', widgets).catch(function () { });
+      }
+    }).catch(function () { });
+    GET('/api/preferences/dashStatCards').then(function (saved) {
+      if (!currentPrefs() || dashUserTouched) { return; }
+      var remote = null;
+      try { remote = JSON.parse(saved || 'null'); } catch (e) { remote = null; }
+      if (remote && remote.length) {
+        if (JSON.stringify(remote) !== JSON.stringify(getStatCards())) {
+          try { localStorage.setItem(cardsKey, JSON.stringify(remote)); } catch (e) { }
+          if (lastData) { build(lastData, lastEvents); }
+        }
+      } else {
+        PUT('/api/preferences/dashStatCards', getStatCards()).catch(function () { });
+      }
+    }).catch(function () { });
+  }
+  adoptServerDashPrefs();
 
   function saveWidgets() {
-    try { localStorage.setItem('dashWidgets', JSON.stringify(widgets)); } catch (e) { /* 忽略 */ }
+    if (!currentPrefs()) return;
+    dashUserTouched = true;
+    markDashDriverLayout(widgets);
+    try { localStorage.setItem(widgetsKey, JSON.stringify(widgets)); } catch (e) { /* 忽略 */ }
+    PUT('/api/preferences/dashWidgets', widgets).catch(function () { });
   }
 
   /* ---------- 近期事件(带快捷筛选) ---------- */
@@ -6181,7 +7354,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '生日', '党务', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {
@@ -6205,14 +7378,18 @@ function dashboardView() {
         h('span', { class: 'txt', text: ev.text || '' }),
         h('span', { class: 'dt', text: (ev.date || '').slice(5) })));
     });
+    // 超过50条被服务端截断时明确提示,不再静默丢失
+    if (lastEventsTotal > lastEvents.length) {
+      listBox.appendChild(h('div', { style: 'font-size:12px;color:var(--c-sub,#66788c);padding:6px 2px 0', text: '事件较多，仅显示前 ' + lastEvents.length + ' 条（共 ' + lastEventsTotal + ' 条）' }));
+    }
   }
 
   /* ---------- 图表卡片(尺寸可切 + 可拖动排序) ---------- */
-  function makeCard(w) {
+    function makeCard(w) {
     var dim = DASH_DIMS[w.dim];
     var kind = w.kind;
     var label = dashCardLabel(w.dim, kind);
-    // 下钻配置:valOf 把图表项名转成接口参数值(部门按名称查id,其余原样)
+    // 普通分组按真实字段值下钻；单位专用图直接使用接口ID，绝不按同名反查。
     var drill = null;
     if (dim.drill) {
       var fixed = dim.drill.fixedVal;
@@ -6220,17 +7397,22 @@ function dashboardView() {
         api: dim.drill.api,
         param: dim.drill.param,
         title: label,
-        valOf: fixed != null
-          ? function () { return fixed; }
-          : (dim.drill.param === 'departmentId'
-              ? function (name) {
-                  if (name === '未分配') { return null; }
-                  for (var i = 0; i < Ctx.deptFlat.length; i++) {
-                    if (Ctx.deptFlat[i].name === name) { return String(Ctx.deptFlat[i].id); }
-                  }
-                  return null;
+        valOf: w.dim === 'driverLicense'
+          ? function (name) { return name === '有驾驶证' ? 'yes' : name === '无驾驶证' ? 'no' : null; }
+          : w.dim === 'actualDuty'
+            // 接口给的是完整路径;两端做斜杠归一化后按路径在单位树上精确匹配(路径唯一),查不到不可点
+            ? function (name) {
+                var want = String(name).replace(/\s*\/\s*/g, '');
+                var hit = null;
+                for (var di = 0; di < Ctx.deptFlat.length; di++) {
+                  var node = Ctx.deptFlat[di];
+                  if (node.path && String(node.path).replace(/\s*\/\s*/g, '') === want) { hit = node; break; }
                 }
-              : function (name) { return name === '未填写' || name === '未分配' ? null : name; })
+                return hit ? hit.id : null;
+              }
+            : fixed != null
+              ? function () { return fixed; }
+              : function (name) { return name == null || name === '' || name === '未填写' || name === '未分配' ? null : name; }
       };
     }
     var body;
@@ -6242,7 +7424,9 @@ function dashboardView() {
       body = drawGauge(lastData, drill);
     } else {
       var items = (lastData.groups && lastData.groups[dim.group]) || [];
-      if (kind === 'treemap') {
+      if (dim.hierarchy) {
+        body = drawDepartmentHierarchy(items);
+      } else if (kind === 'treemap') {
         body = drawTreemap(items, dim.unit, drill);
       } else if (kind === 'rose') {
         body = drawRose(items, drill);
@@ -6264,9 +7448,18 @@ function dashboardView() {
     });
     var card = h('div', { class: 'chart-panel dash-card size-' + (w.size || 'm'), 'data-wid': w.dim + ':' + w.kind },
       h('div', { class: 'dash-card-head' },
-        h('h3', { style: 'margin:0', text: label }),
+        h('span', { class: 'dash-card-title' },
+          h('span', { class: 'dash-drag-handle', draggable: false, title: '按住拖动排序', 'aria-label': '拖动排序', text: '⠿' }),
+          h('h3', { style: 'margin:0', text: label })),
         h('span', { style: 'display:flex;align-items:center;gap:8px' },
           sizeBtns,
+          h('button', {
+            type: 'button', class: 'btn btn-ghost btn-sm', text: '更换图表', title: '更换指标或图表类型',
+            onclick: function (e) {
+              e.stopPropagation();
+              openPicker(widgets.indexOf(w));
+            }
+          }),
           h('button', {
             class: 'dash-card-x', text: '×', title: '移除此图表',
             onclick: function () {
@@ -6276,37 +7469,168 @@ function dashboardView() {
             }
           }))),
       body);
-    card.draggable = true;
-    card.addEventListener('dragstart', function (e) {
-      dragEl = card;
-      card.classList.add('dragging');
-      try { e.dataTransfer.setData('text/plain', ''); e.dataTransfer.effectAllowed = 'move'; } catch (_) { /* IE */ }
-    });
-    card.addEventListener('dragend', function () {
-      card.classList.remove('dragging');
-      dragEl = null;
-      // 按 DOM 顺序回写 widgets(保持各自的尺寸)
-      var order = [];
-      Array.prototype.forEach.call(chartsGrid.querySelectorAll('.dash-card'), function (el) {
-        var key = el.getAttribute('data-wid');
-        for (var i = 0; i < widgets.length; i++) {
-          if (widgets[i].dim + ':' + widgets[i].kind === key) { order.push(widgets[i]); break; }
+    var handle = $('.dash-drag-handle', card);
+    var pointerEvents = !!window.PointerEvent;
+    var downEvent = pointerEvents ? 'pointerdown' : 'mousedown';
+    var moveEvent = pointerEvents ? 'pointermove' : 'mousemove';
+    var upEvent = pointerEvents ? 'pointerup' : 'mouseup';
+    handle.addEventListener(downEvent, function (e) {
+      if (e.button !== 0 || dragState) { return; }
+      e.preventDefault();
+      var startX = e.clientX;
+      var startY = e.clientY;
+      var activePointer = e.pointerId;
+      var started = false;
+      var mirror = null;
+      var rect = card.getBoundingClientRect();
+      var grabX = startX - rect.left;
+      var grabY = startY - rect.top;
+      var dragWidth = rect.width;
+      var dragHeight = rect.height;
+      var gridRect = chartsGrid.getBoundingClientRect();
+      var layoutLeft = rect.left - card.offsetLeft;
+      var layoutTop = rect.top - card.offsetTop;
+      var anchorX = startX;
+      var anchorY = startY;
+      var lastAxis = '';
+      var lastDirection = 0;
+      function movePointer(ev) {
+        if (pointerEvents && ev.pointerId !== activePointer) { return; }
+        if (ev.buttons === 0) { endDrag(); return; }
+        ev.preventDefault();
+        var dx = ev.clientX - startX;
+        var dy = ev.clientY - startY;
+        if (!started && Math.sqrt(dx * dx + dy * dy) < 4) { return; }
+        if (!started) {
+          started = true;
+          mirror = card.cloneNode(true);
+          mirror.classList.add('dash-drag-mirror');
+          mirror.style.width = card.offsetWidth + 'px';
+          mirror.style.height = card.offsetHeight + 'px';
+          mirror.setAttribute('aria-hidden', 'true');
+          mirror.style.left = ev.clientX - grabX + 'px';
+          mirror.style.top = ev.clientY - grabY + 'px';
+          document.body.appendChild(mirror);
+          dragState = { card: card, mirror: mirror };
+          card.classList.add('dragging');
+          document.body.classList.add('dash-sorting');
         }
-      });
-      if (order.length === widgets.length) {
-        widgets = order;
-        saveWidgets();
+        if (mirror) {
+          mirror.style.left = ev.clientX - grabX + 'px';
+          mirror.style.top = ev.clientY - grabY + 'px';
+        }
+        var travelX = ev.clientX - anchorX;
+        var travelY = ev.clientY - anchorY;
+        var horizontal = Math.abs(travelX) >= Math.abs(travelY);
+        var axis = horizontal ? 'x' : 'y';
+        var travel = horizontal ? travelX : travelY;
+        var direction = travel > 0 ? 1 : -1;
+        var buffer = lastAxis === axis && lastDirection !== direction ? 20 : 8;
+        if (Math.abs(travel) < buffer) { return; }
+        var movingCard = dragState.card;
+        var cards = $all('.dash-card', chartsGrid);
+        var movingIndex = cards.indexOf(movingCard);
+        var currentGridRect = chartsGrid.getBoundingClientRect();
+        var originLeft = layoutLeft + currentGridRect.left - gridRect.left;
+        var originTop = layoutTop + currentGridRect.top - gridRect.top;
+        var left = ev.clientX - grabX;
+        var top = ev.clientY - grabY;
+        var target = null;
+        var bestDistance = Infinity;
+        cards.forEach(function (candidate, index) {
+          if (candidate === movingCard || (index - movingIndex) * direction <= 0) { return; }
+          var sameRow = Math.abs(movingCard.offsetTop - candidate.offsetTop) < 2;
+          if (horizontal !== sameRow) { return; }
+          // FLIP 的 transform 只用于动画，命中判断使用未变换的网格位置。
+          var targetLeft = originLeft + candidate.offsetLeft;
+          var targetTop = originTop + candidate.offsetTop;
+          var width = candidate.offsetWidth;
+          var height = candidate.offsetHeight;
+          var overlapX = Math.min(left + dragWidth, targetLeft + width) - Math.max(left, targetLeft);
+          var overlapY = Math.min(top + dragHeight, targetTop + height) - Math.max(top, targetTop);
+          var minWidth = Math.min(dragWidth, width);
+          var minHeight = Math.min(dragHeight, height);
+          var overlap = horizontal ? overlapX : overlapY;
+          var crossOverlap = horizontal ? overlapY : overlapX;
+          var size = horizontal ? minWidth : minHeight;
+          var crossSize = horizontal ? minHeight : minWidth;
+          var threshold = Math.min(48, Math.max(12, size * .16));
+          if (overlap < threshold || crossOverlap < crossSize * .35) { return; }
+          var distanceX = (left + dragWidth / 2 - targetLeft - width / 2) / minWidth;
+          var distanceY = (top + dragHeight / 2 - targetTop - height / 2) / minHeight;
+          var distance = distanceX * distanceX + distanceY * distanceY;
+          if (distance < bestDistance) { target = candidate; bestDistance = distance; }
+        });
+        if (!target) { return; }
+        var reference = direction > 0 ? target.nextElementSibling : target;
+        $all('.dash-card.drop-target', chartsGrid).forEach(function (el) { el.classList.remove('drop-target'); });
+        target.classList.add('drop-target');
+        animateGridMove(function () { chartsGrid.insertBefore(movingCard, reference); });
+        anchorX = ev.clientX;
+        anchorY = ev.clientY;
+        lastAxis = axis;
+        lastDirection = direction;
       }
-      renderCharts();
+      function endDrag(ev) {
+        if (pointerEvents && ev && ev.type !== 'blur' && ev.pointerId !== activePointer) { return; }
+        window.removeEventListener(moveEvent, movePointer);
+        window.removeEventListener(upEvent, endDrag);
+        window.removeEventListener('pointercancel', endDrag);
+        window.removeEventListener('blur', endDrag);
+        if (dragState && dragState.card === card) {
+          card.classList.remove('dragging');
+          document.body.classList.remove('dash-sorting');
+          $all('.dash-card.drop-target', chartsGrid).forEach(function (el) { el.classList.remove('drop-target'); });
+          if (mirror && mirror.parentNode) { mirror.parentNode.removeChild(mirror); }
+          dragState = null;
+          var order = [];
+          Array.prototype.forEach.call(chartsGrid.querySelectorAll('.dash-card'), function (el) {
+            var key = el.getAttribute('data-wid');
+            for (var i = 0; i < widgets.length; i++) {
+              if (widgets[i].dim + ':' + widgets[i].kind === key) { order.push(widgets[i]); break; }
+            }
+          });
+          if (order.length === widgets.length) { widgets = order; saveWidgets(); }
+        }
+      }
+      window.addEventListener(moveEvent, movePointer);
+      window.addEventListener(upEvent, endDrag);
+      window.addEventListener('pointercancel', endDrag);
+      window.addEventListener('blur', endDrag);
     });
-    card.addEventListener('dragenter', function (e) {
-      if (!dragEl || dragEl === card) { return; }
-      var r = card.getBoundingClientRect();
-      var after = (e.clientX || 0) > r.left + r.width / 2;
-      if (after) { chartsGrid.insertBefore(dragEl, card.nextSibling); }
-      else { chartsGrid.insertBefore(dragEl, card); }
-    });
+    handle.addEventListener('dragstart', function (e) { e.preventDefault(); });
     return card;
+  }
+
+  function animateGridMove(move) {
+    var cards = $all('.dash-card', chartsGrid);
+    var before = {};
+    cards.forEach(function (el) {
+      var rect = el.getBoundingClientRect();
+      before[el.getAttribute('data-wid')] = { left: rect.left, top: rect.top };
+    });
+    move();
+    cards.forEach(function (el) {
+      if (el._dashMoveFrame) { cancelAnimationFrame(el._dashMoveFrame); }
+      el.style.transition = 'none';
+      el.style.transform = '';
+    });
+    cards.forEach(function (el) {
+      var old = before[el.getAttribute('data-wid')];
+      if (!old) { return; }
+      var rect = el.getBoundingClientRect();
+      var dx = old.left - rect.left;
+      var dy = old.top - rect.top;
+      el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    });
+    chartsGrid.offsetHeight;
+    cards.forEach(function (el) {
+      el._dashMoveFrame = requestAnimationFrame(function () {
+        el._dashMoveFrame = null;
+        el.style.transition = '';
+        el.style.transform = '';
+      });
+    });
   }
 
   function renderCharts() {
@@ -6317,19 +7641,58 @@ function dashboardView() {
     }
     widgets.forEach(function (w) { chartsGrid.appendChild(makeCard(w)); });
   }
-  chartsGrid.addEventListener('dragover', function (e) { e.preventDefault(); });
-  // 点击图表区域(条形/环段/树块/扇叶/柱体/圆点/仪表弧) → 下钻明细
   chartsGrid.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('[data-api]') : null;
     if (!el) { return; }
     openDrillModal(el.getAttribute('data-title'), el.getAttribute('data-api'),
       el.getAttribute('data-param'), el.getAttribute('data-val'));
   });
+  // 键盘下钻:聚焦的分段/条形按 Enter 或 Space 打开,与点击一致
+  chartsGrid.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') { return; }
+    var el = e.target && e.target.closest ? e.target.closest('[data-api]') : null;
+    if (!el) { return; }
+    e.preventDefault();
+    openDrillModal(el.getAttribute('data-title'), el.getAttribute('data-api'),
+      el.getAttribute('data-param'), el.getAttribute('data-val'));
+  });
 
-  /* ---------- 添加图表:先选指标,再选图表类型 ---------- */
-  function openPicker() {
+  /* ---------- 添加/更换图表:添加时选指标,更换时仅选当前指标的图表类型 ---------- */
+  function openPicker(replaceIndex) {
+    var replacing = typeof replaceIndex === 'number' && replaceIndex >= 0 && replaceIndex < widgets.length;
+    var original = replacing ? widgets[replaceIndex] : null;
     // 不再自设 max-height/overflow:滚动交给弹窗的 .dialog-body,避免出现双滚动条
     var wrap = h('div');
+    if (replacing) {
+      var dim = DASH_DIMS[original.dim];
+      var kinds = kindsForDim(dim);
+      wrap.appendChild(h('div', { style: 'margin-bottom:12px;color:var(--c-sub,#66788c);font-size:13px',
+        text: '当前指标：' + dim.label + '。点击下方图表类型按钮即可替换，指标类别保持不变。' }));
+      var btns = h('div', { style: 'display:flex;flex-wrap:nowrap;gap:8px;margin:8px 0 16px;width:100%' });
+      kinds.forEach(function (kind) {
+        var current = original.kind === kind;
+        btns.appendChild(h('button', {
+          type: 'button', class: current ? 'btn btn-primary' : 'btn btn-ghost',
+          style: 'display:inline-flex;flex:1 1 0;align-items:center;justify-content:center;min-width:0;min-height:36px;padding:6px 10px;white-space:nowrap;cursor:pointer',
+          text: (current ? '当前：' : '切换为：') + DASH_KINDS[kind],
+          title: current ? '当前图表样式' : '切换为' + DASH_KINDS[kind],
+          onclick: function () {
+            if (current) { m.close(); return; }
+            original.kind = kind;
+            saveWidgets();
+            renderCharts();
+            m.close();
+          }
+        }));
+      });
+      wrap.appendChild(btns);
+      var m = openModal({
+        title: '更换图表',
+        body: wrap,
+        footer: [h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { m.close(); } })]
+      });
+      return;
+    }
     var cats = [];
     Object.keys(DASH_DIMS).forEach(function (k) {
       var c = DASH_DIMS[k].cat;
@@ -6337,6 +7700,13 @@ function dashboardView() {
     });
     function isAdded(dimKey, kind) {
       return widgets.some(function (w) { return w.dim === dimKey && w.kind === kind; });
+    }
+    function selectChart(dimKey, kind) {
+      if (isAdded(dimKey, kind)) { toast('该图表已存在'); return; }
+      widgets.push({ dim: dimKey, kind: kind, size: 'm' });
+      saveWidgets();
+      renderCharts();
+      m.close();
     }
     cats.forEach(function (cat) {
       var dims = Object.keys(DASH_DIMS).filter(function (k) { return DASH_DIMS[k].cat === cat; });
@@ -6357,13 +7727,9 @@ function dashboardView() {
           var added = isAdded(k, kd);
           btns.appendChild(h('button', {
             type: 'button', class: 'pick-kind-btn' + (added ? ' on' : ''),
-            text: (added ? '✓ ' : '') + DASH_KINDS[kd], title: added ? '已添加' : '以' + DASH_KINDS[kd] + '展示' + dim.label,
-            onclick: function () {
-              widgets.push({ dim: k, kind: kd, size: 'm' });
-              saveWidgets();
-              renderCharts();
-              m.close();
-            }
+            text: (added ? '✓ 已添加 · ' : '') + DASH_KINDS[kd],
+            title: added ? '已添加到仪表盘' : '以' + DASH_KINDS[kd] + '展示' + dim.label,
+            onclick: function () { selectChart(k, kd); }
           }));
         });
         card.appendChild(btns);
@@ -6378,45 +7744,51 @@ function dashboardView() {
     });
   }
 
-  // 概况卡目录(可配置显示/隐藏)
+  // 概况卡目录(可配置显示/隐藏);href=点击跳转的目标模块路由(带筛选的人员路由与统计口径一致)
   var STAT_CARDS = {
-    total:          { label: '人员总数',   icon: 'users',    danger: false },
-    onDuty:         { label: '在位人员',   icon: 'check',    danger: false },
-    onLeave:        { label: '休假中',     icon: 'calendar', danger: false },
-    deptCount:      { label: '部门总数',   icon: 'building', danger: false },
-    vehicleCount:   { label: '车辆总数',   icon: 'truck',    danger: false },
-    vehicleRepair:  { label: '车辆维修',   icon: 'truck',    danger: true },
-    equipmentTotal: { label: '装备总数',   icon: 'box',      danger: false },
-    equipmentRepair:{ label: '装备维修',   icon: 'box',      danger: true },
-    materialTotal:  { label: '物资总数',   icon: 'box',      danger: false },
-    materialLow:    { label: '库存预警',   icon: 'box',      danger: true },
-    leaveThisYear:  { label: '今年休假',   icon: 'calendar', danger: false },
-    fitnessThisYear:{ label: '今年考核',   icon: 'activity', danger: false }
+    total:          { label: '人员总数',   icon: 'users',    danger: false, href: 'personnel' },
+    onDuty:         { label: '在位人员',   icon: 'check',    danger: false, href: 'personnel' },
+    onLeave:        { label: '休假中',     icon: 'calendar', danger: false, href: 'personnel?status=' + encodeURIComponent('休假') },
+    deptCount:      { label: '单位总数',   icon: 'building', danger: false, href: 'department' },
+    vehicleCount:   { label: '车辆总数',   icon: 'truck',    danger: false, href: 'vehicle' },
+    vehicleRepair:  { label: '车辆维修',   icon: 'truck',    danger: true,  href: 'vehicle' },
+    equipmentTotal: { label: '装备总数',   icon: 'box',      danger: false, href: 'equipment' },
+    equipmentRepair:{ label: '装备维修',   icon: 'box',      danger: true,  href: 'equipment' },
+    materialTotal:  { label: '物资总数',   icon: 'box',      danger: false, href: 'material' },
+    materialLow:    { label: '库存预警',   icon: 'box',      danger: true,  href: 'material' },
+    leaveThisYear:  { label: '今年休假',   icon: 'calendar', danger: false, href: 'leave' },
+    fitnessThisYear:{ label: '今年考核',   icon: 'activity', danger: false, href: 'fitness' },
+    dePercent:      { label: '双争完成率', icon: 'check',    danger: false, href: 'double-excellence', suffix: '%' },
+    aaPercent:      { label: '考评完成率', icon: 'activity', danger: false, href: 'annual-appraisal', suffix: '%' }
   };
-  var STAT_DEFAULT = ['total', 'onDuty', 'onLeave', 'deptCount', 'vehicleCount', 'materialLow'];
+  var STAT_DEFAULT = ['total', 'onDuty', 'onLeave', 'deptCount', 'vehicleCount', 'materialLow', 'dePercent', 'aaPercent'];
 
   function getStatCards() {
     try {
-      var v = JSON.parse(localStorage.getItem('dashStatCards') || 'null');
+      var v = JSON.parse(localStorage.getItem(cardsKey) || 'null');
       if (v && v.length) { return v; }
     } catch (e) { }
     return STAT_DEFAULT.slice();
   }
 
   function saveStatCards(v) {
-    try { localStorage.setItem('dashStatCards', JSON.stringify(v)); } catch (e) { }
+    if (!currentPrefs()) return;
+    dashUserTouched = true;
+    try { localStorage.setItem(cardsKey, JSON.stringify(v)); } catch (e) { }
+    PUT('/api/preferences/dashStatCards', v).catch(function () { });
   }
 
   /** 统计卡配置: 分组按钮式(和图表添加一致,点亮=显示) */
   function openStatCardPicker() {
     var current = getStatCards();
 
-    // 分组: 人员 / 装备物资 / 车辆 / 考勤
+    // 分组: 人员 / 装备物资 / 车辆 / 考勤 / 评比考评
     var groups = [
       { name: '人员', keys: ['total', 'onDuty', 'onLeave', 'deptCount'] },
       { name: '装备物资', keys: ['equipmentTotal', 'equipmentRepair', 'materialTotal', 'materialLow'] },
       { name: '车辆', keys: ['vehicleCount', 'vehicleRepair'] },
-      { name: '考勤', keys: ['leaveThisYear', 'fitnessThisYear'] }
+      { name: '考勤', keys: ['leaveThisYear', 'fitnessThisYear'] },
+      { name: '评比考评', keys: ['dePercent', 'aaPercent'] }
     ];
 
     var wrap = h('div');
@@ -6477,16 +7849,23 @@ function dashboardView() {
     root.innerHTML = '';
     // 顶部概况卡(可配置)
     var chips = h('div', { class: 'stats-cards' });
-    function card(num, lbl, ic, danger) {
+    function card(num, lbl, ic, danger, href) {
+      var body = h('div', {}, h('div', { class: 'num', text: String(num) }), h('div', { class: 'lbl', text: lbl }));
+      // 有跳转目标的卡用按钮承载:键盘可聚焦,Enter 直接打开
+      if (href) {
+        return h('button', { type: 'button', class: 'stat-card stat-card-btn' + (danger && +num > 0 ? ' danger' : ''),
+          title: '点击打开' + lbl + '相关模块', 'aria-label': lbl + ' ' + num + '，点击打开相关模块',
+          onclick: function () { location.hash = href; } },
+          h('span', { class: 'ic', html: iconSvg(ic) }), body);
+      }
       return h('div', { class: 'stat-card' + (danger && +num > 0 ? ' danger' : '') },
-        h('span', { class: 'ic', html: iconSvg(ic) }),
-        h('div', {}, h('div', { class: 'num', text: String(num) }), h('div', { class: 'lbl', text: lbl })));
+        h('span', { class: 'ic', html: iconSvg(ic) }), body);
     }
     var statSel = getStatCards();
     statSel.forEach(function (k) {
       var def = STAT_CARDS[k];
       if (def && d[k] !== undefined) {
-        chips.appendChild(card(d[k] || 0, def.label, def.icon, def.danger));
+        chips.appendChild(card(String(d[k] || 0) + (def.suffix || ''), def.label, def.icon, def.danger, def.href));
       }
     });
     root.appendChild(chips);
@@ -6516,7 +7895,7 @@ function dashboardView() {
                 eventsBox.innerHTML = '';
                 eventsBox.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
                 GET('/api/dashboard/events').then(function (evs) {
-                  lastEvents = evs || [];
+                  adoptEvents(evs);
                   renderEvents();
                 }).catch(function (e) {
                   eventsBox.innerHTML = '';
@@ -6526,7 +7905,7 @@ function dashboardView() {
             }),
             ),
           eventsBox))));
-    lastEvents = events || [];
+    adoptEvents(events);
     renderEvents();
     renderCharts();
   }
@@ -6602,13 +7981,13 @@ function logView() {
 
 /* ================= 系统设置视图 ================= */
 
-function settingsView() {
+function settingsView(initialTab) {
   var vals = {
     siteName: SITE.name === '数智军营' ? '' : SITE.name,
     siteTitle: SITE.title === '数智军营人员管理系统' ? '' : SITE.title,
     siteSubtitle: (SITE.subtitle === '人员管理系统' || !SITE.subtitle) ? '' : SITE.subtitle,
     siteLogo: SITE.logo || '', siteFavicon: SITE.favicon || '',
-    themeColor: SITE.theme || 'var(--pri, #2f6fd6)', pageSize: String(SITE.pageSize || 20), backupKeep: '14'
+    themeColor: SITE.theme || 'var(--pri, #2f6fd6)', pageSize: String(SITE.pageSize || 20)
   };
   var root = h('div');
 
@@ -6714,20 +8093,14 @@ function settingsView() {
   pageSizeSel.value = vals.pageSize;
   pageSizeSel.addEventListener('change', function () { vals.pageSize = pageSizeSel.value; });
   s3.body.appendChild(field('列表每页条数', pageSizeSel, '保存后刷新页面生效'));
-  var keepInput = h('input', { type: 'number', min: '7', max: '60', style: 'width:100%;height:32px;padding:0 10px;border:1px solid #c5cdd8;border-radius:4px' });
-  keepInput.value = vals.backupKeep;
-  keepInput.addEventListener('input', function () { vals.backupKeep = keepInput.value; });
-  s3.body.appendChild(field('自动备份保留份数', keepInput, '每天 03:00 自动备份,超出自动轮转删除(7~60)'));
-  GET('/api/setting/backupKeep').then(function (v) {
-    if (v) { keepInput.value = v; vals.backupKeep = v; }
-  }).catch(function (err) { /* 忽略 */ });
+  s3.body.appendChild(field('自动备份保留份数', h('span', { text: '在“备份恢复”页的自动备份设置中统一配置' }), '保留份数、周期和模块均由备份设置管理'));
 
   /* ---- 保存条(基础+主题+显示通用) ---- */
   var saveBar = h('div', { class: 'panel', style: 'padding:16px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap' });
   saveBar.appendChild(h('button', {
     class: 'btn btn-primary', text: '保存全部设置',
     onclick: function () {
-      var keys = ['siteName', 'siteTitle', 'siteSubtitle', 'siteLogo', 'siteFavicon', 'themeColor', 'pageSize', 'backupKeep'];
+      var keys = ['siteName', 'siteTitle', 'siteSubtitle', 'siteLogo', 'siteFavicon', 'themeColor', 'pageSize'];
       var chain = Promise.resolve();
       keys.forEach(function (k) {
         chain = chain.then(function () { return PUT('/api/setting/' + k, vals[k] || ''); });
@@ -6776,9 +8149,11 @@ function settingsView() {
     ['backup', '备份恢复', function () { if (!backupLoaded) { backupLoaded = true; backupView('backup').render(panels.backup.firstChild); } }],
     ['report', '数据上报', function () { if (!reportLoaded) { reportLoaded = true; backupView('report').render(panels.report.firstChild); } }]
   ];
-  // 记住最后浏览的TAB(刷新不跳回第一个)
-  var savedTab = null;
-  try { savedTab = localStorage.getItem('settingsTab'); } catch (e) { /* 忽略 */ }
+  // 显式路由标签优先;普通设置页面仍记住最后浏览的TAB。
+  var savedTab = initialTab;
+  if (!savedTab) {
+    try { savedTab = localStorage.getItem('settingsTab'); } catch (e) { /* 忽略 */ }
+  }
   var activeIdx = 0;
   tabDefs.forEach(function (td, idx) { if (td[0] === savedTab) { activeIdx = idx; } });
   var tabBar = h('div', { class: 'tabs panel', style: 'padding:0 8px;margin-bottom:16px' });
@@ -6828,6 +8203,7 @@ function fmtSize(bytes) {
 function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 | 'report' 仅数据上报
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
   var MODULES = [];   // [{key,label}]
+  var restoring = false;
 
   function moduleLabel(key) {
     for (var i = 0; i < MODULES.length; i++) {
@@ -6837,10 +8213,10 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   }
 
   /** 模块勾选组;返回 {el, get, setAll} */
-  function checkGroup(checkedKeys) {
+  function checkGroup(checkedKeys, availableModules) {
     var boxes = [];
     var wrap = h('div', { class: 'chk-list' });
-    MODULES.forEach(function (m) {
+    (availableModules || MODULES).forEach(function (m) {
       var box = h('input', { type: 'checkbox', value: m.key });
       box.checked = checkedKeys.indexOf(m.key) >= 0;
       boxes.push(box);
@@ -6867,43 +8243,108 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   }
 
   function openRestore(bk) {
+    if (restoring) return;
     var avail = bk.modules ? Object.keys(bk.modules) : [];
-    if (!avail.length) {
-      toast('该备份没有模块信息,无法恢复', 'err');
+    var availableModules = MODULES.filter(function (m) { return avail.indexOf(m.key) >= 0; });
+    if (!availableModules.length) {
+      toast('该备份没有当前系统支持的模块,无法恢复', 'err');
       return;
     }
-    var group = checkGroup(avail);
+    var group = checkGroup(avail, availableModules);
+    var closed = false;
     var body = h('div');
-    body.appendChild(h('div', { class: 'backup-tip', text: '恢复会先清空所选模块的现有数据,再写入备份内容(每个模块独立执行)。例如只勾选“人员管理”则只覆盖人员,部门、装备等其他模块不受影响。管理员账号与密码不受影响。' }));
-    body.appendChild(h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:8px', text: '选择要恢复的模块:' }));
+    body.appendChild(h('div', { class: 'backup-tip', text: '恢复将覆盖所选模块的现有数据,请确认备份及勾选范围。恢复前系统会自动创建安全备份。所选模块的数据在同一个事务中恢复,不是逐模块独立提交。只恢复“人员管理”不会覆盖单位及装备、物资、车辆照片;v4 人员备份包含删除撤回记录和回收站照片。数据字典/系统数据(dict)包含账号及单位授权、自动备份设置和启动配置;旧包缺少授权表时保留本地账号及授权,缺少其他内容时会提示兼容限制。配置文件另行恢复,端口等启动配置需重启生效。恢复账号、授权或单位信息后需重新登录。' }));
+    body.appendChild(h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-bottom:8px', text: '选择要恢复的模块(仅显示备份中存在且当前系统支持的模块):' }));
     body.appendChild(group.el);
+    var cancelBtn = h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } });
+    var restoreBtn = h('button', {
+      class: 'btn btn-danger', text: '开始恢复',
+      onclick: function () {
+        if (restoring || closed) return;
+        var mods = group.get();
+        if (!mods.length) { toast('请至少勾选一个模块', 'err'); return; }
+        restoring = true;
+        restoreBtn.disabled = true;
+        restoreBtn.textContent = '正在恢复…';
+        cancelBtn.disabled = true;
+        $all('input', group.el).forEach(function (box) { box.disabled = true; });
+        POST('/api/backup/restore', { name: bk.name, modules: mods }).then(function (r) {
+          m.close(true);
+          var parts = (r.restored || []).map(function (x) {
+            var rows = 0;
+            var tables = x.tables || {};
+            Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
+            return moduleLabel(x.module) + '(' + rows + '条)';
+          });
+          var message = '恢复完成:' + parts.join('、') + (r.photos ? ',照片' + r.photos + '张' : '') +
+            (r.configFiles && r.configFiles.length ? ',系统配置' + r.configFiles.length + '个' : '') +
+            (r.requiresRestart ? '(重启后生效)' : '');
+          toast(message, 'ok');
+          if (r.warnings && r.warnings.length) toast('恢复提示:' + r.warnings.join('；'), 'info');
+          if (r.requiresRelogin) {
+            forceLogin('恢复完成,账号、授权或单位信息已变更,请重新登录');
+            return;
+          }
+          refreshAll();
+          loadList();
+        }).then(function () { restoring = false; }).catch(function (e) {
+          restoring = false;
+          restoreBtn.disabled = false;
+          restoreBtn.textContent = '开始恢复';
+          cancelBtn.disabled = false;
+          $all('input', group.el).forEach(function (box) { box.disabled = false; });
+          toast(e.message, 'err');
+        });
+      }
+    });
     var m = openModal({
       title: '恢复备份 · ' + bk.createdText,
       body: body,
-      footer: [
-        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
-        h('button', {
-          class: 'btn btn-danger', text: '开始恢复',
-          onclick: function () {
-            var mods = group.get();
-            if (!mods.length) { toast('请至少勾选一个模块', 'err'); return; }
-            POST('/api/backup/restore', { name: bk.name, modules: mods }).then(function (r) {
-              m.close();
-              var parts = (r.restored || []).map(function (x) {
-                var rows = 0;
-                var tables = x.tables || {};
-                Object.keys(tables).forEach(function (t) { rows += Number(tables[t]) || 0; });
-                return moduleLabel(x.module) + '(' + rows + '条)';
-              });
-              toast('恢复完成:' + parts.join('、') + (r.photos ? ',照片' + r.photos + '张' : ''), 'ok');
-              refreshAll();
-              loadList();
-            }).catch(function (e) { toast(e.message, 'err'); });
-          }
-        })
-      ]
+      footer: [cancelBtn, restoreBtn],
+      beforeClose: function () { return !restoring; },
+      onClose: function () { closed = true; }
     });
   }
+
+  var uploading = false;
+  var uploadInput = h('input', { type: 'file', accept: '.zip', style: 'display:none', 'aria-label': '选择 ZIP 备份文件' });
+  var uploadBtn = h('button', {
+    class: 'btn btn-primary', text: '上传备份并恢复',
+    onclick: function () {
+      if (uploading) return;
+      uploadInput.value = '';
+      uploadInput.click();
+    }
+  });
+  function finishUpload() {
+    uploading = false;
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = '上传备份并恢复';
+    uploadInput.disabled = false;
+  }
+  uploadInput.addEventListener('change', function () {
+    var file = uploadInput.files && uploadInput.files[0];
+    uploadInput.value = ''; // 成功、失败或校验拒绝后重选同一文件均能触发 change。
+    if (uploading || !file) return;
+    if (!file.size) { toast('不能上传空备份文件', 'err'); return; }
+    if (!/\.zip$/i.test(file.name)) { toast('请选择 .zip 格式的备份文件', 'err'); return; }
+    if (file.size > 100 * 1024 * 1024) { toast('备份文件不能超过 100MB', 'err'); return; }
+    var fd = new FormData();
+    fd.append('file', file);
+    uploading = true;
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = '正在上传…';
+    uploadInput.disabled = true;
+    POST('/api/backup/upload', fd).then(function (bk) {
+      finishUpload();
+      toast('备份已上传,请选择模块并确认恢复;取消后仍可从列表恢复', 'ok');
+      loadList();
+      openRestore(bk);
+    }).catch(function (e) {
+      finishUpload();
+      toast('上传失败:' + e.message + ',可重新选择文件重试', 'err');
+    });
+  });
 
   var listTable = h('table', { class: 'grid' });
   var selectedBackups = {};
@@ -7001,8 +8442,11 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   });
 
   var lastList = [];
+  var listGeneration = 0;
   function loadList() {
+    var generation = ++listGeneration;
     GET('/api/backup/list').then(function (list) {
+      if (generation !== listGeneration) return;
       lastList = list || [];
       // 清掉已不存在的勾选,避免误删
       var alive = {};
@@ -7010,7 +8454,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
       Object.keys(selectedBackups).forEach(function (k) { if (!alive[k]) delete selectedBackups[k]; });
       listTable.innerHTML = '<thead><tr>' +
         '<th class="cb-cell"><input type="checkbox" class="cb-all" title="全选本页"/></th>' +
-        '<th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th style="width:170px">操作</th></tr></thead><tbody>' +
+        '<th>创建时间</th><th>类型</th><th>包含模块</th><th>大小</th><th>文件名</th><th class="action-col" style="width:170px">操作</th></tr></thead><tbody>' +
         (lastList.length ? lastList.map(function (bk) {
           return '<tr><td class="cb-cell"><input type="checkbox" class="cb-row" data-name="' + esc(bk.name) + '"' + (selectedBackups[bk.name] ? ' checked' : '') + '/></td><td>' + esc(bk.createdText) + '</td>' +
             '<td>' + (bk.auto ? '<span class="badge green">自动</span>' : '<span class="badge blue">手动</span>') + '</td>' +
@@ -7022,7 +8466,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             '<button class="btn-link" data-act="download" data-name="' + esc(bk.name) + '">下载</button>' +
             '<button class="btn-link danger" data-act="delete" data-name="' + esc(bk.name) + '">删除</button>' +
             '</td></tr>';
-        }).join('') : '<tr><td colspan="7" class="empty-row">暂无备份</td></tr>') + '</tbody>';
+        }).join('') : '<tr><td colspan="7" class="empty-row">暂无备份。可点击上方“上传备份并恢复”选择已有的 .zip 备份(最大 100MB),上传后选择模块并确认才会恢复;也可使用“立即备份”创建本机备份。</td></tr>') + '</tbody>';
       // 全选框状态同步(含半选)
       var cbAll = listTable.querySelector('.cb-all');
       if (cbAll) {
@@ -7058,10 +8502,10 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             }),
             h('button', {
               class: 'btn btn-ghost', text: '⬇ 接收下级数据包',
-              title: '导入下级单位的上报包:自动检索/新建对应部门,按身份证合并人员',
+              title: '导入下级单位的上报包:自动检索/新建对应单位,按身份证合并人员',
               onclick: openReportReceive
             }),
-            h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '下级单位把"系统设置→网站名称"设为本单位名(如:XX班);上级接收时按该名称匹配/新建部门' }))));
+            h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '下级单位把"系统设置→网站名称"设为本单位名(如:XX班);上级接收时按该名称匹配/新建单位' }))));
 
         var reportFile = null;
         function openReportReceive() {
@@ -7078,7 +8522,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         }
 
         function openReportExport() {
-          var mods = { personnel: true, equipment: true, material: true, vehicle: true, leave: true, fitness: true };
+          var mods = { personnel: true, equipment: true, material: true, vehicle: true, leave: true, fitness: true, phone: true, military: true };
           var deptSel = {};
           var allDept = true;
           var modBtns = {};
@@ -7136,13 +8580,13 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
             });
           })(Ctx.deptTree, deptBox, 0);
           if (!(Ctx.deptFlat || []).length) {
-            deptBox.appendChild(h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '(暂无部门)' }));
+            deptBox.appendChild(h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '(暂无单位)' }));
           }
           var countLbl = h('span', { style: 'font-size:12px;color:var(--pri-dark,#16437e);font-weight:600' });
 
           // ② 数据模块
           var modBox = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' });
-          [['personnel', '人员管理'], ['equipment', '装备管理'], ['material', '物资管理'], ['vehicle', '车辆管理'], ['leave', '休假管理'], ['fitness', '体能考核']].forEach(function (m) {
+          [['personnel', '人员管理'], ['equipment', '装备管理'], ['material', '物资管理'], ['vehicle', '车辆管理'], ['leave', '休假管理(含计划)'], ['fitness', '体能考核'], ['phone', '手机设备'], ['military', '军事考核']].forEach(function (m) {
             var b = h('button', { type: 'button', class: 'pick-kind-btn', text: m[1] });
             b.addEventListener('click', function () {
               mods[m[0]] = !mods[m[0]];
@@ -7184,7 +8628,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
               } })),
             modBox,
             h('div', { style: 'color:var(--c-muted, #8a97a8);font-size:12px;margin-top:12px;line-height:1.7',
-              text: '人员/休假/体能按所选单位导出;装备/物资/车辆为全单位台账。' }));
+              text: '人员/休假(含计划)/体能/手机/军事考核按所选单位导出;装备/物资/车辆为全单位台账。' }));
           paint();
 
           var m = openModal({
@@ -7195,9 +8639,9 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                 class: 'btn btn-primary', text: '导出',
                 onclick: function () {
                   var sel = [];
-                  ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness'].forEach(function (k) { if (mods[k]) { sel.push(k); } });
+                  ['personnel', 'equipment', 'material', 'vehicle', 'leave', 'fitness', 'phone', 'military'].forEach(function (k) { if (mods[k]) { sel.push(k); } });
                   if (!sel.length) { toast('至少选择一个数据模块', 'err'); return; }
-                  var needPeople = sel.indexOf('personnel') >= 0 || sel.indexOf('leave') >= 0 || sel.indexOf('fitness') >= 0;
+                  var needPeople = sel.indexOf('personnel') >= 0 || sel.indexOf('leave') >= 0 || sel.indexOf('fitness') >= 0 || sel.indexOf('phone') >= 0 || sel.indexOf('military') >= 0;
                   var deptIds = Object.keys(deptSel);
                   if (needPeople && !allDept && !deptIds.length) { toast('请至少选择一个单位', 'err'); return; }
                   var url = '/api/report/export?scope=' + sel.join(',');
@@ -7237,7 +8681,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
 
           body.appendChild(h('div', { style: 'background:#eef4ff;border-radius:8px;padding:12px 16px;margin-bottom:16px;line-height:1.9;font-size:13.5px' },
             h('div', { html: '上报单位:<b>' + esc(d.unit) + '</b>(' + esc(d.exportedAt || '') + ')' }),
-            h('div', { html: '人员 <b>' + d.personnelCount + '</b> 人(新 ' + d.newCount + ' / 本单位已存在 ' + d.existCount + '),子表 ' + d.subCount + ' 条,休假 ' + d.leaveCount + ' 条,体能 ' + d.fitnessCount + ' 条' }),
+            h('div', { html: '人员 <b>' + d.personnelCount + '</b> 人(新 ' + d.newCount + ' / 本单位已存在 ' + d.existCount + '),子表 ' + d.subCount + ' 条,休假 ' + d.leaveCount + ' 条,休假计划 ' + (d.leavePlanCount || 0) + ' 条,体能 ' + d.fitnessCount + ' 条,军事考核 ' + (d.militaryCount || 0) + ' 条,手机 ' + (d.phoneCount || 0) + ' 条' }),
             h('div', { html: '装备 ' + d.equipmentCount + ' 项,物资 ' + d.materialCount + ' 项,车辆 ' + d.vehicleCount + ' 辆' })));
 
           var deptArea = h('div');
@@ -7263,10 +8707,10 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                   rb.addEventListener('change', function () { createNew = true; useDeptId = ''; renderDeptChoice(); });
                   return rb;
                 })(),
-                h('span', { text: '都不对,新建部门「' + d.unit + '」' })));
+                h('span', { text: '都不对,新建单位「' + d.unit + '」' })));
               if (createNew) { deptArea.appendChild(parentPicker()); }
             } else {
-              deptArea.appendChild(h('div', { style: 'font-weight:600;margin-bottom:8px', html: '本单位没有名为「<b>' + esc(d.unit) + '</b>」的部门,将<b>新建</b>该部门:' }));
+              deptArea.appendChild(h('div', { style: 'font-weight:600;margin-bottom:8px', html: '本单位没有名为「<b>' + esc(d.unit) + '</b>」的单位,将<b>新建</b>该单位:' }));
               deptArea.appendChild(parentPicker());
             }
           }
@@ -7278,7 +8722,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
               var o = h('option', { value: String(x.id), text: new Array(x.depth + 1).join('　') + x.name });
               parentSel.appendChild(o);
             });
-            var top = h('option', { value: '0', text: '(作为顶级部门)' });
+            var top = h('option', { value: '0', text: '(作为顶级单位)' });
             parentSel.insertBefore(top, parentSel.firstChild);
             parentSel.value = '0';
             wrap.appendChild(h('span', { style: 'font-size:13px;color:var(--c-sub, #66788c);margin-right:8px', text: '上级:' }));
@@ -7289,7 +8733,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
 
           body.appendChild(deptArea);
           body.appendChild(h('div', { style: 'color:var(--c-muted, #8a97a8);font-size:12px;margin-top:12px;line-height:1.8',
-            text: '合并规则:人员按身份证去重(新人入所选部门,老人仅更新不改单位);子表以下级为准替换;休假/体能跳过重复;装备按编号、物资按名称、车辆按车牌去重(有则更新,无则新增)。' }));
+            text: '合并规则:人员按身份证去重(新人入所选单位,老人仅更新不改单位);子表以下级为准替换;休假/体能跳过重复;装备按编号、物资按名称、车辆按车牌去重(有则更新,无则新增)。' }));
 
           var m = openModal({
             title: '接收下级数据 · ' + d.unit, body: body, wide: true,
@@ -7304,7 +8748,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                     fd.append('createNew', 'true');
                     fd.append('parentId', parentSel ? parentSel.value : '0');
                   } else {
-                    if (!useDeptId) { toast('请选择接收部门', 'err'); return; }
+                    if (!useDeptId) { toast('请选择接收单位', 'err'); return; }
                     fd.append('deptId', useDeptId);
                   }
                   var pid = 'imp' + Date.now() + Math.floor(Math.random() * 1000);
@@ -7349,7 +8793,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         intervalInput.value = settings.intervalHours || 24;
         var keepInput = h('input', { type: 'number', min: '1', max: '200', step: '1' });
         keepInput.value = settings.keepCount || 10;
-        var autoGroup = checkGroup(settings.modules && settings.modules.length
+        var autoGroup = checkGroup(Array.isArray(settings.modules)
           ? settings.modules : MODULES.map(function (m) { return m.key; }));
         var statusLine = h('div', { style: 'color:var(--c-sub, #66788c);font-size:13px;margin-top:12px' });
         function syncStatusLine() {
@@ -7402,6 +8846,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
                 toast('正在备份…', 'info');
                 POST('/api/backup/run', { modules: mods }).then(function (r) {
                   toast('备份完成:' + fmtSize(r.size) + '(' + Object.keys(r.modules).map(moduleLabel).join('、') + ')');
+                  if (r && r.warning) { toast(r.warning, 'err'); }
                   loadList();
                 }).catch(function (e) { toast(e.message, 'err'); });
               }
@@ -7417,8 +8862,9 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
         root.appendChild(autoCard);
         root.appendChild(manualCard);
         listCard.insertBefore(h('h3', { style: 'padding:16px 20px 0;margin-bottom:12px', text: '备份文件' }), listCard.firstChild);
-        listCard.insertBefore(h('div', { style: 'display:flex;align-items:center;gap:12px;padding:0 20px 12px' },
-          h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: '勾选文件后可批量操作' }),
+        listCard.insertBefore(h('div', { style: 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 20px 12px' },
+          uploadBtn, uploadInput,
+          h('span', { style: 'color:var(--c-muted, #8a97a8);font-size:12px', text: 'ZIP 备份最大 100MB;上传后须确认模块才恢复。勾选列表文件可批量操作' }),
           h('div', { style: 'flex:1' }),
           batchDlBtn,
           batchDelBtn), listCard.firstChild.nextSibling);
@@ -7442,18 +8888,18 @@ function renderLogin(msg) {
   if (msg) toast(msg, 'err');
 
   var errBox = h('div', { class: 'login-error' });
-  var userInput = h('input', { type: 'text', placeholder: '请输入管理员账号', autocomplete: 'username' });
+  var userInput = h('input', { type: 'text', placeholder: '请输入账号', autocomplete: 'username' });
   var pwInput = h('input', { type: 'password', placeholder: '请输入密码', autocomplete: 'current-password' });
   var rememberCb = h('input', { type: 'checkbox', id: 'remember-me' });
   var savedUser = '';
-  var savedPass = '';
   try {
     savedUser = localStorage.getItem('savedUser') || '';
-    savedPass = localStorage.getItem('savedPass') || '';
+    // 旧版本曾将密码明文写入 localStorage;无条件清除,不再读取或迁移。
+    localStorage.removeItem('savedPass');
+    sessionStorage.removeItem('savedPass');
   } catch (e) { }
   if (savedUser) {
     userInput.value = savedUser;
-    if (savedPass) { pwInput.value = savedPass; }
     rememberCb.checked = true;
   } else {
     rememberCb.checked = false;
@@ -7461,6 +8907,7 @@ function renderLogin(msg) {
   var btn = h('button', { class: 'btn btn-primary login-btn', text: '登  录' });
 
   function submit() {
+    if (btn.disabled) return;
     var u = userInput.value.trim();
     var p = pwInput.value;
     if (!u || !p) { errBox.textContent = '请输入账号和密码'; return; }
@@ -7470,7 +8917,7 @@ function renderLogin(msg) {
       if (rememberCb.checked) {
         try {
           localStorage.setItem('savedUser', u);
-          localStorage.setItem('savedPass', p);
+          localStorage.removeItem('savedPass');
         } catch (e) { }
       } else {
         try {
@@ -7478,8 +8925,8 @@ function renderLogin(msg) {
           localStorage.removeItem('savedPass');
         } catch (e) { }
       }
-      saveSession(data.token, { username: data.username, displayName: data.displayName }, rememberCb.checked);
-      return refreshAll().then(renderShell);
+      saveSession(data.token, normalizeProfile(data), rememberCb.checked);
+      return refreshSessionProfile().then(refreshAll).then(renderShell);
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = '登  录';
       errBox.textContent = e.message;
@@ -7504,8 +8951,7 @@ function renderLogin(msg) {
         h('div', { class: 'field' }, h('label', { text: '密码' }), pwInput),
         h('label', { class: 'login-remember', for: 'remember-me' },
           rememberCb,
-          h('span', { text: '记住我' }),
-          h('span', { class: 'hint', text: '勾选后下次自动填入账号和密码', style: 'display:block;margin-top:2px' })),
+          h('span', { text: '记住我' })),
         errBox,
         btn),
       h('div', { class: 'login-tip', text: '忘记密码请联系本机管理员(托盘菜单可重置)' }))));
@@ -7515,34 +8961,1143 @@ function renderLogin(msg) {
 /* ================= 修改密码 ================= */
 
 function openChangePassword() {
+  // 三个字段各占整行,统一竖向排列,避免"确认新密码"孤占两列网格的半格
   var form = buildForm([
-    { key: 'oldPassword', label: '旧密码', required: true },
-    { key: 'newPassword', label: '新密码(至少6位)', required: true },
-    { key: 'confirm', label: '确认新密码', required: true }
+    { key: 'oldPassword', label: '旧密码', type: 'password', required: true, span: 'full' },
+    { key: 'newPassword', label: '新密码(至少6位)', type: 'password', required: true, span: 'full' },
+    { key: 'confirm', label: '确认新密码', type: 'password', required: true, span: 'full' }
   ], {});
+  var saving = false, saved = false;
   var m = openModal({
     title: '修改密码',
     body: form.el,
+    beforeClose: function () {
+      if (saving) return false;
+      return saved || !Object.keys(form.inputs).some(function (key) { return !!form.inputs[key].value; }) || confirm('密码尚未保存，确定放弃并关闭吗？');
+    },
     footer: [
       h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
       h('button', {
         class: 'btn btn-primary', text: '确定修改',
         onclick: function () {
+          if (saving) return;
           var data = form.get();
           if (!data) return;
+          if (data.newPassword.length < 6 || data.newPassword.length > 256) { form.setError('新密码须为6至256位'); return; }
           if (data.newPassword !== data.confirm) { form.setError('两次输入的新密码不一致'); return; }
+          saving = true;
+          var button = m.dialog.querySelector('.btn-primary');
+          if (button) button.disabled = true;
           POST('/api/auth/change-password', { oldPassword: data.oldPassword, newPassword: data.newPassword })
-            .then(function () { m.close(); toast('密码修改成功,下次登录请使用新密码'); })
-            .catch(function (e) { form.setError(e.message); });
+            .then(function () { saved = true; m.close(true); toast('密码修改成功,下次登录请使用新密码'); })
+            .catch(function (e) { form.setError(e.message); }).then(function () {
+              saving = false;
+              if (button) button.disabled = false;
+            });
         }
       })
     ]
   });
 }
 
+function openChangeUsername() {
+  // 当前账号展示登录账号(USER.username),不是显示名;与修改密码弹窗同样整行竖排
+  var current = (USER && USER.username) || '';
+  var form = buildForm([
+    { key: 'current', label: '当前账号', readonly: true, span: 'full' },
+    { key: 'newUsername', label: '新账号', required: true, placeholder: '1至64位字母、数字或 _ . @ -', span: 'full' },
+    { key: 'oldPassword', label: '当前密码', type: 'password', required: true, span: 'full' }
+  ], {});
+  form.inputs.current.value = current;
+  var saving = false, saved = false;
+  var m = openModal({
+    title: '修改账号',
+    body: form.el,
+    beforeClose: function () {
+      if (saving) return false;
+      return saved || (!form.inputs.newUsername.value && !form.inputs.oldPassword.value) || confirm('账号尚未保存，确定放弃并关闭吗？');
+    },
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+      h('button', {
+        class: 'btn btn-primary', text: '确定修改',
+        onclick: function () {
+          if (saving) return;
+          var data = form.get();
+          if (!data) return;
+          if (data.newUsername === current) { form.setError('新账号不能与当前账号相同'); return; }
+          saving = true;
+          var button = m.dialog.querySelector('.btn-primary');
+          if (button) button.disabled = true;
+          POST('/api/auth/change-username', { newUsername: data.newUsername, oldPassword: data.oldPassword })
+            .then(function () {
+              saved = true; m.close(true);
+              forceLogin('账号已修改，请使用新账号重新登录');
+            })
+            .catch(function (e) { form.setError(e.message); }).then(function () {
+              saving = false;
+              if (button) button.disabled = false;
+            });
+        }
+      })
+    ]
+  });
+}
+
+/* ================= 物品借还独立台账 ================= */
+function itemLoanStatus(status) {
+  return { borrowing: '借用中', returned: '已归还' }[status] || status || '—';
+}
+
+function setupItemLoanForm(form, row) {
+  if (!row) form.inputs.borrowDate.value = formatCalendarDay(new Date());
+  var handler = form.inputs.handlerId;
+  var handlerId = row && row.handlerId ? String(row.handlerId) : '';
+  if (handlerId && handlerId !== '0') {
+    // 同ID改名也保留台账快照；仅克隆并修改当前字段的选项，不影响其他表单。
+    var handlerFound = false;
+    var handlerOptions = Ctx.personnelOptions.map(function (p) {
+      var option = { v: String(p.id), l: p.name + ((p.departmentPath || p.departmentName) ? ' (' + (p.departmentPath || p.departmentName) + ')' : '') };
+      if (option.v === handlerId) {
+        handlerFound = true;
+        option.l = row.handlerName || option.l;
+      }
+      return option;
+    });
+    if (!handlerFound) handlerOptions.push({ v: handlerId, l: row.handlerName || '原经手人（已删除或不可见）' });
+    handler.setOptions(handlerOptions);
+  }
+  handler.value = handlerId === '0' ? '' : handlerId;
+  var handlerPick = handler.parentElement.querySelector('.pick-btn');
+  if (handlerPick) handlerPick.setAttribute('aria-label', '经手人');
+  var handlerCard = form.inputs.handlerIdCard;
+  function selectedHandlerCard() {
+    var id = handler.value;
+    if (!id) return '';
+    if (row && String(row.handlerId) === id) return row.handlerIdCard || '';
+    for (var i = 0; i < Ctx.personnelOptions.length; i++) {
+      if (String(Ctx.personnelOptions[i].id) === id) return Ctx.personnelOptions[i].idCard || '';
+    }
+    return '';
+  }
+  function refreshHandlerCard() {
+    if (handlerCard) handlerCard.value = selectedHandlerCard();
+  }
+  handler.addEventListener('change', refreshHandlerCard);
+  refreshHandlerCard();
+  var limits = { itemName: 100, specification: 200, unit: 20, borrowerName: 100, borrowerIdCard: 50, borrowerPhone: 50, borrowerUnit: 200, registrationDepartment: 200, remark: 1000 };
+  Object.keys(limits).forEach(function (key) { form.inputs[key].setAttribute('maxlength', limits[key]); });
+  itemLoanCfg.form.forEach(function (field) {
+    var input = form.inputs[field.key];
+    if (field.type === 'date') input = input.querySelector('input');
+    if (field.type === 'select' || field.type === 'personnel') input = input.querySelector('.dd-btn');
+    if (input) input.setAttribute('aria-label', field.label);
+  });
+  var get = form.get;
+  form.get = function () {
+    var data = get.call(form);
+    if (!data) return null;
+    var quantity = String(form.inputs.quantity.value || '').trim();
+    if (!/^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(quantity) || !isFinite(data.quantity) || data.quantity <= 0 || data.quantity > 999999999.99) {
+      form.setError('数量必须大于0、最多2位小数，且不超过999999999.99');
+      return null;
+    }
+    var invalid = Object.keys(limits).some(function (key) {
+      if (String(data[key] || '').length <= limits[key]) return false;
+      var field = itemLoanCfg.form.filter(function (f) { return f.key === key; })[0];
+      form.setError(field.label + '不能超过' + limits[key] + '字');
+      return true;
+    });
+    if (invalid) return null;
+    return data;
+  };
+}
+
+function openItemLoanDetail(row, actions) {
+  var grid = h('div', { class: 'detail-grid' });
+  itemLoanCfg.columns.filter(function (field) { return !field.action; }).concat([
+    { key: 'remark', label: '用途备注' },
+    { key: 'returnCondition', label: '归还情况' },
+    { key: 'returnRemark', label: '归还备注' }
+  ]).forEach(function (field) {
+    var isUnit = field.key === 'borrowerUnit' || field.key === 'registrationDepartment';
+    var value = field.key === 'status' ? itemLoanStatus(row.status) : row[field.key];
+    // 单位快照显示去斜杠:仅合并" / "路径分隔,不影响自由文本中的其他斜杠(如</script>、24/7)
+    if (isUnit && value != null && value !== '') { value = String(value).split(' / ').join(''); }
+    grid.appendChild(h('div', { class: 'detail-item' },
+      h('div', { class: 'dl', text: field.label }),
+      h('div', { class: 'dv', text: value === undefined || value === null || value === '' ? '—' : String(value), title: isUnit ? String(row[field.key] == null ? '' : row[field.key]) : undefined })));
+  });
+  var footer = [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })];
+  if (row.status !== 'returned' && actions && actions.edit) {
+    footer.push(h('button', { class: 'btn btn-primary', text: '编辑', onclick: function () { m.close(); actions.edit(); } }));
+  }
+  if (row.status !== 'returned' && actions && actions.refresh) {
+    footer.push(h('button', { class: 'btn btn-primary', text: '登记归还', onclick: function () { m.close(); openItemLoanReturn(row, actions); } }));
+  }
+  var m = openModal({ title: '物品借还详情 - ' + (row.itemName || ''), body: grid, wide: true, footer: footer });
+}
+
+function openItemLoanReturn(row, actions) {
+  if (row.status === 'returned') return;
+  var form = buildForm([
+    { key: 'returnCondition', label: '归还情况', type: 'textarea', required: true },
+    { key: 'returnRemark', label: '归还备注', type: 'textarea' }
+  ]);
+  form.inputs.returnCondition.setAttribute('aria-label', '归还情况');
+  form.inputs.returnRemark.setAttribute('aria-label', '归还备注');
+  form.inputs.returnCondition.setAttribute('maxlength', '500');
+  form.inputs.returnRemark.setAttribute('maxlength', '1000');
+  var saving = false, saved = false;
+  var m = openModal({
+    title: '整笔归还 · ' + row.itemName,
+    body: h('div', {}, h('p', { text: '本次整笔归还 ' + row.quantity + ' ' + row.unit + '，不支持部分归还。' }), form.el),
+    beforeClose: function () {
+      if (saving) { form.setError('正在保存，请稍候'); return false; }
+      if (saved) return true;
+      var dirty = form.inputs.returnCondition.value || form.inputs.returnRemark.value;
+      return !dirty || confirm('归还登记有未保存的修改，确定放弃并关闭吗？');
+    },
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+      h('button', { class: 'btn btn-primary', text: '确认归还', onclick: function () {
+        if (saving) return;
+        var data = form.get();
+        if (!data) return;
+        if (data.returnCondition.length > 500 || data.returnRemark.length > 1000) { form.setError('归还情况不能超过500字，归还备注不能超过1000字'); return; }
+        saving = true;
+        var controls = $all('input, button, textarea', m.dialog).map(function (el) {
+          var entry = { el: el, disabled: el.disabled }; el.disabled = true; return entry;
+        });
+        POST('/api/item-loans/' + encodeURIComponent(row.id) + '/return', data).then(function () {
+          saved = true;
+          m.close(true);
+          toast('归还登记成功');
+          actions.refresh();
+        }).catch(function (e) { form.setError(e.message || '归还失败，请重试'); }).then(function () {
+          saving = false;
+          controls.forEach(function (entry) { entry.el.disabled = entry.disabled; });
+        });
+      } })
+    ]
+  });
+}
+
+var itemLoanCfg = {
+  key: 'item-loans', title: '物品借还', icon: 'box', endpoint: '/api/item-loans', excel: false,
+  addLabel: '新增借用登记', clickKey: 'itemName', rowTitle: function (row) { return row.itemName; },
+  filters: [
+    { key: 'itemName', label: '物品名称' },
+    { key: 'borrowerName', label: '借用人' },
+    { key: 'registrationDepartment', label: '登记单位' },
+    { key: 'status', label: '状态', type: 'select', options: [
+      { v: 'borrowing', l: '借用中' }, { v: 'returned', l: '已归还' }
+    ] }
+  ],
+  columns: [
+    { key: 'itemName', label: '物品名称' },
+    { key: 'quickReturn', label: '快捷归还', action: true, render: function (row) {
+      if (row.status === 'returned') return '<span class="badge green">已归还</span>';
+      return '<button class="btn btn-primary btn-sm" data-act="return" data-id="' + esc(row.id) + '" aria-label="快捷归还">快捷归还</button>';
+    } },
+    { key: 'specification', label: '规格型号' },
+    { key: 'borrowerUnit', label: '借用人单位', render: function (row) { return esc(String(row.borrowerUnit || '').split(' / ').join('')); } },
+    { key: 'borrowerName', label: '借用人' }, { key: 'borrowerIdCard', label: '借用人身份证号' },
+    { key: 'borrowerPhone', label: '借用人联系方式' },
+    { key: 'registrationDepartment', label: '登记单位', render: function (row) { return esc(String(row.registrationDepartment || '').split(' / ').join('')); } },
+    { key: 'handlerName', label: '经手人' },
+    { key: 'handlerIdCard', label: '经手人身份证号' },
+    { key: 'quantity', label: '数量' }, { key: 'unit', label: '物品单位' },
+    { key: 'borrowDate', label: '借出日期' },
+    { key: 'status', label: '状态', render: function (row) {
+      return '<span class="badge ' + (row.status === 'returned' ? 'green' : 'blue') + '">' + esc(itemLoanStatus(row.status)) + '</span>';
+    } }
+  ],
+  form: [
+    { key: 'itemName', label: '物品名称', required: true },
+    { key: 'specification', label: '规格型号' },
+    { key: 'quantity', label: '数量', type: 'number', required: true, min: 0.01, max: 999999999.99, step: '0.01' },
+    { key: 'unit', label: '物品单位', required: true },
+    { key: 'borrowerUnit', label: '借用人单位' },
+    { key: 'borrowerName', label: '借用人', required: true },
+    { key: 'borrowerIdCard', label: '借用人身份证号' },
+    { key: 'borrowerPhone', label: '借用人联系方式' },
+    { key: 'registrationDepartment', label: '登记单位', required: true },
+    { key: 'handlerId', label: '经手人', type: 'personnel', placeholder: '(不指定)' },
+    { key: 'handlerIdCard', label: '经手人身份证号', readonly: true },
+    { key: 'borrowDate', label: '借出日期', type: 'date', required: true },
+    { key: 'remark', label: '用途备注', type: 'textarea', span: 'full' }
+  ],
+  formSetup: setupItemLoanForm,
+  beforeSave: function (data) {
+    var payload = {};
+    itemLoanCfg.form.forEach(function (field) {
+      if (field.key !== 'handlerIdCard') payload[field.key] = data[field.key];
+    });
+    payload.handlerId = Number(data.handlerId) || 0; // 空选项显式清空；姓名和证件号快照仅由服务端维护。
+    return payload; // 仅提交借用表单字段；权限归属由服务端确定，状态、归还字段和旧关联不能混入通用写入。
+  },
+  onView: openItemLoanDetail,
+  rowActions: [
+    { key: 'view', label: '查看' },
+    { key: 'edit', label: '编辑', visible: function (row) { return row.status !== 'returned'; } },
+    { key: 'return', label: '登记归还', visible: function (row) { return row.status !== 'returned'; }, onClick: openItemLoanReturn },
+    { key: 'del', label: '删除', danger: true }
+  ]
+};
+
+/* ================= 双争评比：年度四季度全员矩阵 ================= */
+var doubleExcellenceCfg = { key: 'double-excellence', title: '双争评比', icon: 'flag' };
+/* 评定等级色彩：好=绿/中=蓝/一般=橙，取系统徽章配色，便于矩阵扫读；未映射的字典新选项用默认色 */
+var DE_RATING_CLS = { '好': 'is-good', '中': 'is-mid', '一般': 'is-fair' };
+/* 双争评定选项：数据字典 de_rating 启用项（管理员可在"数据字典"维护），字典缺失时回退默认三档 */
+function deRatingOptions() {
+  var labels = dictLabels('de_rating');
+  return labels.length ? labels : ['好', '中', '一般'];
+}
+
+function doubleExcellenceFields() {
+  return [
+    { key: 'year', label: '年份', type: 'number', min: 1900, max: 9999, required: true },
+    { key: 'quarter', label: '季度', type: 'select', options: [
+      { v: '1', l: '第一季度' }, { v: '2', l: '第二季度' }, { v: '3', l: '第三季度' }, { v: '4', l: '第四季度' }
+    ], required: true },
+    { key: 'personnelName', label: '姓名', readonly: true, required: true },
+    { key: 'idCard', label: '身份证号码', required: true },
+    { key: 'rating', label: '评定', type: 'select', options: function () { return deRatingOptions(); }, required: true },
+    { key: 'ratingDate', label: '评比日期', type: 'date', required: true },
+    { key: 'personnelId', type: 'hidden' }
+  ];
+}
+
+function doubleExcellencePayload(data) {
+  var year = Number(data.year), quarter = Number(data.quarter), pid = Number(data.personnelId);
+  if (!isFinite(year) || year % 1 || year < 1900 || year > 9999) throw new Error('请填写有效年份（1900至9999）');
+  if (!isFinite(quarter) || quarter < 1 || quarter > 4 || quarter % 1) throw new Error('请选择季度');
+  if (!isFinite(pid) || pid < 1 || pid % 1) throw new Error('请先选择现有人员或通过身份证号码完成反查');
+  if (deRatingOptions().indexOf(data.rating) < 0) throw new Error('评定只能为' + deRatingOptions().join('、'));
+  var day = parseCalendarDay(data.ratingDate);
+  if (!day) throw new Error('请填写有效评比日期');
+  // 姓名、证号仅用于身份确认，提交的关联始终为现有人员 ID；不创建或伪造档案。
+  return { year: year, quarter: quarter, personnelId: pid, rating: data.rating, ratingDate: formatCalendarDay(day) };
+}
+
+function doubleExcellenceQuery(filters, recordsOnly) {
+  var keys = ['year', 'quarter', 'personnelName', 'idCard', 'departmentId', 'rating'];
+  if (recordsOnly) keys = keys.concat(['ratingDateStart', 'ratingDateEnd']);
+  return keys.filter(function (key) {
+    return filters[key] !== undefined && filters[key] !== null && String(filters[key]).trim() !== ''
+      && !(recordsOnly && key === 'rating' && filters[key] === 'unrated');
+  }).map(function (key) { return key + '=' + encodeURIComponent(String(filters[key]).trim()); }).join('&');
+}
+
+function doubleExcellenceView() {
+  // 主页面即年度四季度矩阵：全部权限内人员一行一人，四个季度单元格点击即可填写或修改评定。
+  var endpoint = '/api/double-excellence', now = new Date(), currentYear = now.getFullYear();
+  var root = h('div', { class: 'double-excellence' });
+  var sessionToken = TOKEN, sessionUser = USER && USER.userId;
+  var state = { year: currentYear, filters: {},
+    total: 0, rows: [], loading: false, generation: 0,
+    writing: false, importing: false, confirmingImport: false, formOpen: false, disposed: false };
+  var inputs = {}, filterTab, filterPanel, main, toolbar, tableBox, pagerBox, errorBox, count, importInput, importItem;
+  var yearPrev, yearNext, yearText;
+  var filterOpen = false, closeTimer = null, animations = [], observer = null;
+  function alive() { return !state.disposed && TOKEN === sessionToken && USER && USER.userId === sessionUser && document.body.contains(root); }
+  function cancelAnimations() {
+    if (closeTimer !== null) { clearTimeout(closeTimer); closeTimer = null; }
+    animations.forEach(function (cancel) { cancel(); }); animations = [];
+  }
+  function dispose() {
+    if (state.disposed) return;
+    state.disposed = true; state.generation++; cancelAnimations();
+    if (filterTab) filterTab.remove();
+    if (observer) observer.disconnect();
+  }
+  function animate(el, dx) { var cancel = slideFrom(el, dx); if (typeof cancel === 'function') animations.push(cancel); }
+  function toggleFilter() {
+    if (!alive()) { dispose(); return; }
+    cancelAnimations(); filterOpen = !filterOpen;
+    if (filterOpen) {
+      filterPanel.classList.add('open'); animate(filterPanel, 270);
+      main.classList.add('filter-padding'); animate(main, 270);
+    } else {
+      filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
+      filterPanel.style.transform = 'translateX(100%)';
+      main.classList.remove('filter-padding'); animate(main, -270);
+      closeTimer = setTimeout(function () {
+        closeTimer = null;
+        if (!alive()) { dispose(); return; }
+        if (filterOpen) return;
+        filterPanel.classList.remove('open'); filterPanel.style.transition = ''; filterPanel.style.transform = '';
+      }, 310);
+    }
+    filterTab.classList.toggle('panel-open', filterOpen); filterTab.textContent = filterOpen ? '收 起' : '筛 选';
+    filterTab.setAttribute('aria-expanded', String(filterOpen));
+  }
+  function setYear(year) {
+    if (!alive()) return;
+    year = Number(year);
+    if (!isFinite(year) || year % 1 || year < 1900 || year > 9999 || year === state.year) return;
+    state.year = year; load();
+  }
+  function readFilters() {
+    var filters = {};
+    ['personnelName', 'idCard', 'departmentId'].forEach(function (key) {
+      if (inputs[key]) filters[key] = String(inputs[key].rawValue === undefined ? inputs[key].value || '' : inputs[key].rawValue).trim();
+    });
+    return filters;
+  }
+  function applyFilters() {
+    if (!alive()) return;
+    state.filters = readFilters();
+    load();
+  }
+  function load() {
+    if (!alive()) return;
+    var generation = ++state.generation;
+    state.rows = []; state.total = 0; state.loading = true; errorBox.textContent = '';
+    renderData();
+    var query = doubleExcellenceQuery({ year: state.year, personnelName: state.filters.personnelName,
+      idCard: state.filters.idCard, departmentId: state.filters.departmentId }, false);
+    // 与其它模块一致：一次加载全部人员（loadAllRows 自动循环按 200/页取全），矩阵不做分页
+    loadAllRows(endpoint + '/stats?' + query).then(function (data) {
+      if (!alive() || generation !== state.generation) return;
+      state.rows = data && data.list || [];
+      state.total = data && data.total || state.rows.length;
+      state.loading = false;
+      renderData();
+    }).catch(function (e) {
+      if (!alive() || generation !== state.generation) return;
+      state.loading = false;
+      errorBox.textContent = e.message || '加载失败，请重试';
+      renderData(true);
+    });
+  }
+  function cell(row, text) { row.appendChild(h('td', {}, text == null ? '' : String(text))); }
+  // 姓名与身份证号码列：点击查看该人历年双争评比
+  function personCell(tr, row, value) {
+    tr.appendChild(h('td', { class: 'de-person-cell' },
+      h('button', { type: 'button', class: 'btn-link de-person-btn',
+        title: '查看' + row.personnelName + '历年双争评比',
+        'aria-label': '查看' + row.personnelName + '历年双争评比',
+        onclick: function () { openHistory(row); } },
+        value == null ? '' : String(value))));
+  }
+  function renderData(failed) {
+    tableBox.innerHTML = ''; pagerBox.innerHTML = '';
+    yearText.textContent = state.year + ' 年';
+    yearPrev.disabled = state.year <= 1900;
+    yearNext.disabled = state.year >= 9999;
+    count.textContent = state.loading ? '加载中…' : failed ? '加载失败' : '共 ' + state.total + ' 人';
+    var table = h('table', { class: 'grid de-grid', 'aria-label': '双争评比年度四季度表' });
+    var head = h('tr'), body = h('tbody');
+    ['单位', '姓名', '身份证号码', '第一季度', '第二季度', '第三季度', '第四季度'].forEach(function (label) {
+      head.appendChild(h('th', { text: label }));
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    state.rows.forEach(function (row) {
+      var tr = h('tr');
+      cell(tr, String(row.departmentPath || '').replace(/\s*\/\s*/g, '')); personCell(tr, row, row.personnelName); personCell(tr, row, row.idCard);
+      for (var quarter = 1; quarter <= 4; quarter++) tr.appendChild(quarterCell(row, quarter));
+      body.appendChild(tr);
+    });
+    if (!state.rows.length) body.appendChild(h('tr', {}, h('td', {
+      colspan: 7, class: 'empty-row', text: state.loading ? '加载中…' : failed ? '加载失败，请重试' : '暂无人员'
+    })));
+    tableBox.appendChild(table);
+    // 不分页：全部人员一次展示，滚动即可
+  }
+  function quarterCell(row, quarter) {
+    var entry = row['q' + quarter];
+    var ratingCls = entry ? DE_RATING_CLS[entry.rating] : 'is-unrated';
+    return h('td', { class: 'de-cell' },
+      h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
+        'aria-label': row.personnelName + '第' + quarter + '季度评定：' + (entry ? entry.rating : '未评定'),
+        title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写第' + quarter + '季度评定',
+        onclick: function () { openCellForm(row, quarter); } },
+        // 日期（仅月/日）在前、评定在后同一行紧凑排列、整体靠左；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
+        h('span', { class: 'de-rating-line' },
+          entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null,
+          h('b', { text: entry ? entry.rating : '未评定' }))));
+  }
+  // 历年评比：按人员ID取全部年度记录（服务端 personnelIds 走权限校验），按年度×四季度矩阵展示
+  function openHistory(row) {
+    if (!alive()) return;
+    var box = h('div', { class: 'de-history' },
+      h('div', { class: 'de-history-empty', text: '正在加载 ' + row.personnelName + ' 的历年评比…' }));
+    openModal({ title: row.personnelName + ' · 历年双争评比', body: box, wide: true });
+    // loadAllRows 自动按 200/页取全:历年记录超过 200 条时不再截断
+    loadAllRows(endpoint + '?personnelIds=' + encodeURIComponent(row.personnelId)).then(function (data) {
+      if (!alive() || !document.body.contains(box)) return;
+      renderHistory(box, row, (data && data.list) || []);
+    }).catch(function (e) {
+      if (!alive() || !document.body.contains(box)) return;
+      box.innerHTML = '';
+      box.appendChild(h('div', { class: 'de-history-empty', text: e.message || '加载失败，请关闭后重试' }));
+    });
+  }
+  function renderHistory(box, row, list) {
+    box.innerHTML = '';
+    var years = {};
+    list.forEach(function (r) { (years[r.year] = years[r.year] || {})[r.quarter] = r; });
+    var yearList = Object.keys(years).map(Number).sort(function (a, b) { return b - a; });
+    box.appendChild(h('div', { class: 'de-history-head' },
+      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
+      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条评定记录' })));
+    if (!yearList.length) {
+      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的评比记录' }));
+      return;
+    }
+    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年双争评比表' });
+    var head = h('tr');
+    ['年度', '第一季度', '第二季度', '第三季度', '第四季度'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
+    var body = h('tbody');
+    yearList.forEach(function (year) {
+      var tr = h('tr');
+      tr.appendChild(h('td', { class: 'de-h-year', text: year + ' 年' }));
+      for (var quarter = 1; quarter <= 4; quarter++) {
+        var entry = years[year][quarter];
+        var cls = entry ? (DE_RATING_CLS[entry.rating] || '') : 'is-unrated';
+        tr.appendChild(h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
+          h('span', { class: 'de-rating-line' },
+            h('b', { text: entry ? entry.rating : '—' }),
+            entry && entry.ratingDate ? h('small', { text: entry.ratingDate }) : null)));
+      }
+      body.appendChild(tr);
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    box.appendChild(table);
+    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
+  }
+  function openCellForm(row, quarter) {
+    if (!alive() || state.writing || state.importing || state.formOpen) return;
+    var entry = row['q' + quarter];
+    var values = { year: state.year, quarter: String(quarter),
+      personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
+      ratingDate: entry && entry.ratingDate ? entry.ratingDate : formatCalendarDay(now) };
+    if (entry) values.rating = entry.rating;
+    openForm(values, { recordId: entry ? entry.id : null, fixed: true });
+  }
+  function afterChange() {
+    if (alive()) load();
+  }
+  function openForm(values, options) {
+    if (!alive() || state.writing || state.importing || state.formOpen) return;
+    state.formOpen = true;
+    options = options || {};
+    var fixed = !!options.fixed, recordId = options.recordId || null;
+    // 新增默认跟随正在查看的年度（而非系统当前年），避免查看历史年度时误录入今年；年度仍可手动调整
+    if (!values) values = { year: state.year, quarter: String(Math.floor(now.getMonth() / 3) + 1), ratingDate: formatCalendarDay(now) };
+    var form = buildForm(doubleExcellenceFields(), values);
+    if (fixed) {
+      // 单元格进入：人员与年度、季度由所在行列锁定，只允许改评定与评比日期。
+      ['year', 'quarter', 'personnelName', 'idCard'].forEach(function (key) {
+        var input = form.inputs[key];
+        if (!input) return;
+        // 下拉容器没有 readOnly，用禁用锁住；输入框用只读保持可复制
+        if (input.classList && input.classList.contains('dd')) input.disabled = true;
+        else input.readOnly = true;
+        input.classList.add('ro');
+      });
+    } else {
+      setupPersonLookup(form, { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' });
+    }
+    var saving = false, saved = false, removing = false;
+    var remove = recordId ? h('button', { class: 'btn btn-danger', text: '删除', onclick: function () {
+      if (saving || removing) return;
+      removing = true;
+      confirmBox('确定删除' + values.year + '年第' + values.quarter + '季度的这条评比记录吗？删除后不可恢复。', true).then(function (yes) {
+        if (!yes || !alive()) return false;
+        return DEL(endpoint + '/' + encodeURIComponent(recordId)).then(function () { return true; });
+      }).then(function (changed) {
+        removing = false;
+        if (changed) { saved = true; m.close(true); if (alive()) { toast('已删除'); afterChange(); } }
+      }).catch(function (e) { removing = false; if (alive()) toast(e.message || '删除失败，请重试', 'err'); });
+    } }) : null;
+    var save = h('button', { class: 'btn btn-primary', text: '保存', onclick: function () {
+      if (saving || removing) return; // 删除进行中同样禁止保存,避免并发写同一条记录
+      if (!alive()) { form.setError('页面或登录状态已变更，请关闭后重新进入'); return; }
+      var data = form.get(), payload;
+      if (!data || form.validatePerson && !form.validatePerson()) return;
+      try { payload = doubleExcellencePayload(data); } catch (e) { form.setError(e.message); return; }
+      saving = true; state.writing = true; save.disabled = true;
+      if (remove) remove.disabled = true;
+      var controls = $all('input, button, textarea, select', form.el).map(function (el) {
+        var old = { el: el, disabled: el.disabled }; el.disabled = true; return old;
+      });
+      var request = recordId ? PUT(endpoint + '/' + encodeURIComponent(recordId), payload) : POST(endpoint, payload);
+      request.then(function () {
+        saved = true; m.close(true);
+        if (alive()) { toast('保存成功'); afterChange(); }
+      }).catch(function (e) { if (alive()) form.setError(e.message || '保存失败，请重试'); }).then(function () {
+        saving = false; state.writing = false; save.disabled = false;
+        if (remove) remove.disabled = false;
+        controls.forEach(function (old) { old.el.disabled = old.disabled; });
+      });
+    } });
+    var footer = [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })];
+    if (remove) footer.push(remove);
+    footer.push(save);
+    // 单元格进入：标题点明人员与季度，工具栏"新增"保持通用标题
+    var title = (recordId ? '编辑' : '新增') + '双争评比记录';
+    if (fixed && values.personnelName) {
+      title = (recordId ? '编辑' : '填写') + '评定：' + values.personnelName + ' ' + values.year + '年第' + values.quarter + '季度';
+    }
+    var m = openModal({ title: title, body: form.el,
+      onClose: function () { state.formOpen = false; },
+      beforeClose: function () { if ((saving || removing) && !saved) { form.setError('正在保存或删除，请稍候'); return false; } return true; },
+      footer: footer });
+  }
+  function download(path, title) {
+    if (!alive()) return;
+    var pm = showProgressModal(title);
+    pm.setStatus('正在生成文件…');
+    apiBlobWithProgress(endpoint + path, function (pct) { pm.setProgress(pct); }).then(function (r) {
+      pm.close();
+      if (alive()) downloadBlob(r.blob, r.filename);
+    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '下载失败，请重试', 'err'); });
+  }
+  function exportRecords() {
+    if (!alive() || state.loading) return;
+    var filters = state.filters;
+    // 无勾选与人员范围：导出当前年份＋筛选命中的全部评比记录（未评定不是记录）。
+    var query = doubleExcellenceQuery({ year: state.year, personnelName: filters.personnelName,
+      idCard: filters.idCard, departmentId: filters.departmentId }, true);
+    download('/export' + (query ? '?' + query : ''), '导出' + state.year + '年双争评比记录');
+  }
+  function setImportBusy(busy) {
+    state.importing = busy;
+    if (importInput) importInput.disabled = busy;
+    if (importItem) { importItem.disabled = busy; importItem.textContent = busy ? '正在导入…' : '导入 Excel'; }
+  }
+  function importFile() {
+    var file = importInput.files && importInput.files[0]; importInput.value = '';
+    if (!file || state.importing || state.writing || !alive()) return;
+    if (!/\.xlsx$/i.test(file.name)) { toast('请选择下载模板填写的 .xlsx 文件', 'err'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast('双争评比导入文件不能超过 10MiB，请拆分后重试', 'err'); return; }
+    setImportBusy(true);
+    var fd = new FormData(); fd.append('file', file);
+    var pm = showProgressModal('导入双争评比'); pm.setStatus('正在上传 ' + file.name + '…');
+    postFormWithProgress(endpoint + '/import-excel', fd, function (pct) {
+      pm.setProgress(pct * 0.5); pm.setStatus(pct >= 100 ? '正在处理数据…' : '正在上传… ' + pct + '%');
+    }).then(function (result) {
+      pm.close();
+      if (!alive()) return;
+      result = result || {};
+      var message = importResultSummary(result, false), errors = result.errors || [];
+      if (result.error || errors.length) openImportResultModal(message, errors, result.error || '');
+      else toast(message, result.failed ? 'info' : 'ok');
+      // 部分失败也可能有新增/更新，重新请求当前视图；失败文件仍可重选重试。
+      afterChange();
+    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '导入失败，请检查后重试', 'err'); })
+      .then(function () { setImportBusy(false); });
+  }
+  function filterField(key, label, options) {
+    var input = options ? makeDropdown(options, '全部') : h('input', { type: 'text', placeholder: '回车搜索' });
+    inputs[key] = input;
+    input.setAttribute('data-fkey', key);
+    input.value = state.filters[key] || '';
+    var control = options ? input.querySelector('.dd-btn') : input;
+    if (control) control.setAttribute('aria-label', label);
+    if (key === 'departmentId') input.classList.add('personnel-path-dropdown');
+    if (options) input.addEventListener('change', applyFilters);
+    else input.addEventListener('keydown', function (e) { if (e.key === 'Enter') applyFilters(); });
+    return h('div', { class: 'filter-field' }, h('label', { text: label }), input);
+  }
+  function render() {
+    // 只在挂载时构建主视图；普通筛选开关不会重建 DOM 或重置滚动。
+    $all('.filter-tab-btn', document).forEach(function (el) { el.remove(); });
+    $all('.scroll-btns', document).forEach(function (el) { el.remove(); });
+    root.innerHTML = ''; inputs = {};
+    toolbar = h('div', { class: 'toolbar' });
+    // 顶栏已显示"双争评比"模块名，工具栏不再重复标题，直接以年度切换开头
+    yearPrev = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '‹', 'aria-label': '上一年', title: '上一年', onclick: function () { setYear(state.year - 1); } });
+    yearNext = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '›', 'aria-label': '下一年', title: '下一年', onclick: function () { setYear(state.year + 1); } });
+    yearText = h('span', { class: 'de-year-text', 'aria-live': 'polite', text: state.year + ' 年' });
+    toolbar.appendChild(h('div', { class: 'de-year-nav', role: 'group', 'aria-label': '年份切换' }, yearPrev, yearText, yearNext));
+    toolbar.appendChild(h('div', { class: 'spacer' }));
+    importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none', 'aria-label': '选择双争评比 Excel 文件' });
+    importInput.addEventListener('change', importFile);
+    var ioWrap = h('div', { class: 'dd io-dd' });
+    var ioButton = h('button', { type: 'button', class: 'btn btn-ghost dd-btn io-btn', text: '导入导出 ▾', onclick: function (e) {
+      e.stopPropagation(); if (!alive()) return;
+      var opening = !ioWrap.classList.contains('open');
+      $all('.dd.open, .cal.open').forEach(function (el) { el.classList.remove('open'); });
+      ioWrap.classList.toggle('open', opening);
+    } });
+    importItem = h('button', { type: 'button', class: 'dd-item de-io-item', text: '导入 Excel', onclick: function () {
+      ioWrap.classList.remove('open');
+      if (!alive() || state.importing || state.writing || state.confirmingImport) return;
+      state.confirmingImport = true;
+      confirmBox('请使用六列模板填写。按身份证号码＋年份＋季度匹配：不存在则新增，已存在则更新评定和评比日期。人员必须已建档，评定仅限好、中、一般。确定继续导入吗？')
+        .then(function (yes) { state.confirmingImport = false; if (yes && alive() && !state.importing) importInput.click(); })
+        .catch(function () { state.confirmingImport = false; });
+    } });
+    var menu = h('div', { class: 'dd-list io-menu' }, importItem,
+      h('button', { type: 'button', class: 'dd-item de-io-item', text: '导出 Excel', title: '导出当前年份与筛选命中的全部评比记录（未评定不是记录）',
+        onclick: function () { ioWrap.classList.remove('open'); exportRecords(); } }));
+    menu.addEventListener('click', function (e) { e.stopPropagation(); });
+    ioWrap.appendChild(ioButton); ioWrap.appendChild(menu);
+    toolbar.appendChild(importInput); toolbar.appendChild(ioWrap);
+    toolbar.appendChild(h('button', { class: 'btn btn-ghost', text: '下载模板', onclick: function () { download('/template', '下载双争评比模板'); } }));
+    toolbar.appendChild(h('button', { class: 'btn btn-primary', text: '新增评比记录', onclick: function () { openForm(null, null); } }));
+    setImportBusy(state.importing);
+    count = h('span', { class: 'de-count' });
+    errorBox = h('div', { class: 'form-err de-error', role: 'alert' });
+    tableBox = h('div', { class: 'table-wrap' }); pagerBox = h('div');
+    main = h('div', { class: 'content-main' },
+      h('div', { class: 'panel de-toolbar' }, toolbar), errorBox,
+      h('div', { class: 'panel' }, h('div', { class: 'de-list-head' }, count), tableBox, pagerBox));
+    var filterInner = h('div', { class: 'filter-panel-inner' }, h('h4', { text: '筛选条件' }),
+      filterField('personnelName', '姓名'), filterField('idCard', '身份证号码'),
+      filterField('departmentId', '单位（含下级）', Ctx.deptFlat.map(function (dept) { return { v: String(dept.id), l: dept.path || dept.name }; })));
+    filterInner.appendChild(h('div', { class: 'filter-actions' },
+      h('button', { class: 'btn btn-primary', text: '查询', onclick: applyFilters }),
+      h('button', { class: 'btn btn-ghost', text: '重置', onclick: function () {
+        if (!alive()) return;
+        Object.keys(inputs).forEach(function (key) { inputs[key].value = ''; });
+        applyFilters();
+      } })));
+    filterPanel = h('div', { class: 'filter-panel' + (filterOpen ? ' open' : '') }, filterInner);
+    root.appendChild(h('div', { class: 'content-layout' }, main, filterPanel));
+    filterTab = h('button', { type: 'button', class: 'filter-tab-btn' + (filterOpen ? ' panel-open' : ''), text: filterOpen ? '收 起' : '筛 选',
+      'aria-label': '切换双争评比筛选面板', 'aria-expanded': String(filterOpen), onclick: toggleFilter });
+    document.body.appendChild(filterTab);
+  }
+  return { render: function (container) {
+    container.appendChild(root); render(); load();
+    observer = new MutationObserver(function () { if (!alive()) dispose(); });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }, destroy: dispose };
+}
+
+/* ================= 年度考评：年度全员评定表 ================= */
+var annualAppraisalCfg = { key: 'annual-appraisal', title: '年度考评', icon: 'fileText' };
+/* 评定色彩：优秀=绿/称职=蓝/一般称职=橙/不称职=红，与系统徽章配色一致；未映射的字典新选项用默认色 */
+var AA_RATING_CLS = { '优秀': 'is-good', '称职': 'is-mid', '一般称职': 'is-fair', '不称职': 'is-bad' };
+/* 年度考评评定选项：数据字典 annual_rating 启用项（管理员可在"数据字典"维护），字典缺失时回退默认四档 */
+function annualRatingOptions() {
+  var labels = dictLabels('annual_rating');
+  return labels.length ? labels : ['优秀', '称职', '一般称职', '不称职'];
+}
+
+function annualAppraisalFields() {
+  return [
+    { key: 'year', label: '年度', type: 'number', min: 1900, max: 9999, required: true },
+    { key: 'personnelName', label: '姓名', readonly: true, required: true },
+    { key: 'idCard', label: '身份证号码', required: true },
+    { key: 'rating', label: '评定', type: 'select', options: function () { return annualRatingOptions(); }, required: true },
+    { key: 'ratingDate', label: '考评日期', type: 'date', required: true },
+    { key: 'personnelId', type: 'hidden' }
+  ];
+}
+
+function annualAppraisalPayload(data) {
+  var year = Number(data.year), pid = Number(data.personnelId);
+  if (!isFinite(year) || year % 1 || year < 1900 || year > 9999) throw new Error('请填写有效年度（1900至9999）');
+  if (!isFinite(pid) || pid < 1 || pid % 1) throw new Error('请先选择现有人员或通过身份证号码完成反查');
+  var options = annualRatingOptions();
+  if (options.indexOf(data.rating) < 0) throw new Error('评定只能为' + options.join('、'));
+  var day = parseCalendarDay(data.ratingDate);
+  if (!day) throw new Error('请填写有效考评日期');
+  // 姓名、证号仅用于身份确认，提交的关联始终为现有人员 ID；不创建或伪造档案。
+  return { year: year, personnelId: pid, rating: data.rating, ratingDate: formatCalendarDay(day) };
+}
+
+function annualAppraisalQuery(filters) {
+  var keys = ['year', 'personnelName', 'idCard', 'departmentId', 'rating'];
+  return keys.filter(function (key) {
+    return filters[key] !== undefined && filters[key] !== null && String(filters[key]).trim() !== ''
+      && !(key === 'rating' && filters[key] === 'unrated');
+  }).map(function (key) { return key + '=' + encodeURIComponent(String(filters[key]).trim()); }).join('&');
+}
+
+function annualAppraisalView() {
+  // 主页面即年度全员评定表：全部权限内人员一行一人，评定单元格点击即可填写或修改。
+  var endpoint = '/api/annual-appraisal', now = new Date(), currentYear = now.getFullYear();
+  var root = h('div', { class: 'double-excellence' }); // 复用双争矩阵的全部样式与对齐
+  var sessionToken = TOKEN, sessionUser = USER && USER.userId;
+  var state = { year: currentYear, filters: {},
+    total: 0, rows: [], loading: false, generation: 0,
+    writing: false, importing: false, confirmingImport: false, formOpen: false, disposed: false };
+  var inputs = {}, filterTab, filterPanel, main, toolbar, tableBox, pagerBox, errorBox, count, importInput, importItem;
+  var yearPrev, yearNext, yearText;
+  var filterOpen = false, closeTimer = null, animations = [], observer = null;
+  function alive() { return !state.disposed && TOKEN === sessionToken && USER && USER.userId === sessionUser && document.body.contains(root); }
+  function cancelAnimations() {
+    if (closeTimer !== null) { clearTimeout(closeTimer); closeTimer = null; }
+    animations.forEach(function (cancel) { cancel(); }); animations = [];
+  }
+  function dispose() {
+    if (state.disposed) return;
+    state.disposed = true; state.generation++; cancelAnimations();
+    if (filterTab) filterTab.remove();
+    if (observer) observer.disconnect();
+  }
+  function animate(el, dx) { var cancel = slideFrom(el, dx); if (typeof cancel === 'function') animations.push(cancel); }
+  function toggleFilter() {
+    if (!alive()) { dispose(); return; }
+    cancelAnimations(); filterOpen = !filterOpen;
+    if (filterOpen) {
+      filterPanel.classList.add('open'); animate(filterPanel, 270);
+      main.classList.add('filter-padding'); animate(main, 270);
+    } else {
+      filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
+      filterPanel.style.transform = 'translateX(100%)';
+      main.classList.remove('filter-padding'); animate(main, -270);
+      closeTimer = setTimeout(function () {
+        closeTimer = null;
+        if (!alive()) { dispose(); return; }
+        if (filterOpen) return;
+        filterPanel.classList.remove('open'); filterPanel.style.transition = ''; filterPanel.style.transform = '';
+      }, 310);
+    }
+    filterTab.classList.toggle('panel-open', filterOpen); filterTab.textContent = filterOpen ? '收 起' : '筛 选';
+    filterTab.setAttribute('aria-expanded', String(filterOpen));
+  }
+  function setYear(year) {
+    if (!alive()) return;
+    year = Number(year);
+    if (!isFinite(year) || year % 1 || year < 1900 || year > 9999 || year === state.year) return;
+    state.year = year; load();
+  }
+  function readFilters() {
+    var filters = {};
+    ['personnelName', 'idCard', 'departmentId'].forEach(function (key) {
+      if (inputs[key]) filters[key] = String(inputs[key].rawValue === undefined ? inputs[key].value || '' : inputs[key].rawValue).trim();
+    });
+    return filters;
+  }
+  function applyFilters() {
+    if (!alive()) return;
+    state.filters = readFilters();
+    load();
+  }
+  function load() {
+    if (!alive()) return;
+    var generation = ++state.generation;
+    state.rows = []; state.total = 0; state.loading = true; errorBox.textContent = '';
+    renderData();
+    var query = annualAppraisalQuery({ year: state.year, personnelName: state.filters.personnelName,
+      idCard: state.filters.idCard, departmentId: state.filters.departmentId });
+    // 与其它模块一致：一次加载全部人员（loadAllRows 自动循环按 200/页取全），列表不做分页
+    loadAllRows(endpoint + '/stats?' + query).then(function (data) {
+      if (!alive() || generation !== state.generation) return;
+      state.rows = data && data.list || [];
+      state.total = data && data.total || state.rows.length;
+      state.loading = false;
+      renderData();
+    }).catch(function (e) {
+      if (!alive() || generation !== state.generation) return;
+      state.loading = false;
+      errorBox.textContent = e.message || '加载失败，请重试';
+      renderData(true);
+    });
+  }
+  function cell(row, text) { row.appendChild(h('td', {}, text == null ? '' : String(text))); }
+  // 姓名与身份证号码列：点击查看该人历年考评
+  function personCell(tr, row, value) {
+    tr.appendChild(h('td', { class: 'de-person-cell' },
+      h('button', { type: 'button', class: 'btn-link de-person-btn',
+        title: '查看' + row.personnelName + '历年年度考评',
+        'aria-label': '查看' + row.personnelName + '历年年度考评',
+        onclick: function () { openHistory(row); } },
+        value == null ? '' : String(value))));
+  }
+  function renderData(failed) {
+    tableBox.innerHTML = ''; pagerBox.innerHTML = '';
+    yearText.textContent = state.year + ' 年';
+    yearPrev.disabled = state.year <= 1900;
+    yearNext.disabled = state.year >= 9999;
+    count.textContent = state.loading ? '加载中…' : failed ? '加载失败' : '共 ' + state.total + ' 人';
+    var table = h('table', { class: 'grid de-grid', 'aria-label': '年度考评评定表' });
+    var head = h('tr'), body = h('tbody');
+    ['单位', '姓名', '身份证号码', '年度评定'].forEach(function (label) {
+      head.appendChild(h('th', { text: label }));
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    state.rows.forEach(function (row) {
+      var tr = h('tr');
+      cell(tr, String(row.departmentPath || '').replace(/\s*\/\s*/g, '')); personCell(tr, row, row.personnelName); personCell(tr, row, row.idCard);
+      tr.appendChild(appraisalCell(row));
+      body.appendChild(tr);
+    });
+    if (!state.rows.length) body.appendChild(h('tr', {}, h('td', {
+      colspan: 4, class: 'empty-row', text: state.loading ? '加载中…' : failed ? '加载失败，请重试' : '暂无人员'
+    })));
+    tableBox.appendChild(table);
+    // 不分页：全部人员一次展示，滚动即可
+  }
+  function appraisalCell(row) {
+    var entry = row.entry;
+    var ratingCls = entry ? (AA_RATING_CLS[entry.rating] || '') : 'is-unrated';
+    return h('td', { class: 'de-cell' },
+      h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
+        'aria-label': row.personnelName + ' ' + state.year + '年度考评：' + (entry ? entry.rating : '未评定'),
+        title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写' + state.year + '年度考评',
+        onclick: function () { openCellForm(row); } },
+        // 评定靠左、考评日期（仅月/日）紧随其后；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
+        h('span', { class: 'de-rating-line' },
+          h('b', { text: entry ? entry.rating : '未评定' }),
+          entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null)));
+  }
+  function openCellForm(row) {
+    if (!alive() || state.writing || state.importing || state.formOpen) return;
+    var entry = row.entry;
+    var values = { year: state.year,
+      personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
+      ratingDate: entry && entry.ratingDate ? entry.ratingDate : formatCalendarDay(now) };
+    if (entry) values.rating = entry.rating;
+    openForm(values, { recordId: entry ? entry.id : null, fixed: true });
+  }
+  function afterChange() {
+    if (alive()) load();
+  }
+  // 历年考评：按人员ID取全部年度记录（服务端 personnelIds 走权限校验），按年度倒序列表展示
+  function openHistory(row) {
+    if (!alive()) return;
+    var box = h('div', { class: 'de-history' },
+      h('div', { class: 'de-history-empty', text: '正在加载 ' + row.personnelName + ' 的历年考评…' }));
+    openModal({ title: row.personnelName + ' · 历年年度考评', body: box, wide: true });
+    // loadAllRows 自动按 200/页取全:历年考评记录超过 200 条时不再截断
+    loadAllRows(endpoint + '?personnelIds=' + encodeURIComponent(row.personnelId)).then(function (data) {
+      if (!alive() || !document.body.contains(box)) return;
+      renderHistory(box, row, (data && data.list) || []);
+    }).catch(function (e) {
+      if (!alive() || !document.body.contains(box)) return;
+      box.innerHTML = '';
+      box.appendChild(h('div', { class: 'de-history-empty', text: e.message || '加载失败，请关闭后重试' }));
+    });
+  }
+  function renderHistory(box, row, list) {
+    box.innerHTML = '';
+    box.appendChild(h('div', { class: 'de-history-head' },
+      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
+      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条考评记录' })));
+    if (!list.length) {
+      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的考评记录' }));
+      return;
+    }
+    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年年度考评表' });
+    var head = h('tr');
+    ['年度', '评定', '考评日期'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
+    var body = h('tbody');
+    list.forEach(function (r) {
+      var cls = AA_RATING_CLS[r.rating] || '';
+      body.appendChild(h('tr', {},
+        h('td', { class: 'de-h-year', text: r.year + ' 年' }),
+        h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
+          h('span', { class: 'de-rating-line' }, h('b', { text: r.rating || '—' }))),
+        h('td', { class: 'de-h-cell' }, r.ratingDate || '—')));
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    box.appendChild(table);
+    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
+  }
+  function openForm(values, options) {
+    if (!alive() || state.writing || state.importing || state.formOpen) return;
+    state.formOpen = true;
+    options = options || {};
+    var fixed = !!options.fixed, recordId = options.recordId || null;
+    // 新增默认跟随正在查看的年度（而非系统当前年），避免查看历史年度时误录入今年；年度仍可手动调整
+    if (!values) values = { year: state.year, ratingDate: formatCalendarDay(now) };
+    var form = buildForm(annualAppraisalFields(), values);
+    if (fixed) {
+      // 单元格进入：人员与年度由所在行列锁定，只允许改评定与考评日期。
+      ['year', 'personnelName', 'idCard'].forEach(function (key) {
+        var input = form.inputs[key];
+        if (!input) return;
+        if (input.classList && input.classList.contains('dd')) input.disabled = true;
+        else input.readOnly = true;
+        input.classList.add('ro');
+      });
+    } else {
+      setupPersonLookup(form, { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' });
+    }
+    var saving = false, saved = false, removing = false;
+    var remove = recordId ? h('button', { class: 'btn btn-danger', text: '删除', onclick: function () {
+      if (saving || removing) return;
+      removing = true;
+      confirmBox('确定删除' + values.year + '年度的这条考评记录吗？删除后不可恢复。', true).then(function (yes) {
+        if (!yes || !alive()) return false;
+        return DEL(endpoint + '/' + encodeURIComponent(recordId)).then(function () { return true; });
+      }).then(function (changed) {
+        removing = false;
+        if (changed) { saved = true; m.close(true); if (alive()) { toast('已删除'); afterChange(); } }
+      }).catch(function (e) { removing = false; if (alive()) toast(e.message || '删除失败，请重试', 'err'); });
+    } }) : null;
+    var save = h('button', { class: 'btn btn-primary', text: '保存', onclick: function () {
+      if (saving || removing) return; // 删除进行中同样禁止保存,避免并发写同一条记录
+      if (!alive()) { form.setError('页面或登录状态已变更，请关闭后重新进入'); return; }
+      var data = form.get(), payload;
+      if (!data || form.validatePerson && !form.validatePerson()) return;
+      try { payload = annualAppraisalPayload(data); } catch (e) { form.setError(e.message); return; }
+      saving = true; state.writing = true; save.disabled = true;
+      if (remove) remove.disabled = true;
+      var controls = $all('input, button, textarea, select', form.el).map(function (el) {
+        var old = { el: el, disabled: el.disabled }; el.disabled = true; return old;
+      });
+      var request = recordId ? PUT(endpoint + '/' + encodeURIComponent(recordId), payload) : POST(endpoint, payload);
+      request.then(function () {
+        saved = true; m.close(true);
+        if (alive()) { toast('保存成功'); afterChange(); }
+      }).catch(function (e) { if (alive()) form.setError(e.message || '保存失败，请重试'); }).then(function () {
+        saving = false; state.writing = false; save.disabled = false;
+        if (remove) remove.disabled = false;
+        controls.forEach(function (old) { old.el.disabled = old.disabled; });
+      });
+    } });
+    var footer = [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })];
+    if (remove) footer.push(remove);
+    footer.push(save);
+    // 单元格进入：标题点明人员与年度，工具栏"新增"保持通用标题
+    var title = (recordId ? '编辑' : '新增') + '年度考评记录';
+    if (fixed && values.personnelName) {
+      title = (recordId ? '编辑' : '填写') + '考评：' + values.personnelName + ' ' + values.year + '年度';
+    }
+    var m = openModal({ title: title, body: form.el,
+      onClose: function () { state.formOpen = false; },
+      beforeClose: function () { if ((saving || removing) && !saved) { form.setError('正在保存或删除，请稍候'); return false; } return true; },
+      footer: footer });
+  }
+  function download(path, title) {
+    if (!alive()) return;
+    var pm = showProgressModal(title);
+    pm.setStatus('正在生成文件…');
+    apiBlobWithProgress(endpoint + path, function (pct) { pm.setProgress(pct); }).then(function (r) {
+      pm.close();
+      if (alive()) downloadBlob(r.blob, r.filename);
+    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '下载失败，请重试', 'err'); });
+  }
+  function exportRecords() {
+    if (!alive() || state.loading) return;
+    var filters = state.filters;
+    // 无勾选与人员范围：导出当前年度＋筛选命中的全部考评记录（未评定不是记录）。
+    var query = annualAppraisalQuery({ year: state.year, personnelName: filters.personnelName,
+      idCard: filters.idCard, departmentId: filters.departmentId });
+    download('/export' + (query ? '?' + query : ''), '导出' + state.year + '年年度考评记录');
+  }
+  function setImportBusy(busy) {
+    state.importing = busy;
+    if (importInput) importInput.disabled = busy;
+    if (importItem) { importItem.disabled = busy; importItem.textContent = busy ? '正在导入…' : '导入 Excel'; }
+  }
+  function importFile() {
+    var file = importInput.files && importInput.files[0]; importInput.value = '';
+    if (!file || state.importing || state.writing || !alive()) return;
+    if (!/\.xlsx$/i.test(file.name)) { toast('请选择下载模板填写的 .xlsx 文件', 'err'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast('年度考评导入文件不能超过 10MiB，请拆分后重试', 'err'); return; }
+    setImportBusy(true);
+    var fd = new FormData(); fd.append('file', file);
+    var pm = showProgressModal('导入年度考评'); pm.setStatus('正在上传 ' + file.name + '…');
+    postFormWithProgress(endpoint + '/import-excel', fd, function (pct) {
+      pm.setProgress(pct * 0.5); pm.setStatus(pct >= 100 ? '正在处理数据…' : '正在上传… ' + pct + '%');
+    }).then(function (result) {
+      pm.close();
+      if (!alive()) return;
+      result = result || {};
+      var message = importResultSummary(result, false), errors = result.errors || [];
+      if (result.error || errors.length) openImportResultModal(message, errors, result.error || '');
+      else toast(message, result.failed ? 'info' : 'ok');
+      // 部分失败也可能有新增/更新，重新请求当前视图；失败文件仍可重选重试。
+      afterChange();
+    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '导入失败，请检查后重试', 'err'); })
+      .then(function () { setImportBusy(false); });
+  }
+  function filterField(key, label, options) {
+    var input = options ? makeDropdown(options, '全部') : h('input', { type: 'text', placeholder: '回车搜索' });
+    inputs[key] = input;
+    input.setAttribute('data-fkey', key);
+    input.value = state.filters[key] || '';
+    var control = options ? input.querySelector('.dd-btn') : input;
+    if (control) control.setAttribute('aria-label', label);
+    if (key === 'departmentId') input.classList.add('personnel-path-dropdown');
+    if (options) input.addEventListener('change', applyFilters);
+    else input.addEventListener('keydown', function (e) { if (e.key === 'Enter') applyFilters(); });
+    return h('div', { class: 'filter-field' }, h('label', { text: label }), input);
+  }
+  function render() {
+    // 只在挂载时构建主视图；普通筛选开关不会重建 DOM 或重置滚动。
+    $all('.filter-tab-btn', document).forEach(function (el) { el.remove(); });
+    $all('.scroll-btns', document).forEach(function (el) { el.remove(); });
+    root.innerHTML = ''; inputs = {};
+    toolbar = h('div', { class: 'toolbar' });
+    // 顶栏已显示"年度考评"模块名，工具栏不再重复标题，直接以年度切换开头
+    yearPrev = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '‹', 'aria-label': '上一年度', title: '上一年度', onclick: function () { setYear(state.year - 1); } });
+    yearNext = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '›', 'aria-label': '下一年度', title: '下一年度', onclick: function () { setYear(state.year + 1); } });
+    yearText = h('span', { class: 'de-year-text', 'aria-live': 'polite', text: state.year + ' 年' });
+    toolbar.appendChild(h('div', { class: 'de-year-nav', role: 'group', 'aria-label': '年度切换' }, yearPrev, yearText, yearNext));
+    toolbar.appendChild(h('div', { class: 'spacer' }));
+    importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none', 'aria-label': '选择年度考评 Excel 文件' });
+    importInput.addEventListener('change', importFile);
+    var ioWrap = h('div', { class: 'dd io-dd' });
+    var ioButton = h('button', { type: 'button', class: 'btn btn-ghost dd-btn io-btn', text: '导入导出 ▾', onclick: function (e) {
+      e.stopPropagation(); if (!alive()) return;
+      var opening = !ioWrap.classList.contains('open');
+      $all('.dd.open, .cal.open').forEach(function (el) { el.classList.remove('open'); });
+      ioWrap.classList.toggle('open', opening);
+    } });
+    importItem = h('button', { type: 'button', class: 'dd-item de-io-item', text: '导入 Excel', onclick: function () {
+      ioWrap.classList.remove('open');
+      if (!alive() || state.importing || state.writing || state.confirmingImport) return;
+      state.confirmingImport = true;
+      confirmBox('请使用五列模板填写。按身份证号码＋年度匹配：不存在则新增，已存在则更新评定和考评日期。人员必须已建档，评定选项以数据字典为准。确定继续导入吗？')
+        .then(function (yes) { state.confirmingImport = false; if (yes && alive() && !state.importing) importInput.click(); })
+        .catch(function () { state.confirmingImport = false; });
+    } });
+    var menu = h('div', { class: 'dd-list io-menu' }, importItem,
+      h('button', { type: 'button', class: 'dd-item de-io-item', text: '导出 Excel', title: '导出当前年度与筛选命中的全部考评记录（未评定不是记录）',
+        onclick: function () { ioWrap.classList.remove('open'); exportRecords(); } }));
+    menu.addEventListener('click', function (e) { e.stopPropagation(); });
+    ioWrap.appendChild(ioButton); ioWrap.appendChild(menu);
+    toolbar.appendChild(importInput); toolbar.appendChild(ioWrap);
+    toolbar.appendChild(h('button', { class: 'btn btn-ghost', text: '下载模板', onclick: function () { download('/template', '下载年度考评模板'); } }));
+    toolbar.appendChild(h('button', { class: 'btn btn-primary', text: '新增考评记录', onclick: function () { openForm(null, null); } }));
+    setImportBusy(state.importing);
+    count = h('span', { class: 'de-count' });
+    errorBox = h('div', { class: 'form-err de-error', role: 'alert' });
+    tableBox = h('div', { class: 'table-wrap' }); pagerBox = h('div');
+    main = h('div', { class: 'content-main' },
+      h('div', { class: 'panel de-toolbar' }, toolbar), errorBox,
+      h('div', { class: 'panel' }, h('div', { class: 'de-list-head' }, count), tableBox, pagerBox));
+    var filterInner = h('div', { class: 'filter-panel-inner' }, h('h4', { text: '筛选条件' }),
+      filterField('personnelName', '姓名'), filterField('idCard', '身份证号码'),
+      filterField('departmentId', '单位（含下级）', Ctx.deptFlat.map(function (dept) { return { v: String(dept.id), l: dept.path || dept.name }; })));
+    filterInner.appendChild(h('div', { class: 'filter-actions' },
+      h('button', { class: 'btn btn-primary', text: '查询', onclick: applyFilters }),
+      h('button', { class: 'btn btn-ghost', text: '重置', onclick: function () {
+        if (!alive()) return;
+        Object.keys(inputs).forEach(function (key) { inputs[key].value = ''; });
+        applyFilters();
+      } })));
+    filterPanel = h('div', { class: 'filter-panel' + (filterOpen ? ' open' : '') }, filterInner);
+    root.appendChild(h('div', { class: 'content-layout' }, main, filterPanel));
+    filterTab = h('button', { type: 'button', class: 'filter-tab-btn' + (filterOpen ? ' panel-open' : ''), text: filterOpen ? '收 起' : '筛 选',
+      'aria-label': '切换年度考评筛选面板', 'aria-expanded': String(filterOpen), onclick: toggleFilter });
+    document.body.appendChild(filterTab);
+  }
+  return { render: function (container) {
+    container.appendChild(root); render(); load();
+    observer = new MutationObserver(function () { if (!alive()) dispose(); });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }, destroy: dispose };
+}
+
+function pendingModuleView(cfg) {
+  return {
+    render: function (container) {
+      container.appendChild(h('div', { class: 'panel' },
+        h('div', { class: 'empty-row' },
+          h('h3', { text: cfg.title }),
+          h('p', { text: '菜单已添加，具体功能待完善。' }))));
+    }
+  };
+}
+
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg];
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
+var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
 var NAV_GROUPS = [
@@ -7558,13 +10113,13 @@ var NAV_GROUPS = [
     { key: 'equipment-small', label: '小型装备' }
   ] }
 ];
-var NAV_VIEWS = MODULES.concat([equipmentGunCfg, equipmentLargeCfg, equipmentSmallCfg]);
+var NAV_VIEWS = MODULES.concat([equipmentGunCfg, equipmentLargeCfg, equipmentSmallCfg], PENDING_MODULES);
 /** 页面 → 所属分组key(用于父级高亮) */
 var GROUP_OF = {};
 NAV_GROUPS.forEach(function (g) { g.children.forEach(function (c) { GROUP_OF[c.key] = g.key; }); });
 
 function renderShell() {
-  if (!TOKEN) {
+  if (!TOKEN || !USER) {
     return; // 已被踢回登录页(令牌失效/退出),不再渲染主界面
   }
   var app = $('#app');
@@ -7574,15 +10129,22 @@ function renderShell() {
   var titleEl = h('div', { class: 'topbar-title' });
   var menuItems = {};
   var currentView = 'stats';
+  var shellUserId = USER.userId, shellToken = TOKEN;
+  var lastViewKey = preferenceKey('lastView'), sidebarKey = preferenceKey('sidebarCollapsed');
+  function currentShell() { return TOKEN === shellToken && USER && USER.userId === shellUserId; }
 
   function navigate(view) {
+    if (!currentShell() || !TOKEN || !document.body.contains(content)) return;
+    if (!canAccessView(view)) { toast('当前账号无权访问此全局管理页面', 'err'); view = 'stats'; }
     currentView = view;
     refreshDicts(); // 字典可能在别处被修改,切页时刷新缓存保证筛选/表单下拉最新
     // 记住当前页面:URL 锚点(刷新/分享/前进后退)+ localStorage 兜底
-    if (('#' + view) !== location.hash) {
-      try { history.replaceState(null, '', '#' + view); } catch (e) { location.hash = view; }
+    var routeHash = '#' + view;
+    if (view === 'personnel' && String(location.hash || '').indexOf('#personnel?') === 0) routeHash = location.hash;
+    if (routeHash !== location.hash) {
+      try { history.replaceState(null, '', routeHash); } catch (e) { location.hash = routeHash; }
     }
-    localStorage.setItem('lastView', view);
+    localStorage.setItem(lastViewKey, view);
     Object.keys(menuItems).forEach(function (k) { menuItems[k].classList.remove('active'); });
     Object.keys(groupParents).forEach(function (k) { groupParents[k].classList.remove('active'); });
     if (menuItems[view]) menuItems[view].classList.add('active');
@@ -7595,19 +10157,19 @@ function renderShell() {
 
     content.innerHTML = '';
     var comp;
-    if (view === 'department') { titleEl.textContent = '部门管理'; comp = departmentView(); }
+    if (view === 'accounts' && typeof accountsView === 'function') { titleEl.textContent = '账号管理'; comp = accountsView(); }
+    else if (view === 'department') { titleEl.textContent = '单位管理'; comp = departmentView(); }
     else if (view === 'dict') { titleEl.textContent = '数据字典'; comp = dictView(); }
     else if (view === 'settings') { titleEl.textContent = '系统设置'; comp = settingsView(); }
-    else if (view === 'backup') { view = 'settings'; titleEl.textContent = '系统设置'; comp = settingsView(); }
+    else if (view === 'backup') { titleEl.textContent = '系统设置'; comp = settingsView('backup'); }
     else if (view === 'stats') { titleEl.textContent = '仪表盘'; comp = dashboardView(); }
-    else if (view === 'backup') { titleEl.textContent = '备份恢复'; comp = backupView(); }
     else if (view === 'log') { titleEl.textContent = '操作日志'; comp = logView(); }
     else {
       var cfg = null;
       NAV_VIEWS.forEach(function (m) { if (m.key === view) cfg = m; });
       if (!cfg) { cfg = personnelCfg; view = 'personnel'; }
       titleEl.textContent = cfg.title;
-      comp = crudView(cfg);
+      comp = cfg.pending ? pendingModuleView(cfg) : cfg.key === 'double-excellence' ? doubleExcellenceView() : cfg.key === 'annual-appraisal' ? annualAppraisalView() : crudView(cfg);
     }
     comp.render(content);
   }
@@ -7615,6 +10177,7 @@ function renderShell() {
   var menu = h('div', { class: 'menu' });
   var groupParents = {};
   function addMenu(key, icon, label) {
+    if (!canAccessView(key)) return;
     var item = h('div', {
       class: 'menu-item', 'data-tip': label,
       onclick: function () { navigate(key); }
@@ -7657,26 +10220,48 @@ function renderShell() {
   addMenu('stats', 'chart', '仪表盘');   // 仪表盘置顶
   addMenu('personnel', personnelCfg.icon, '人员管理');
   NAV_GROUPS.forEach(addGroupMenu);
-  [materialCfg, leaveCfg, phoneCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
-  addMenu('department', 'building', '部门管理');
+  [materialCfg, leaveCfg, phoneCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
+  PENDING_MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
+  addMenu('department', 'building', '单位管理');
+  addMenu('accounts', 'users', '账号管理');
   addMenu('dict', 'book', '数据字典');
   addMenu('settings', 'shield', '系统设置');
   addMenu('log', 'fileText', '操作日志');
 
   var who = (USER && (USER.displayName || USER.username)) || '管理员';
+  var logoutFn = function () {
+    POST('/api/auth/logout').catch(function (err) { /* 忽略 */ }).then(function () {
+      forceLogin('已退出登录');
+    });
+  };
   var topbar = h('div', { class: 'topbar' },
     titleEl,
     h('div', { class: 'topbar-user' },
       h('span', { class: 'who', text: who }),
-      h('button', { class: 'btn btn-ghost btn-sm', text: '修改密码', onclick: openChangePassword }),
-      h('button', {
-        class: 'btn btn-ghost btn-sm', text: '退出',
-        onclick: function () {
-          POST('/api/auth/logout').catch(function (err) { /* 忽略 */ }).then(function () {
-            forceLogin('已退出登录');
-          });
-        }
-      })));
+      h('div', { class: 'topbar-avatar-wrap' },
+        h('button', {
+          class: 'topbar-avatar', type: 'button', 'aria-label': '账号菜单', 'aria-haspopup': 'true', 'aria-expanded': 'false',
+          title: '账号菜单', text: who.slice(0, 1).toUpperCase(),
+          onclick: function (event) {
+            event.stopPropagation();
+            var open = avatarMenu.classList.toggle('open');
+            this.setAttribute('aria-expanded', open ? 'true' : 'false');
+          }
+        }),
+        h('div', { class: 'topbar-menu', role: 'menu' },
+          h('button', { type: 'button', class: 'topbar-menu-item', role: 'menuitem', text: '修改账号', onclick: function () { closeMenu(); openChangeUsername(); } }),
+          h('button', { type: 'button', class: 'topbar-menu-item', role: 'menuitem', text: '修改密码', onclick: function () { closeMenu(); openChangePassword(); } }),
+          h('button', { type: 'button', class: 'topbar-menu-item danger', role: 'menuitem', text: '退出登录', onclick: function () { closeMenu(); logoutFn(); } })))));
+
+  // 注意:不能叫 menu,renderShell 上文已有侧边栏的 var menu;这里改名避免覆盖
+  var avatarMenu = topbar.querySelector('.topbar-menu');
+  function closeMenu() {
+    avatarMenu.classList.remove('open');
+    var trigger = topbar.querySelector('.topbar-avatar');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  }
+  document.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeMenu(); });
 
   var toggleIcon = h('span', { class: 'ic' });
   var toggleTxt = h('span', { class: 'txt', text: '收起菜单' });
@@ -7690,22 +10275,29 @@ function renderShell() {
     }
   }, toggleIcon, toggleTxt);
 
-  var sideEl = h('div', { class: 'sidebar' },
-    h('div', { class: 'sidebar-logo' },
+  var logoEl = h('div', { class: 'sidebar-logo' },
       SITE.logo
         ? h('img', { class: 'logo-img', src: SITE.logo, alt: 'LOGO' })
         : h('span', { class: 'star', text: '★' }),
       h('div', {},
         h('div', { class: 't1', text: SITE.name || '数智军营' }),
-        h('div', { class: 't2', text: SITE.subtitle || '人员管理系统' }))),
+        h('div', { class: 't2', text: SITE.subtitle || '人员管理系统' })));
+  // 彩蛋:连点品牌区5次(2.2秒内)弹出致敬彩蛋(typeof 保护,独立测试环境未注入彩蛋函数时不影响壳层渲染)
+  if (typeof attachEasterEgg === 'function') {
+    attachEasterEgg(logoEl, function () { if (typeof openEasterEgg === 'function') { openEasterEgg(); } });
+  }
+  var sideEl = h('div', { class: 'sidebar' },
+    logoEl,
     menu,
-    h('div', { class: 'sidebar-toggle' }, toggleBtn));
+    h('div', { class: 'sidebar-toggle' },
+      toggleBtn));
 
   var mainEl = h('div', { class: 'main' }, topbar, content);
   var SIDEBAR_W = 208, SIDEBAR_MINI = 64;
 
   // 窗口太窄自动收起菜单(与手动收起同一动画),变宽自动展开;900/960滞回避免临界抖动
   window.addEventListener('resize', function () {
+    if (!currentShell() || !document.body.contains(sideEl)) return;
     var w = window.innerWidth;
     var collapsed = sideEl.classList.contains('collapsed');
     if (w < 900 && !collapsed && !manualExpand) { setCollapsed(true); }
@@ -7716,10 +10308,11 @@ function renderShell() {
   });
 
   function setCollapsed(collapsed) {
+    if (!currentShell()) return;
     var was = sideEl.classList.contains('collapsed');
     sideEl.classList.toggle('collapsed', collapsed);
     document.body.classList.toggle('side-mini', collapsed);
-    localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+    localStorage.setItem(sidebarKey, collapsed ? '1' : '0');
     toggleIcon.innerHTML = iconSvg(collapsed ? 'chevronR' : 'chevronL');
     toggleTxt.textContent = collapsed ? '展开菜单' : '收起菜单';
     toggleBtn.setAttribute('data-tip', collapsed ? '展开菜单' : '收起菜单');
@@ -7728,21 +10321,23 @@ function renderShell() {
       slideFrom(mainEl, collapsed ? (SIDEBAR_W - SIDEBAR_MINI) : -(SIDEBAR_W - SIDEBAR_MINI));
     }
   }
-  setCollapsed(localStorage.getItem('sidebarCollapsed') === '1');
+  setCollapsed(localStorage.getItem(sidebarKey) === '1');
 
   app.appendChild(h('div', { class: 'layout' }, sideEl, mainEl));
 
   // 浏览器前进/后退键切换模块
   window.addEventListener('hashchange', function () {
-    var v = (location.hash || '').replace('#', '');
-    if (menuItems[v] && v !== currentView) navigate(v);
+    var v = (location.hash || '').replace('#', '').split('?')[0];
+    if ((!canAccessView(v) || menuItems[v] || v === 'backup') && (v !== currentView || v === 'personnel')) navigate(v);
   });
 
   // 恢复上次所在页面:优先 URL 锚点,其次 localStorage
-  var initialView = (location.hash || '').replace('#', '');
+  var initialView = (location.hash || '').replace('#', '').split('?')[0];
   var validViews = Object.keys(menuItems);
+  if (canAccessView('backup')) validViews.push('backup'); // 旧书签路由,不再有独立菜单项。
+  if (!canAccessView(initialView)) initialView = 'stats';
   if (validViews.indexOf(initialView) < 0) {
-    initialView = localStorage.getItem('lastView') || 'stats';
+    initialView = localStorage.getItem(lastViewKey) || 'stats';
   }
   if (validViews.indexOf(initialView) < 0) {
     initialView = 'personnel';
@@ -7753,18 +10348,17 @@ function renderShell() {
 /* ================= 启动 ================= */
 
 (function boot() {
+  try { localStorage.removeItem('savedPass'); sessionStorage.removeItem('savedPass'); } catch (e) { }
   // 站点外观(标题/LOGO/主题色)免登录可用,登录页也要显示
   var siteReady = loadSiteSettings();
   if (!TOKEN) { siteReady.then(function () { renderLogin(); }); return; }
   Promise.all([siteReady]).then(function () {
-  refreshAll().then(function () {
-    if (TOKEN) {
-      renderShell();             // 缓存刷新期间令牌失效则不进主界面(已在登录页)
-    }
+    return refreshSessionProfile();
+  }).then(function () {
+    return refreshAll().catch(function (e) { if (TOKEN) toast(e.message, 'err'); });
+  }).then(function () {
+    if (TOKEN && USER) renderShell();
   }).catch(function (e) {
-    if (!TOKEN) return;          // 401 已跳转登录
-    toast(e.message, 'err');
-    renderShell();
-  });
+    if (TOKEN) forceLogin('无法验证登录状态:' + e.message);
   });
 })();
