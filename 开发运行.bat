@@ -13,6 +13,11 @@ cd /d "%~dp0"
 set "JAVA_HOME=%~dp0.tools\zulu8.84.0.15-ca-jdk8.0.442-win_x64"
 
 echo [1/2] Building latest code (about 20s)...
+rem 旧实例运行时锁定jar,会导致repackage重命名失败:先停止监听8080的进程
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":8080" ^| findstr "LISTENING"') do (
+  echo        Stopping old instance ^(PID %%p^)...
+  taskkill /PID %%p /F >nul 2>&1
+)
 call "%~dp0.tools\apache-maven-3.9.9\bin\mvn.cmd" -q -pl personnel-server package -DskipTests
 if errorlevel 1 (
   echo.
