@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 装备数据访问
@@ -53,38 +54,64 @@ public class EquipmentDao {
             "SELECT e.*, IFNULL(p.name,'') AS keeper_name FROM equipment e " +
             "LEFT JOIN personnel p ON e.keeper_id = p.id ";
 
-    private void buildFilter(StringBuilder sql, List<Object> args, String keyword, String status) {
-        sql.append(" WHERE ").append(DataScope.personSql("e.keeper_id")).append(" ");
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            sql.append(" AND (e.name LIKE ? OR e.code LIKE ? OR e.ident_code LIKE ?) ");
-            String kw = "%" + keyword.trim() + "%";
-            args.add(kw);
-            args.add(kw);
-            args.add(kw);
+    /** 列表查询(驼峰别名列,与前端字段一一对应);SQL 统一住址在 dao,controller 只做参数绑定 */
+    public List<Map<String, Object>> query(String name, String code, String identCode,
+            String category, String status, String keeperName, String location,
+            String buyDateStart, String buyDateEnd, int page, int size) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT e.id, e.name, e.code, e.ident_code AS identCode, e.category, e.brand, e.model, e.status, e.keeper_id AS keeperId, " +
+            "p.name AS keeperName, p.id_card AS keeperIdCard, e.location, e.buy_date AS buyDate, " +
+            "e.equip_date AS equipDate, e.remark, e.photo, e.created_at AS createdAt, e.updated_at AS updatedAt " +
+            "FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
+        List<Object> args = new ArrayList<Object>();
+        appendFilters(sql, args, name, code, identCode, category, status, keeperName, location, buyDateStart, buyDateEnd);
+        sql.append(" ORDER BY e.updated_at DESC, e.id DESC LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add((long) (page - 1) * size);
+        return jdbc.queryForList(sql.toString(), args.toArray());
+    }
+
+    public long count(String name, String code, String identCode, String category, String status,
+            String keeperName, String location, String buyDateStart, String buyDateEnd) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT COUNT(*) FROM equipment e LEFT JOIN personnel p ON e.keeper_id = p.id WHERE 1=1");
+        List<Object> args = new ArrayList<Object>();
+        appendFilters(sql, args, name, code, identCode, category, status, keeperName, location, buyDateStart, buyDateEnd);
+        Long total = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
+    private void appendFilters(StringBuilder sql, List<Object> args, String name, String code,
+            String identCode, String category, String status, String keeperName, String location,
+            String buyDateStart, String buyDateEnd) {
+        sql.append(" AND ").append(DataScope.personSql("e.keeper_id"));
+        if (name != null && !name.trim().isEmpty()) {
+            sql.append(" AND e.name LIKE ?"); args.add("%" + name.trim() + "%");
+        }
+        if (code != null && !code.trim().isEmpty()) {
+            sql.append(" AND e.code LIKE ?"); args.add("%" + code.trim() + "%");
+        }
+        if (identCode != null && !identCode.trim().isEmpty()) {
+            sql.append(" AND e.ident_code LIKE ?"); args.add("%" + identCode.trim() + "%");
+        }
+        if (category != null && !category.trim().isEmpty()) {
+            sql.append(" AND e.category = ?"); args.add(category.trim());
         }
         if (status != null && !status.trim().isEmpty()) {
-            sql.append(" AND e.status = ? ");
-            args.add(status.trim());
+            sql.append(" AND e.status = ?"); args.add(status.trim());
         }
-    }
-
-    public List<Equipment> query(String keyword, String status, int page, int size) {
-        StringBuilder sql = new StringBuilder(BASE);
-        List<Object> args = new ArrayList<Object>();
-        buildFilter(sql, args, keyword, status);
-        sql.append(" ORDER BY e.updated_at DESC, e.id DESC LIMIT ? OFFSET ? ");
-        args.add(size);
-        args.add((page - 1) * size);
-        return jdbc.query(sql.toString(), MAPPER, args.toArray());
-    }
-
-    public long count(String keyword, String status) {
-        StringBuilder sql = new StringBuilder(
-                "SELECT COUNT(*) FROM equipment e LEFT JOIN personnel p ON e.keeper_id=p.id ");
-        List<Object> args = new ArrayList<Object>();
-        buildFilter(sql, args, keyword, status);
-        Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
-        return n == null ? 0 : n;
+        if (keeperName != null && !keeperName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + keeperName.trim() + "%");
+        }
+        if (location != null && !location.trim().isEmpty()) {
+            sql.append(" AND e.location LIKE ?"); args.add("%" + location.trim() + "%");
+        }
+        if (buyDateStart != null && !buyDateStart.trim().isEmpty()) {
+            sql.append(" AND e.buy_date >= ?"); args.add(buyDateStart.trim());
+        }
+        if (buyDateEnd != null && !buyDateEnd.trim().isEmpty()) {
+            sql.append(" AND e.buy_date <= ?"); args.add(buyDateEnd.trim());
+        }
     }
 
     public Equipment findById(Long id) {

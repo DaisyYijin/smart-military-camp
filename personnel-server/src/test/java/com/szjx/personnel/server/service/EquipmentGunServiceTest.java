@@ -25,7 +25,7 @@ class EquipmentGunServiceTest {
         ds.setDriverClassName("org.sqlite.JDBC");
         ds.setUrl("jdbc:sqlite:" + temp.resolve("equipment.sqlite").toAbsolutePath());
         JdbcTemplate jdbc = new JdbcTemplate(ds);
-        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT '')");
+        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT '', id_card TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE equipment(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT '', code TEXT DEFAULT '', " +
                 "ident_code TEXT DEFAULT '', category TEXT DEFAULT '', brand TEXT DEFAULT '', model TEXT DEFAULT '', status TEXT DEFAULT '', keeper_id INTEGER DEFAULT 0, " +
                 "location TEXT DEFAULT '', buy_date TEXT DEFAULT '', equip_date TEXT DEFAULT '', remark TEXT DEFAULT '', photo TEXT DEFAULT '', " +
@@ -63,7 +63,7 @@ class EquipmentGunServiceTest {
 
         assertEquals("测试品牌甲", saved.getBrand());
         assertEquals("测试品牌甲", service.get(saved.getId()).getBrand());
-        assertEquals("测试品牌甲", service.query(null, null, 1, 20).get(0).getBrand());
+        assertEquals("测试品牌甲", service.query(null, null, null, null, null, null, null, null, null, 1, 20).getList().get(0).get("brand"));
     }
 
     @Test void updatingEquipmentPersistsBrand() {

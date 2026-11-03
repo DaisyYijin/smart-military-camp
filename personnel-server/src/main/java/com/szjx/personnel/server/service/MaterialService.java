@@ -5,10 +5,9 @@ import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.dao.MaterialDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.Material;
+import com.szjx.personnel.server.model.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-
-import java.util.List;
 
 /**
  * 物资业务
@@ -26,12 +25,12 @@ public class MaterialService {
         this.photoService = photoService;
     }
 
-    public List<Material> query(String keyword, String category, int page, int size) {
-        return materialDao.query(keyword, category, page, size);
-    }
-
-    public long count(String keyword, String category) {
-        return materialDao.count(keyword, category);
+    public PageResult<java.util.Map<String, Object>> query(String name, String category, String spec,
+            String keeperName, String location, int page, int size) {
+        long total = materialDao.count(name, category, spec, keeperName, location);
+        java.util.List<java.util.Map<String, Object>> rows = materialDao.query(name, category, spec,
+                keeperName, location, page, size);
+        return new PageResult<java.util.Map<String, Object>>(total, rows);
     }
 
     public Material create(Material m) {

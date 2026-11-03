@@ -1,10 +1,7 @@
 package com.szjx.personnel.server.controller;
 
-import com.szjx.personnel.server.auth.DataScope;
-
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.Material;
-import com.szjx.personnel.server.model.PageResult;
 import com.szjx.personnel.server.service.MaterialService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,8 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 /**
  * 物资接口
  */
@@ -28,12 +23,9 @@ import java.util.List;
 public class MaterialController {
 
     private final MaterialService materialService;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public MaterialController(MaterialService materialService,
-                              org.springframework.jdbc.core.JdbcTemplate jdbc) {
+    public MaterialController(MaterialService materialService) {
         this.materialService = materialService;
-        this.jdbc = jdbc;
     }
 
     @GetMapping
@@ -47,43 +39,7 @@ public class MaterialController {
                              @RequestParam(defaultValue = "50") int size) {
         if (page < 1) page = 1;
         if (size < 1 || size > 200) size = 50;
-        StringBuilder sql = new StringBuilder(
-            "SELECT m.id, m.name, m.category, m.spec, m.unit, m.quantity, " +
-            "m.min_quantity AS minQuantity, m.keeper_id AS keeperId, p.name AS keeperName, " +
-            "p.id_card AS keeperIdCard, m.location, m.detail_location AS detailLocation, m.remark, m.photo, " +
-            "m.created_at AS createdAt, m.updated_at AS updatedAt " +
-            "FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
-        StringBuilder csql = new StringBuilder(
-            "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
-        sql.append(" AND ").append(DataScope.personSql("m.keeper_id"));
-        csql.append(" AND ").append(DataScope.personSql("m.keeper_id"));
-        java.util.List<Object> args = new java.util.ArrayList<Object>();
-        java.util.List<Object> cargs = new java.util.ArrayList<Object>();
-        if (name != null && !name.trim().isEmpty()) {
-            sql.append(" AND m.name LIKE ?"); args.add("%" + name.trim() + "%");
-            csql.append(" AND m.name LIKE ?"); cargs.add("%" + name.trim() + "%");
-        }
-        if (category != null && !category.trim().isEmpty()) {
-            sql.append(" AND m.category = ?"); args.add(category.trim());
-            csql.append(" AND m.category = ?"); cargs.add(category.trim());
-        }
-        if (spec != null && !spec.trim().isEmpty()) {
-            sql.append(" AND m.spec LIKE ?"); args.add("%" + spec.trim() + "%");
-            csql.append(" AND m.spec LIKE ?"); cargs.add("%" + spec.trim() + "%");
-        }
-        if (keeperName != null && !keeperName.trim().isEmpty()) {
-            sql.append(" AND p.name LIKE ?"); args.add("%" + keeperName.trim() + "%");
-            csql.append(" AND p.name LIKE ?"); cargs.add("%" + keeperName.trim() + "%");
-        }
-        if (location != null && !location.trim().isEmpty()) {
-            sql.append(" AND m.location LIKE ?"); args.add("%" + location.trim() + "%");
-            csql.append(" AND m.location LIKE ?"); cargs.add("%" + location.trim() + "%");
-        }
-        Long total = jdbc.queryForObject(csql.toString(), Long.class, cargs.toArray());
-        sql.append(" ORDER BY m.updated_at DESC, m.id DESC LIMIT ? OFFSET ?");
-        args.add(size); args.add((page - 1) * size);
-        java.util.List<java.util.Map<String, Object>> list = jdbc.queryForList(sql.toString(), args.toArray());
-        return ApiResponse.ok(new PageResult<java.util.Map<String, Object>>(total == null ? 0 : total, list));
+        return ApiResponse.ok(materialService.query(name, category, spec, keeperName, location, page, size));
     }
 
     @GetMapping("/{id:\\d+}/photo")

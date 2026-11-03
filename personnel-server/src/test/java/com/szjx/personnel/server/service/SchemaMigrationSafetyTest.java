@@ -22,8 +22,9 @@ class SchemaMigrationSafetyTest {
     }
 
     @Test void successfulDictionaryMigrationIsIdempotentAndKeepsRowsAndIds() {
-        ReflectionTestUtils.invokeMethod(initializer, "migrateDictUnique");
-        ReflectionTestUtils.invokeMethod(initializer, "migrateDictUnique");
+        Object dictSeed = ReflectionTestUtils.getField(initializer, "dictSeed");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateDictUnique");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateDictUnique");
         assertEquals("note", jdbc.queryForObject("SELECT remark FROM sys_dict WHERE id=1", String.class));
         jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,parent_id) VALUES(2,'test','preserve',10)");
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict", Integer.class));
@@ -36,8 +37,8 @@ class SchemaMigrationSafetyTest {
                 super.execute(sql);
             }
         };
-        SchemaInitializer target = new SchemaInitializer(failing, new AdminUserDao(failing));
-        assertThrows(IllegalStateException.class, () -> ReflectionTestUtils.invokeMethod(target, "migrateDictUnique"));
+        Object dictSeed = ReflectionTestUtils.getField(new SchemaInitializer(failing, new AdminUserDao(failing)), "dictSeed");
+        assertThrows(IllegalStateException.class, () -> ReflectionTestUtils.invokeMethod(dictSeed, "migrateDictUnique"));
         assertEquals("preserve", jdbc.queryForObject("SELECT dict_label FROM sys_dict WHERE id=1", String.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sqlite_master WHERE name='sys_dict_mig'", Integer.class));
     }

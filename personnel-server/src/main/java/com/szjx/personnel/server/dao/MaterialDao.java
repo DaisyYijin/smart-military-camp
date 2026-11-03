@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 物资数据访问
@@ -51,35 +52,50 @@ public class MaterialDao {
             "SELECT m.*, IFNULL(p.name,'') AS keeper_name FROM material m " +
             "LEFT JOIN personnel p ON m.keeper_id = p.id ";
 
-    private void buildFilter(StringBuilder sql, List<Object> args, String keyword, String category) {
-        sql.append(" WHERE ").append(DataScope.personSql("m.keeper_id")).append(" ");
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            sql.append(" AND m.name LIKE ? ");
-            args.add("%" + keyword.trim() + "%");
+    /** 列表查询(驼峰别名列,与前端字段一一对应);SQL 统一住址在 dao,controller 只做参数绑定 */
+    public List<Map<String, Object>> query(String name, String category, String spec,
+            String keeperName, String location, int page, int size) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT m.id, m.name, m.category, m.spec, m.unit, m.quantity, " +
+            "m.min_quantity AS minQuantity, m.keeper_id AS keeperId, p.name AS keeperName, " +
+            "p.id_card AS keeperIdCard, m.location, m.detail_location AS detailLocation, m.remark, m.photo, " +
+            "m.created_at AS createdAt, m.updated_at AS updatedAt " +
+            "FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+        List<Object> args = new ArrayList<Object>();
+        appendFilters(sql, args, name, category, spec, keeperName, location);
+        sql.append(" ORDER BY m.updated_at DESC, m.id DESC LIMIT ? OFFSET ?");
+        args.add(size);
+        args.add((long) (page - 1) * size);
+        return jdbc.queryForList(sql.toString(), args.toArray());
+    }
+
+    public long count(String name, String category, String spec, String keeperName, String location) {
+        StringBuilder sql = new StringBuilder(
+            "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id = p.id WHERE 1=1");
+        List<Object> args = new ArrayList<Object>();
+        appendFilters(sql, args, name, category, spec, keeperName, location);
+        Long total = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+        return total == null ? 0 : total;
+    }
+
+    private void appendFilters(StringBuilder sql, List<Object> args, String name, String category,
+            String spec, String keeperName, String location) {
+        sql.append(" AND ").append(DataScope.personSql("m.keeper_id"));
+        if (name != null && !name.trim().isEmpty()) {
+            sql.append(" AND m.name LIKE ?"); args.add("%" + name.trim() + "%");
         }
         if (category != null && !category.trim().isEmpty()) {
-            sql.append(" AND m.category = ? ");
-            args.add(category.trim());
+            sql.append(" AND m.category = ?"); args.add(category.trim());
         }
-    }
-
-    public List<Material> query(String keyword, String category, int page, int size) {
-        StringBuilder sql = new StringBuilder(BASE);
-        List<Object> args = new ArrayList<Object>();
-        buildFilter(sql, args, keyword, category);
-        sql.append(" ORDER BY m.updated_at DESC, m.id DESC LIMIT ? OFFSET ? ");
-        args.add(size);
-        args.add((page - 1) * size);
-        return jdbc.query(sql.toString(), MAPPER, args.toArray());
-    }
-
-    public long count(String keyword, String category) {
-        StringBuilder sql = new StringBuilder(
-                "SELECT COUNT(*) FROM material m LEFT JOIN personnel p ON m.keeper_id=p.id ");
-        List<Object> args = new ArrayList<Object>();
-        buildFilter(sql, args, keyword, category);
-        Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
-        return n == null ? 0 : n;
+        if (spec != null && !spec.trim().isEmpty()) {
+            sql.append(" AND m.spec LIKE ?"); args.add("%" + spec.trim() + "%");
+        }
+        if (keeperName != null && !keeperName.trim().isEmpty()) {
+            sql.append(" AND p.name LIKE ?"); args.add("%" + keeperName.trim() + "%");
+        }
+        if (location != null && !location.trim().isEmpty()) {
+            sql.append(" AND m.location LIKE ?"); args.add("%" + location.trim() + "%");
+        }
     }
 
     public Material findById(Long id) {

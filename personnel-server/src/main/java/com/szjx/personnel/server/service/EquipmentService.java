@@ -5,10 +5,9 @@ import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.dao.EquipmentDao;
 import com.szjx.personnel.server.dao.PersonnelDao;
 import com.szjx.personnel.server.model.Equipment;
+import com.szjx.personnel.server.model.PageResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-
-import java.util.List;
 
 /**
  * 装备业务
@@ -26,12 +25,14 @@ public class EquipmentService {
         this.photoService = photoService;
     }
 
-    public List<Equipment> query(String keyword, String status, int page, int size) {
-        return equipmentDao.query(keyword, status, page, size);
-    }
-
-    public long count(String keyword, String status) {
-        return equipmentDao.count(keyword, status);
+    public PageResult<java.util.Map<String, Object>> query(String name, String code, String identCode,
+            String category, String status, String keeperName, String location,
+            String buyDateStart, String buyDateEnd, int page, int size) {
+        long total = equipmentDao.count(name, code, identCode, category, status, keeperName,
+                location, buyDateStart, buyDateEnd);
+        java.util.List<java.util.Map<String, Object>> rows = equipmentDao.query(name, code, identCode,
+                category, status, keeperName, location, buyDateStart, buyDateEnd, page, size);
+        return new PageResult<java.util.Map<String, Object>>(total, rows);
     }
 
     public Equipment create(Equipment e) {

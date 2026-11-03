@@ -188,9 +188,9 @@ class DictServiceTest {
         addDict("education", "高中及以下", 5, 0);
         String[] labels = {"博士", "硕士", "本科", "大专", "职高", "中专", "初中", "小学", "其他"};
         for (int i = 0; i < labels.length; i++) addDict("education", labels[i], 20 + i, 0);
-        SchemaInitializer initializer = new SchemaInitializer(jdbc, new AdminUserDao(jdbc));
+        Object dictSeed = ReflectionTestUtils.getField(new SchemaInitializer(jdbc, new AdminUserDao(jdbc)), "dictSeed");
 
-        ReflectionTestUtils.invokeMethod(initializer, "migrateEducationOptionsOnce");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateEducationOptionsOnce");
 
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM sys_dict WHERE dict_type='education' AND dict_label='高中及以下'", Integer.class));
@@ -205,9 +205,9 @@ class DictServiceTest {
         jdbc.execute("CREATE TABLE sys_setting(skey TEXT PRIMARY KEY, svalue TEXT DEFAULT '')");
         long old = addDict("education", "高中及以下", 5, 0);
         jdbc.update("INSERT INTO personnel(id,education) VALUES(1,'高中及以下')");
-        SchemaInitializer initializer = new SchemaInitializer(jdbc, new AdminUserDao(jdbc));
+        Object dictSeed = ReflectionTestUtils.getField(new SchemaInitializer(jdbc, new AdminUserDao(jdbc)), "dictSeed");
 
-        ReflectionTestUtils.invokeMethod(initializer, "migrateEducationOptionsOnce");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateEducationOptionsOnce");
 
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM sys_dict WHERE id=?", Integer.class, old));
@@ -224,9 +224,9 @@ class DictServiceTest {
         long c = addDict("holiday_type", "丙", 4, 0);
         long child1 = addDict("holiday_type", "甲一", 7, a);
         long child2 = addDict("holiday_type", "甲二", 9, a);
-        SchemaInitializer initializer = new SchemaInitializer(jdbc, new AdminUserDao(jdbc));
+        Object dictSeed = ReflectionTestUtils.getField(new SchemaInitializer(jdbc, new AdminUserDao(jdbc)), "dictSeed");
 
-        ReflectionTestUtils.invokeMethod(initializer, "normalizeDictSortsOnce");
+        ReflectionTestUtils.invokeMethod(dictSeed, "normalizeDictSortsOnce");
         assertEquals(1, sortOf(a));
         assertEquals(2, sortOf(b));
         assertEquals(3, sortOf(c));
@@ -234,7 +234,7 @@ class DictServiceTest {
         assertEquals(2, sortOf(child2));
 
         jdbc.update("UPDATE sys_dict SET sort=9 WHERE id=?", a);
-        ReflectionTestUtils.invokeMethod(initializer, "normalizeDictSortsOnce");
+        ReflectionTestUtils.invokeMethod(dictSeed, "normalizeDictSortsOnce");
         assertEquals(9, sortOf(a));
     }
 

@@ -129,7 +129,7 @@ class BusinessDataScopeTest {
     }
 
     @Test void allPagedControllersFilterBeforeLimitAndCountAndEmptyScopeDeniesAll() throws Exception {
-        Object[] controllers = {personnelController(), new EquipmentController(equipmentService, jdbc), new MaterialController(materialService, jdbc), new VehicleController(vehicleService, jdbc), new PhoneDeviceController(jdbc), leaveController(), new LeavePlanController(jdbc), new FitnessController(fitnessService), militaryController()};
+        Object[] controllers = {personnelController(), new EquipmentController(equipmentService), new MaterialController(materialService), new VehicleController(vehicleService), new PhoneDeviceController(jdbc), leaveController(), new LeavePlanController(jdbc), new FitnessController(fitnessService), militaryController()};
         for (Object c : controllers) {
             assertPage(page(c, 1, 1), 2, 1); assertPage(page(c, 2, 1), 2, 1); assertPage(page(c, 3, 1), 2, 0);
         }
@@ -167,9 +167,9 @@ class BusinessDataScopeTest {
         assertNull(people.findByIdCard(" card3 ")); assertTrue(people.existsOtherIdCard("card3", null));
         assertNull(personnelController().findByIdCard("card3").getData());
         assertTrue(((List<?>) leaveController().findPerson("CARD3").getData()).isEmpty());
-        assertEquals(2, equipment.count(null, null)); assertEquals(2, equipment.query(null, null, 1, 20).size());
-        assertEquals(2, material.count(null, null)); assertEquals(2, material.query(null, null, 1, 20).size());
-        assertEquals(2, vehicle.count(null, null)); assertEquals(2, vehicle.query(null, null, 1, 20).size());
+        assertEquals(2, equipment.count(null, null, null, null, null, null, null, null, null)); assertEquals(2, equipment.query(null, null, null, null, null, null, null, null, null, 1, 20).size());
+        assertEquals(2, material.count(null, null, null, null, null)); assertEquals(2, material.query(null, null, null, null, null, 1, 20).size());
+        assertEquals(2, vehicle.count(null, null, null, null, null, null, null)); assertEquals(2, vehicle.query(null, null, null, null, null, null, null, 1, 20).size());
         assertEquals(2, leave.count(null)); assertEquals(2, leave.query(null, 1, 20).size());
         assertEquals(2, fitness.count(null, null)); assertEquals(2, fitness.query(null, null, 1, 20).size());
         assertEquals(2, military.count(null, null, null, null, null, null)); assertEquals(2, military.query(null, null, null, null, null, null, 1, 20).size());
@@ -259,9 +259,9 @@ class BusinessDataScopeTest {
             assertThrows(ForbiddenException.class, () -> equipmentService.delete(id));
             assertThrows(ForbiddenException.class, () -> materialService.delete(id));
             assertThrows(ForbiddenException.class, () -> vehicleService.delete(id));
-            assertThrows(ForbiddenException.class, () -> new EquipmentController(equipmentService, jdbc).photo(id));
-            assertThrows(ForbiddenException.class, () -> new MaterialController(materialService, jdbc).photo(id));
-            assertThrows(ForbiddenException.class, () -> new VehicleController(vehicleService, jdbc).photo(id));
+            assertThrows(ForbiddenException.class, () -> new EquipmentController(equipmentService).photo(id));
+            assertThrows(ForbiddenException.class, () -> new MaterialController(materialService).photo(id));
+            assertThrows(ForbiddenException.class, () -> new VehicleController(vehicleService).photo(id));
         }
         for (Long owner : Arrays.asList(3L, 4L, 0L, null)) {
             e.setKeeperId(owner); m.setKeeperId(owner); v.setDriverId(owner);
