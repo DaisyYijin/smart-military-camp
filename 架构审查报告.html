@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>架构审查 · 数智军营</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .modlabel { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+      <!-- ============ Header ============ -->
+      <header class="space-y-3">
+        <h1 class="font-serif text-3xl">架构审查 · 数智军营</h1>
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-600">
+          <span>仓库：<span class="font-mono">G:\数智军营</span></span>
+          <span>2026-11-02</span>
+          <span>范围：personnel-server（Java 186 文件 · 前端 13,855 行 · 测试 68 文件）</span>
+        </div>
+        <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 border border-slate-500 bg-white"></span>module</span>
+          <span class="flex items-center gap-1.5"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#64748b" stroke-width="1.5" class="seam"/></svg>seam</span>
+          <span class="flex items-center gap-1.5"><svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="#dc2626" stroke-width="2"/></svg>泄漏</span>
+          <span class="flex items-center gap-1.5"><span class="inline-block w-4 h-3 deep rounded-sm"></span>deep module</span>
+        </div>
+      </header>
+
+      <!-- ============ Candidates ============ -->
+      <section id="candidates" class="space-y-10">
+
+        <!-- ─────────── Candidate 1 ─────────── -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-8 space-y-6">
+          <div class="space-y-2">
+            <h2 class="font-serif text-2xl">1 · 把 Excel 导入导出家族收拢为一条管线</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-medium">Strong</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-mono">in-process</span>
+            </div>
+            <p class="font-mono text-sm text-slate-500 leading-relaxed">
+              service/ModuleExcelService.java (822) · RollCallExcelService.java (752) · PersonnelFullExcel.java (729) · RosterExcelService.java (619) · DoubleExcellenceExcelService.java (387) · AnnualAppraisalExcelService.java (371) · FitnessWideExcelService.java · util/ExcelUtils.java
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="modlabel text-slate-400 mb-2">Before · 8 份 implementation 各自复制</p>
+              <pre class="mermaid" style="max-height:320px">
+flowchart TB
+  M1[ModuleExcel 822] -.-> R[样式工厂 ×7]
+  M2[RollCallExcel 752] -.-> R
+  M3[PersonnelFullExcel 729] -.-> R
+  M4[RosterExcel 619] -.-> R
+  M5[DoubleExcellence 387] -.-> R
+  M6[AnnualAppraisal 371] -.-> R
+  M7[FitnessWideExcel] -.-> R
+  R[重复的辅助 implementation] --> R2[readLimited / bytes ×7<br/>单元格读取 ×5 / 日期解析 ×多份]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class R,R2 leak
+              </pre>
+              <p class="text-xs text-slate-400 mt-2">AnnualAppraisal ↔ DoubleExcellence：13 个同名 private 方法逐字重复（openWorkbook / createSheet / scalar / text / identity / requiredColumns / validateDimensions / readLimited …）</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col">
+              <p class="modlabel text-slate-400 mb-2">After · 一条管线 module</p>
+              <div class="relative flex-1 flex flex-col justify-center gap-2 py-2">
+                <div class="flex gap-2 justify-center flex-wrap text-xs">
+                  <div class="border border-slate-400 bg-stone-50 rounded px-2 py-1 font-mono">表头声明</div>
+                  <div class="border border-slate-400 bg-stone-50 rounded px-2 py-1 font-mono">行映射</div>
+                  <div class="border border-slate-400 bg-stone-50 rounded px-2 py-1 font-mono">校验回调</div>
+                </div>
+                <svg viewBox="0 0 300 24" class="h-6 w-full"><g stroke="#475569" stroke-width="1.5" fill="none"><line x1="80" y1="0" x2="150" y2="22" class="seam"/><line x1="150" y1="0" x2="150" y2="22" class="seam"/><line x1="220" y1="0" x2="150" y2="22" class="seam"/></g></svg>
+                <div class="deep text-slate-100 rounded-lg px-4 py-4 mx-10">
+                  <p class="modlabel text-slate-400">Excel 管线 implementation</p>
+                  <div class="flex flex-wrap gap-1.5 mt-2 text-xs text-slate-300">
+                    <span class="border border-slate-600 rounded px-1.5 py-0.5">样式工厂 ×1</span>
+                    <span class="border border-slate-600 rounded px-1.5 py-0.5">readLimited ×1</span>
+                    <span class="border border-slate-600 rounded px-1.5 py-0.5">ExcelDates</span>
+                    <span class="border border-slate-600 rounded px-1.5 py-0.5">校验 / 错误定位</span>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-400 mt-2">8 个调用方只见 interface：声明式配置。ExcelDates 已证明单点复用可行——它是家族里唯一没被复制的。</p>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><span class="font-semibold">Problem：</span>8 个文件 ~4,300 行里约 550–750 行是互相复制的 implementation，样式、日期解析、字节上限在 7 处各修各的。</p>
+            <p><span class="font-semibold">Solution：</span>一条 workbook 管线 module：interface 收敛为「表头声明 + 行映射 + 校验回调」，样式/解析/防超大文件全部沉进 implementation。</p>
+          </div>
+          <ul class="flex flex-wrap gap-2 text-xs">
+            <li class="bg-stone-100 rounded px-2 py-1">locality：Excel bug 集中一处</li>
+            <li class="bg-stone-100 rounded px-2 py-1">leverage：一个 interface，8 个调用方</li>
+            <li class="bg-stone-100 rounded px-2 py-1">删除 ~600 行复制体</li>
+            <li class="bg-stone-100 rounded px-2 py-1">日期口径一处修正</li>
+          </ul>
+        </article>
+
+        <!-- ─────────── Candidate 2 ─────────── -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-8 space-y-6">
+          <div class="space-y-2">
+            <h2 class="font-serif text-2xl">2 · 单位可见范围过滤统一到 DataScope 一个 seam</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-medium">Strong</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-mono">local-substitutable</span>
+            </div>
+            <p class="font-mono text-sm text-slate-500">
+              auth/DataScope.java · util/DepartmentHierarchy.java · dao/PersonnelDao (12 处) · MilitaryAssessmentDao (8) · LeaveDao (7) · ItemLoanDao (7) · FitnessDao (7) · SubRecordDao (6) …
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="modlabel text-slate-400 mb-2">Before · 3–4 套机制，95 处手工拼接</p>
+              <div class="space-y-1.5 text-xs" style="max-height:320px">
+                <div class="h-9 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">dao 层 ×60</span><span class="font-mono text-slate-500">DataScope.personSql / departmentSql 拼接</span></div>
+                <div class="h-9 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">controller 层 ×35</span><span class="font-mono text-slate-500">同一批片段再次手拼</span></div>
+                <div class="h-9 border-l-4 border-red-500 bg-red-50 px-3 flex items-center justify-between"><span class="modlabel text-red-700">ItemLoanDao</span><span class="font-mono text-red-600">递归 CTE 另起一套</span></div>
+                <div class="h-9 border-l-4 border-red-500 bg-red-50 px-3 flex items-center justify-between"><span class="modlabel text-red-700">内存过滤</span><span class="font-mono text-red-600">第四套：查出后再筛</span></div>
+                <div class="h-9 border-l-4 border-slate-300 bg-white px-3 flex items-center justify-between"><span class="modlabel">DepartmentHierarchy</span><span class="font-mono text-slate-500">子树逻辑又一份</span></div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col">
+              <p class="modlabel text-slate-400 mb-2">After · 一个厚带，两个 adapter</p>
+              <div class="flex-1 flex flex-col justify-center gap-3" style="max-height:320px">
+                <div class="deep text-slate-100 rounded-lg px-4 py-5">
+                  <p class="modlabel text-slate-400">DataScope module</p>
+                  <p class="text-xs text-slate-300 mt-1 font-mono">interface: deptFilter(deptId) → SQL 片段 | 内存谓词</p>
+                </div>
+                <div class="flex gap-2 justify-center text-xs">
+                  <div class="border border-slate-400 rounded px-2 py-1 font-mono bg-stone-50">adapter: SQL 片段（生产）</div>
+                  <div class="border border-slate-400 rounded px-2 py-1 font-mono bg-stone-50">adapter: 递归 CTE</div>
+                </div>
+                <p class="text-center text-xs text-slate-400">两个 adapter，seam 才是真实的——其余拼接全部消失</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><span class="font-semibold">Problem：</span>「按单位子树可见」这一条不变量没有自己的 module，95 处手拼各持一份 implementation，口径一旦变化要改 95 处。</p>
+            <p><span class="font-semibold">Solution：</span>dept 过滤收进 DataScope 一个 module，SQL 片段与递归 CTE 降为它的两个 adapter，dao/controller 只声明 deptId。</p>
+          </div>
+          <ul class="flex flex-wrap gap-2 text-xs">
+            <li class="bg-stone-100 rounded px-2 py-1">locality：口径一处修正</li>
+            <li class="bg-stone-100 rounded px-2 py-1">95 处拼接消失</li>
+            <li class="bg-stone-100 rounded px-2 py-1">新模块零成本获得过滤</li>
+            <li class="bg-stone-100 rounded px-2 py-1">interface 缩为一个方法</li>
+          </ul>
+        </article>
+
+        <!-- ─────────── Candidate 3 ─────────── -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-8 space-y-6">
+          <div class="space-y-2">
+            <h2 class="font-serif text-2xl">3 · CRUD 三层：删死代码链，SQL 归位 dao</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-mono">in-process</span>
+            </div>
+            <p class="font-mono text-sm text-slate-500">
+              controller/EquipmentController.java (L55, L60) · VehicleController.java · service/EquipmentService.java · VehicleService.java · dao/EquipmentDao.java · VehicleDao.java
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="modlabel text-slate-400 mb-2">Before · 绕层 + 死链并存</p>
+              <pre class="mermaid" style="max-height:320px">
+flowchart TB
+  C[EquipmentController.query L55/L60] -->|手写 SELECT+COUNT| J[(jdbcTemplate)]
+  C -. 死代码：无人调用 .-> S[Service.query / count]
+  S -.-> D[Dao.query / count]
+  V[VehicleController] -->|同样绕层| J
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  classDef dead stroke-dasharray:5 5,color:#94a3b8;
+  class C,J,V leak
+  class S,D dead
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col">
+              <p class="modlabel text-slate-400 mb-2">After · 三层各归其位</p>
+              <div class="flex-1 flex flex-col justify-center gap-3" style="max-height:320px">
+                <div class="border-2 border-slate-700 rounded-lg px-4 py-3 text-center">
+                  <p class="modlabel">controller</p><p class="text-xs font-mono mt-1">参数绑定 · ApiResponse</p>
+                </div>
+                <svg viewBox="0 0 300 16" class="h-4 w-full"><line x1="150" y1="0" x2="150" y2="16" stroke="#475569" stroke-width="1.5" class="seam"/></svg>
+                <div class="border-2 border-slate-700 rounded-lg px-4 py-3 text-center">
+                  <p class="modlabel">service</p><p class="text-xs font-mono mt-1">校验 · 跨模块编排</p>
+                </div>
+                <svg viewBox="0 0 300 16" class="h-4 w-full"><line x1="150" y1="0" x2="150" y2="16" stroke="#475569" stroke-width="1.5" class="seam"/></svg>
+                <div class="border-2 border-slate-700 rounded-lg px-4 py-3 text-center">
+                  <p class="modlabel">dao</p><p class="text-xs font-mono mt-1">SQL 唯一住址（query 下沉至此）</p>
+                </div>
+                <p class="text-center text-xs text-slate-400">ItemLoan 三件套已是这个形状——照抄即可</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><span class="font-semibold">Problem：</span>Equipment / Vehicle 的 seam 名存实亡——controller 绕过两层手写 SQL，service/dao 侧同名的 query/count 是 grep 证实的死代码链。</p>
+            <p><span class="font-semibold">Solution：</span>删死代码，controller 里的 SQL 下沉 dao；ItemLoan 三件套就是现成的规范形状。</p>
+          </div>
+          <ul class="flex flex-wrap gap-2 text-xs">
+            <li class="bg-stone-100 rounded px-2 py-1">SQL 一处可测</li>
+            <li class="bg-stone-100 rounded px-2 py-1">死代码链删除</li>
+            <li class="bg-stone-100 rounded px-2 py-1">seam 恢复含义</li>
+          </ul>
+        </article>
+
+        <!-- ─────────── Candidate 4 ─────────── -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-8 space-y-6">
+          <div class="space-y-2">
+            <h2 class="font-serif text-2xl">4 · 前端三处手写列表页回归 crudView</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">Worth exploring</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-mono">in-process</span>
+            </div>
+            <p class="font-mono text-sm text-slate-500">
+              static/app.js L2141 crudView (~985 行) · doubleExcellenceView (L9294–9674) · annualAppraisalView (L9715–10085) · ext-features.js renderLeavePlanPage (L1308–1614)
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="modlabel text-slate-400 mb-2">Before · interface 宽 ≈ implementation（shallow）</p>
+              <div class="flex items-end justify-center gap-6 h-full" style="max-height:320px">
+                <div class="flex flex-col items-center gap-1 w-28">
+                  <div class="w-28 border-2 border-red-400 bg-red-50 rounded-t" style="height:118px"></div>
+                  <div class="w-28 h-4 bg-slate-800 rounded-b"></div>
+                  <p class="modlabel text-red-600">双争视图 ~380 行手写</p>
+                  <p class="text-[10px] text-slate-400">列表+分页+防竞态 各自为政</p>
+                </div>
+                <div class="flex flex-col items-center gap-1 w-28">
+                  <div class="w-28 border-2 border-red-400 bg-red-50 rounded-t" style="height:110px"></div>
+                  <div class="w-28 h-4 bg-slate-800 rounded-b"></div>
+                  <p class="modlabel text-red-600">年度考评 ~370 行手写</p>
+                  <p class="text-[10px] text-slate-400">fetchPage 与 loadAllRows 雷同</p>
+                </div>
+                <div class="flex flex-col items-center gap-1 w-28">
+                  <div class="w-28 border-2 border-red-400 bg-red-50 rounded-t" style="height:96px"></div>
+                  <div class="w-28 h-4 bg-slate-800 rounded-b"></div>
+                  <p class="modlabel text-red-600">休假计划 ~310 行手写</p>
+                  <p class="text-[10px] text-slate-400">ext-features monkey-patch 层</p>
+                </div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col">
+              <p class="modlabel text-slate-400 mb-2">After · 全部变成 cfg（deep）</p>
+              <div class="flex items-end justify-center gap-4 flex-1" style="max-height:320px">
+                <div class="flex flex-col items-center gap-1">
+                  <div class="border border-slate-400 bg-stone-50 rounded-t" style="height:14px"></div>
+                  <div class="deep w-40 rounded-b px-2 py-3 text-center text-slate-100">
+                    <p class="modlabel text-slate-400">crudView implementation</p>
+                    <p class="text-xs font-mono">列表·分页·搜索·表单·删除·防竞态</p>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-1.5 justify-end pb-1 text-[10px] font-mono text-slate-500">
+                  <div class="border border-slate-300 rounded px-2 py-0.5 bg-white">doubleExcellenceCfg</div>
+                  <div class="border border-slate-300 rounded px-2 py-0.5 bg-white">annualAppraisalCfg</div>
+                  <div class="border border-slate-300 rounded px-2 py-0.5 bg-white">leavePlanCfg</div>
+                  <div class="border border-slate-300 rounded px-2 py-0.5 bg-white">equipmentCfg 等 ×11</div>
+                </div>
+              </div>
+              <p class="text-xs text-slate-400 mt-2">11 个模块已是 48–62 行 cfg——这 3 个是仅存的漏网者。</p>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><span class="font-semibold">Problem：</span>crudView 已是全库最深的 module（一个 interface 喂饱 11 个模块），但 3 个后到视图手写了整套列表/分页/防竞态，重复 ~1,060 行。</p>
+            <p><span class="font-semibold">Solution：</span>给 crudView 增配（子表 / 矩阵列 / 导入导出插槽），3 个视图改写为 cfg；ext-features.js 的 monkey-patch 随之退役。</p>
+          </div>
+          <ul class="flex flex-wrap gap-2 text-xs">
+            <li class="bg-stone-100 rounded px-2 py-1">删除 ~1,060 行手写</li>
+            <li class="bg-stone-100 rounded px-2 py-1">防竞态一处修正</li>
+            <li class="bg-stone-100 rounded px-2 py-1">monkey-patch 层退役</li>
+            <li class="bg-stone-100 rounded px-2 py-1">interface 只剩 cfg</li>
+          </ul>
+          <div class="bg-amber-50 border border-amber-200 rounded px-4 py-2 text-sm text-amber-900">
+            ADR：crudView 是外部 seam 还是继续吸收？三处回归后 ext-features.js 应整体并入 app.js 或正式定为插件 seam——二选一，别停在 monkey-patch。
+          </div>
+        </article>
+
+        <!-- ─────────── Candidate 5 ─────────── -->
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-8 space-y-6">
+          <div class="space-y-2">
+            <h2 class="font-serif text-2xl">5 · 两个巨类按职责拆 module</h2>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 font-medium">Speculative</span>
+              <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-mono">in-process</span>
+            </div>
+            <p class="font-mono text-sm text-slate-500">
+              config/SchemaInitializer.java (1,192 行) · service/BackupService.java (1,415 行)
+            </p>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <p class="modlabel text-slate-400 mb-2">Before · 一根柱子里的所有职责</p>
+              <div class="space-y-1.5 text-xs" style="max-height:320px">
+                <p class="modlabel text-slate-500 mt-1">SchemaInitializer.run() 单方法 617 行</p>
+                <div class="h-8 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">建表 ×33</span><span class="font-mono text-slate-500">28 张表内联</span></div>
+                <div class="h-8 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">迁移 ×52</span><span class="font-mono text-slate-500">ALTER / INDEX / addColumn</span></div>
+                <div class="h-8 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">种子数据</span><span class="font-mono text-slate-500">字典 / 区域</span></div>
+                <p class="modlabel text-slate-500 mt-4">BackupService（≥8 类职责）</p>
+                <div class="h-8 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">restore() 266 行</span><span class="font-mono text-slate-500">校验·停写·换库·重启</span></div>
+                <div class="h-8 border-l-4 border-slate-400 bg-stone-50 px-3 flex items-center justify-between"><span class="modlabel">调度 · 归档 · 介质</span><span class="font-mono text-slate-500">与恢复挤在同一 implementation</span></div>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col">
+              <p class="modlabel text-slate-400 mb-2">After · 每职责一个深 module</p>
+              <div class="flex-1 flex flex-col justify-center gap-2" style="max-height:320px">
+                <div class="flex gap-2">
+                  <div class="flex-1 deep text-slate-100 rounded-lg px-3 py-3"><p class="modlabel text-slate-400">schema 版本表</p><p class="text-xs mt-1 font-mono">interface: migrate()</p></div>
+                  <div class="flex-1 deep text-slate-100 rounded-lg px-3 py-3"><p class="modlabel text-slate-400">备份编排</p><p class="text-xs mt-1 font-mono">interface: backup()</p></div>
+                </div>
+                <div class="flex gap-2">
+                  <div class="flex-1 border-2 border-slate-700 rounded-lg px-3 py-3"><p class="modlabel">建表 / 种子</p><p class="text-xs mt-1 font-mono text-slate-500">内部细节</p></div>
+                  <div class="flex-1 border-2 border-slate-700 rounded-lg px-3 py-3"><p class="modlabel">归档校验 · 恢复</p><p class="text-xs mt-1 font-mono text-slate-500">内部细节</p></div>
+                </div>
+                <p class="text-center text-xs text-slate-400">interface 缩为两个动词，implementation 各自演进</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-sm">
+            <p><span class="font-semibold">Problem：</span>schema 全史与备份全流程各自挤在一个 implementation 里，interface 之外的事实（28 张表、8 类职责）全都要调用方绕道感知。</p>
+            <p><span class="font-semibold">Solution：</span>按职责切 seam：schema 版本化迁移独立；备份编排与归档校验、恢复分层。</p>
+          </div>
+          <ul class="flex flex-wrap gap-2 text-xs">
+            <li class="bg-stone-100 rounded px-2 py-1">每职责独立可测</li>
+            <li class="bg-stone-100 rounded px-2 py-1">恢复路径单独演进</li>
+            <li class="bg-stone-100 rounded px-2 py-1">run() 不再是 617 行</li>
+          </ul>
+        </article>
+      </section>
+
+      <!-- ============ Top recommendation ============ -->
+      <section id="top-recommendation">
+        <div class="rounded-xl border-2 border-emerald-600 bg-emerald-50 p-8 space-y-2">
+          <p class="modlabel text-emerald-700">Top recommendation</p>
+          <h2 class="font-serif text-2xl"><a href="#c1" class="underline decoration-emerald-400 underline-offset-4">把 Excel 导入导出家族收拢为一条管线</a></h2>
+          <p class="text-sm text-emerald-900">量化收益最大（~600 行复制体归一）、风险最低（8 个调用方 interface 清晰、前端 crudView 已证明「配置 + 工厂」在本库可行），且顺手为候选 2 的 DataScope 提供落点——Excel 导入导出正是单位过滤的重度调用方。</p>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-400 pt-4 border-t border-slate-200">
+        由 codebase-design 词汇表约束：module · interface · implementation · depth · seam · adapter · leverage · locality。证据：两个只读 explore 子代理 + 抽查交叉验证（2026-11-02）。
+      </footer>
+    </main>
+  </body>
+</html>
