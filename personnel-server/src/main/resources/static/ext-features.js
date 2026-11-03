@@ -177,7 +177,7 @@
         departmentBox.innerHTML = '';
         departmentBox.appendChild(h('button', { type: 'button', class: 'btn btn-ghost', text: '重新加载单位', onclick: loadDepartments }));
         selection.textContent = '加载失败';
-        error.textContent = e.message || '单位加载失败';
+        error.textContent = e.message || '单位加载失败，请重试';
       });
     }
     loadDepartments();

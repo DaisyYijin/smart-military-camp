@@ -115,11 +115,19 @@ function harness(t) {
     modals.push(modal); return modal;
   };
   for (const name of ['$', '$all', 'h', 'esc', 'parseCalendarDay', 'formatCalendarDay', 'makeDropdown', 'buildForm', 'attachPersonPick', 'setupPersonLookup',
-    'renderPager', 'slideFrom', 'loadAllRows', 'deRatingOptions', 'doubleExcellenceFields', 'doubleExcellencePayload', 'doubleExcellenceQuery', 'doubleExcellenceView']) vm.runInContext(definition(name), c);
+    'renderPager', 'slideFrom', 'loadAllRows', 'deRatingOptions', 'doubleExcellenceFields', 'doubleExcellencePayload', 'doubleExcellenceQuery', 'doubleExcellenceView',
+    'yearMatrixView', 'cellFormValues', 'prefersReducedMotion']) vm.runInContext(definition(name), c);
   // 评级→样式类映射是单行 var 声明,definition() 只抽取函数,单独注入生产定义
   const ratingCls = source.match(/^var DE_RATING_CLS = \{.*\};$/m);
   assert.ok(ratingCls, 'production DE_RATING_CLS exists');
   vm.runInContext(ratingCls[0], c);
+  // 动效令牌与矩阵视图配置(多行 var 对象,definition() 只抽取函数,同样单独注入生产定义)
+  const motion = source.match(/^var MOTION = \{[\s\S]*?^\};$/m);
+  assert.ok(motion, 'production MOTION exists');
+  vm.runInContext(motion[0], c);
+  const matrixCfg = source.match(/^var doubleExcellenceMatrixCfg = \{[\s\S]*?^\};$/m);
+  assert.ok(matrixCfg, 'production doubleExcellenceMatrixCfg exists');
+  vm.runInContext(matrixCfg[0], c);
   c.makeDateField = () => {
     const input = c.h('input', { type: 'text' }), wrap = c.h('div', { class: 'cal' }, input);
     Object.defineProperties(wrap, { value: { get: () => { const parsed = c.parseCalendarDay(input.value); return parsed ? c.formatCalendarDay(parsed) : ''; }, set: (v) => { input.value = v; } }, rawValue: { get: () => input.value } });
@@ -212,8 +220,8 @@ test('year arrows switch year, guard stale responses and stay within 1900..9999'
   assert.equal(query(back).get('year'), String(currentYear + 1));
   back.resolve(stats()); await flush();
   assert.equal(h.host.querySelector('.de-year-text').textContent, (currentYear + 1) + ' 年');
-  // Bounds are enforced in render: arrows disable at the limits.
-  const region = source.slice(source.indexOf('function doubleExcellenceView'), source.indexOf('function pendingModuleView'));
+  // Bounds are enforced in render: arrows disable at the limits.(矩阵骨架在 yearMatrixView 工厂内)
+  const region = source.slice(source.indexOf('function yearMatrixView'), source.indexOf('function pendingModuleView'));
   assert.match(region, /yearPrev\.disabled = state\.year <= 1900/);
   assert.match(region, /yearNext\.disabled = state\.year >= 9999/);
 });

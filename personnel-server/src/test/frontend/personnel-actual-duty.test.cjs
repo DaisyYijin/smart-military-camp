@@ -22,8 +22,12 @@ const names = ['$', '$all', 'h', 'esc', 'openModal', 'parseCalendarDay', 'format
   'crudView', 'buildTrendChart', 'preferenceKey', 'importRuleText', 'importFileErrorMessage', 'importResultSummary', 'openImportResultModal', 'dashMigrate', 'markDashDriverLayout', 'dashDriverLayout', 'dashboardView', 'openChangePassword', 'subRecordsPanel',
   'makeDropdown', 'itemLoanStatus', 'setupItemLoanForm', 'openItemLoanDetail', 'openItemLoanReturn', 'fmtSize', 'backupView',
   'dictItems', 'dictView', 'settingsView', 'readPersonnelRouteFilters', 'kindsForDim', 'dashCardLabel',
-  'departmentDepthColor', 'drawDepartmentHierarchy', 'dashBarList', 'openDrillModal', 'openPersonPicker', 'openDetailModal', 'statusOptions', 'badge', 'driverLicenseOptions'];
-const script = new vm.Script(names.map(definition).join('\n'));
+  'departmentDepthColor', 'drawDepartmentHierarchy', 'dashBarList', 'openDrillModal', 'openPersonPicker', 'openDetailModal', 'statusOptions', 'badge', 'driverLicenseOptions',
+  'prefersReducedMotion', 'countUp', 'skeletonRows'];
+// 动效令牌与函数同源提取:crudView 的面板滑行/骨架屏、dashboardView 的数字滚动按名引用 MOTION
+const motion = source.match(/^var MOTION = \{[\s\S]*?^\};$/m);
+assert.ok(motion, 'production MOTION exists');
+const script = new vm.Script(motion[0] + '\n' + names.map(definition).join('\n'));
 const flush = () => new Promise((done) => setImmediate(done));
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const decode = (value) => value.replace(/&(amp|lt|gt|quot|#39);/g, (_, key) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" })[key]);

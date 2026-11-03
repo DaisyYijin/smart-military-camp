@@ -1,6 +1,22 @@
 /* 数智军营人员管理系统 - 网页端(零依赖原生 JS,离线可用) */
 'use strict';
 
+/* ================= 动效令牌 =================
+   与 app.css 的 --dur- 与 --ease- 系列同源(此处为毫秒,css 为秒),改动须两边同步。
+   减动效:系统开启「减少动画」时 JS 侧动效直接终态(css 侧由文件末尾全局块兜底)。 */
+var MOTION = {
+  glide: 'cubic-bezier(.4,0,.2,1)',  /* 位移滑行 = --ease-glide */
+  panel: 300,                        /* 面板滑行 ms = --dur-panel */
+  fade: 300,                         /* 淡出 ms = --dur-fade */
+  toastStay: 2400,                   /* toast 停留 ms(淡出开始) */
+  toastGone: 2800                    /* toast 移除 ms */
+};
+function prefersReducedMotion() {
+  // 自包含判定(便于按名提取做单测);无 matchMedia 的环境一律视为不减动效
+  return Boolean(typeof window !== 'undefined' && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
 /* ================= 工具函数 ================= */
 
 function $(sel, root) { return (root || document).querySelector(sel); }
@@ -41,8 +57,8 @@ function toast(msg, type) {
   if (!box) { box = h('div', { id: 'toast-box' }); document.body.appendChild(box); }
   var t = h('div', { class: 'toast ' + (type || 'ok'), text: msg });
   box.appendChild(t);
-  setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2400);
-  setTimeout(function () { t.remove(); }, 2800);
+  setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity ' + MOTION.fade + 'ms'; }, MOTION.toastStay);
+  setTimeout(function () { t.remove(); }, MOTION.toastGone);
 }
 
 /**
@@ -1121,13 +1137,13 @@ function loadAllRows(path) {
  */
 function slideFrom(el, deltaX, duration) {
   if (!el || !deltaX) return;
-  var ms = duration || 300;
+  if (prefersReducedMotion()) return; // 减动效:不做位移动画,元素保持终态
+  var ms = duration || MOTION.panel;
   el.style.transition = 'none';
   el.style.transform = 'translateX(' + deltaX + 'px)';
   void el.offsetWidth; // 强制回流,让起始位置先生效
-  el.style.transition = 'transform ' + ms + 'ms cubic-bezier(.4,0,.2,1)';
-  el.style.transform = 'translateX(0)';
-  var done = false;
+  el.style.transition = 'transform ' + ms + 'ms ' + MOTION.glide;
+  el.style.transform = 'translateX(0)';  var done = false;
   function clear() {
     if (done) return;
     done = true;
@@ -1139,6 +1155,37 @@ function slideFrom(el, deltaX, duration) {
   var timer = setTimeout(clear, ms + 100);
   // 可选取消句柄供需要销毁/快速反向切换的视图使用，现有调用方可继续忽略返回值。
   return function () { clearTimeout(timer); clear(); };
+}
+
+/* 统计数字入场滚动:从 0 数到目标(仅"纯数字"或"数字+单位后缀"),rAF easeOut ~600ms;
+   减动效/非正数/解析失败时直接终值,不阻塞渲染;重入时取消上一轮帧。 */
+function countUp(el, text) {
+  var m = /^(\d+)(.*)$/.exec(String(text == null ? '' : text).trim());
+  if (!el || !m) return;
+  var target = Number(m[1]), suffix = m[2];
+  if (!isFinite(target) || target <= 0 || prefersReducedMotion()) return;
+  if (typeof requestAnimationFrame !== 'function') return; // 无 rAF 环境(单测沙箱)直接终值
+  if (el._countFrame) cancelAnimationFrame(el._countFrame);
+  var start = null, dur = 600;
+  function frame(ts) {
+    if (start === null) start = ts;
+    var p = Math.min(1, (ts - start) / dur);
+    var eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    el.textContent = Math.round(target * eased) + suffix;
+    if (p < 1) el._countFrame = requestAnimationFrame(frame);
+    else el._countFrame = null;
+  }
+  el._countFrame = requestAnimationFrame(frame);
+}
+
+/* 表格加载骨架屏:替代"加载中…"文字行,宽度错落的扫光占位条;
+   减动效时 shimmer 被全局块置为静止(仍保留占位高度)。 */
+function skeletonRows(cols) {
+  var out = '';
+  for (var i = 0; i < 8; i++) {
+    out += '<tr><td colspan="' + cols + '"><div class="sk-bar" style="width:' + (42 + (i * 13) % 48) + '%"></div></td></tr>';
+  }
+  return out;
 }
 
 function apiBlob(path) {
@@ -2176,7 +2223,7 @@ function crudView(cfg) {
     head.disabled = locked() || !boxes.length;
     boxes.forEach(function (b) { b.disabled = locked(); });
   }
-  var root = h('div');
+  var root = h('div', { class: 'view-in' });
   var loadingMore = false;
   var allLoaded = false;
   var sentinel = h('div', { class: 'scroll-sentinel' },
@@ -2332,7 +2379,7 @@ function crudView(cfg) {
       summary.items.map(function (name) { return '<th>' + esc(name) + '</th>'; }).join('') +
       '</tr></thead><tbody>';
     if (summary.loading) {
-      html += '<tr><td colspan="' + cols + '" class="empty-row">加载中…</td></tr>';
+      html += skeletonRows(cols);
     } else if (summary.error) {
       html += '<tr><td colspan="' + cols + '" class="empty-row">加载失败：' + esc(summary.error) + '</td></tr>';
     } else if (!summary.rows.length) {
@@ -2410,11 +2457,11 @@ function crudView(cfg) {
     selectionChanged();
     syncHeaderCheck();
     if (state.loading) {
-      tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">加载中…</td></tr>';
+      tb.innerHTML = skeletonRows(cols);
       return;
     }
     if (!state.rows.length) {
-      tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">暂无数据</td></tr>';
+      tb.innerHTML = '<tr><td colspan="' + cols + '" class="empty-row">暂无数据，点击右上角「新增」开始录入</td></tr>';
       syncHeaderCheck();
       return;
     }
@@ -2769,7 +2816,7 @@ function crudView(cfg) {
             slideFrom(filterPanel, 270);
             if (main) { main.classList.add('filter-padding'); slideFrom(main, 270); }
           } else {
-            filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
+            filterPanel.style.transition = 'transform ' + MOTION.panel + 'ms ' + MOTION.glide;
             filterPanel.style.transform = 'translateX(100%)';
             if (main) { main.classList.remove('filter-padding'); slideFrom(main, -270); }
             setTimeout(function () {
@@ -3038,6 +3085,7 @@ function crudView(cfg) {
       } else if (actionKey === 'edit') {
         openForm(row);
       } else if (actionKey === 'del') {
+        var trEl = btnEl.closest('tr'); // 行删除塌陷动画目标(滑出淡出后再刷新整表)
         state.deleting = true;
         syncBatchBtn(); syncHeaderCheck();
         confirmBox(cfg.delTip ? cfg.delTip(row) : '确定删除这条记录吗?删除后不可恢复。', true)
@@ -3047,7 +3095,17 @@ function crudView(cfg) {
             return DEL(cfg.endpoint + '/' + encodeURIComponent(id)).then(function () { toast('已删除'); return true; });
           }).then(function (reload) {
             state.deleting = false;
-            if (reload) afterChange();
+            if (reload) {
+              // 行塌陷:被删行右滑淡出后整表刷新(其余行自然上移补位);
+              // 减动效或无 rAF 的单测沙箱直接刷新(与 mock 定时器时序契约一致)
+              if (trEl && document.body.contains(trEl) && !prefersReducedMotion()
+                  && typeof requestAnimationFrame === 'function') {
+                trEl.classList.add('row-removing');
+                setTimeout(afterChange, 240);
+              } else {
+                afterChange();
+              }
+            }
             syncBatchBtn(); syncHeaderCheck();
           }).catch(function (err) {
             state.deleting = false;
@@ -5413,6 +5471,7 @@ function personnelPhotoBlock(row) {
   }
 
   var fileInput = h('input', { type: 'file', accept: 'image/jpeg,image/png', style: 'display:none' });
+  var removeBtn; // 移除照片按钮:选择新照片后需要在 reader.onload 里重新启用
   fileInput.addEventListener('change', function () {
     var f = fileInput.files[0];
     fileInput.value = '';
@@ -5429,6 +5488,7 @@ function personnelPhotoBlock(row) {
       st.removed = false;
       preview.style.backgroundImage = 'url(' + st.base64 + ')';
       preview.textContent = '';
+      removeBtn.disabled = false; // 选定新照片后允许移除
     };
     reader.onerror = function () { toast('读取图片失败', 'err'); };
     reader.readAsDataURL(f);
@@ -5440,12 +5500,14 @@ function personnelPhotoBlock(row) {
     h('div', {}, fileInput,
       h('div', { class: 'photo-actions' },
         h('button', { class: 'btn btn-ghost btn-sm photo-action', text: '选择照片', onclick: function () { fileInput.click(); } }),
-        h('button', {
+        removeBtn = h('button', {
           class: 'btn btn-ghost btn-sm photo-action', text: '移除照片',
+          disabled: !st.existing, // 无照片时禁用,避免对空状态误操作
           onclick: function () {
             st.base64 = null; st.removed = true; st.existing = null;
             preview.style.backgroundImage = '';
             preview.textContent = '无照片';
+            this.disabled = true;
           }
         })),
       h('div', { class: 'photo-hint', text: '支持 JPG、PNG 格式' }))));
@@ -7850,7 +7912,9 @@ function dashboardView() {
     // 顶部概况卡(可配置)
     var chips = h('div', { class: 'stats-cards' });
     function card(num, lbl, ic, danger, href) {
-      var body = h('div', {}, h('div', { class: 'num', text: String(num) }), h('div', { class: 'lbl', text: lbl }));
+      var numEl = h('div', { class: 'num', text: String(num) });
+      countUp(numEl, num);
+      var body = h('div', {}, numEl, h('div', { class: 'lbl', text: lbl }));
       // 有跳转目标的卡用按钮承载:键盘可聚焦,Enter 直接打开
       if (href) {
         return h('button', { type: 'button', class: 'stat-card stat-card-btn' + (danger && +num > 0 ? ' danger' : ''),
@@ -7862,10 +7926,12 @@ function dashboardView() {
         h('span', { class: 'ic', html: iconSvg(ic) }), body);
     }
     var statSel = getStatCards();
-    statSel.forEach(function (k) {
+    statSel.forEach(function (k, i) {
       var def = STAT_CARDS[k];
       if (def && d[k] !== undefined) {
-        chips.appendChild(card(String(d[k] || 0) + (def.suffix || ''), def.label, def.icon, def.danger, def.href));
+        var el = card(String(d[k] || 0) + (def.suffix || ''), def.label, def.icon, def.danger, def.href);
+        el.style.animationDelay = (i * 60) + 'ms'; // 级联入场:逐卡错峰(减动效时动画直达终态,延迟无感)
+        chips.appendChild(el);
       }
     });
     root.appendChild(chips);
@@ -9291,10 +9357,13 @@ function doubleExcellenceQuery(filters, recordsOnly) {
   }).map(function (key) { return key + '=' + encodeURIComponent(String(filters[key]).trim()); }).join('&');
 }
 
-function doubleExcellenceView() {
-  // 主页面即年度四季度矩阵：全部权限内人员一行一人，四个季度单元格点击即可填写或修改评定。
-  var endpoint = '/api/double-excellence', now = new Date(), currentYear = now.getFullYear();
-  var root = h('div', { class: 'double-excellence' });
+/* ================= 年度矩阵视图工厂：年度全员评定表公共骨架 =================
+   双争评比(四季度列)与年度考评(年度评定列)共用：生命周期与会话守卫、筛选面板、
+   年份切换、/stats 全量加载与请求代际、单元格/新增表单、历年弹窗、导入导出。
+   模块差异(列定义、字段、文案、历年渲染)全部经 cfg 注入。 */
+function yearMatrixView(cfg) {
+  var endpoint = cfg.endpoint, now = new Date(), currentYear = now.getFullYear();
+  var root = h('div', { class: 'double-excellence view-in' }); // 矩阵样式与对齐以双争为公共基准
   var sessionToken = TOKEN, sessionUser = USER && USER.userId;
   var state = { year: currentYear, filters: {},
     total: 0, rows: [], loading: false, generation: 0,
@@ -9321,7 +9390,7 @@ function doubleExcellenceView() {
       filterPanel.classList.add('open'); animate(filterPanel, 270);
       main.classList.add('filter-padding'); animate(main, 270);
     } else {
-      filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
+      filterPanel.style.transition = 'transform ' + MOTION.panel + 'ms ' + MOTION.glide;
       filterPanel.style.transform = 'translateX(100%)';
       main.classList.remove('filter-padding'); animate(main, -270);
       closeTimer = setTimeout(function () {
@@ -9357,8 +9426,8 @@ function doubleExcellenceView() {
     var generation = ++state.generation;
     state.rows = []; state.total = 0; state.loading = true; errorBox.textContent = '';
     renderData();
-    var query = doubleExcellenceQuery({ year: state.year, personnelName: state.filters.personnelName,
-      idCard: state.filters.idCard, departmentId: state.filters.departmentId }, false);
+    var query = cfg.statQuery({ year: state.year, personnelName: state.filters.personnelName,
+      idCard: state.filters.idCard, departmentId: state.filters.departmentId });
     // 与其它模块一致：一次加载全部人员（loadAllRows 自动循环按 200/页取全），矩阵不做分页
     loadAllRows(endpoint + '/stats?' + query).then(function (data) {
       if (!alive() || generation !== state.generation) return;
@@ -9374,12 +9443,12 @@ function doubleExcellenceView() {
     });
   }
   function cell(row, text) { row.appendChild(h('td', {}, text == null ? '' : String(text))); }
-  // 姓名与身份证号码列：点击查看该人历年双争评比
+  // 姓名与身份证号码列：点击查看该人历年记录
   function personCell(tr, row, value) {
     tr.appendChild(h('td', { class: 'de-person-cell' },
       h('button', { type: 'button', class: 'btn-link de-person-btn',
-        title: '查看' + row.personnelName + '历年双争评比',
-        'aria-label': '查看' + row.personnelName + '历年双争评比',
+        title: '查看' + row.personnelName + cfg.historyLabel,
+        'aria-label': '查看' + row.personnelName + cfg.historyLabel,
         onclick: function () { openHistory(row); } },
         value == null ? '' : String(value))));
   }
@@ -9389,97 +9458,47 @@ function doubleExcellenceView() {
     yearPrev.disabled = state.year <= 1900;
     yearNext.disabled = state.year >= 9999;
     count.textContent = state.loading ? '加载中…' : failed ? '加载失败' : '共 ' + state.total + ' 人';
-    var table = h('table', { class: 'grid de-grid', 'aria-label': '双争评比年度四季度表' });
+    var table = h('table', { class: 'grid de-grid', 'aria-label': cfg.tableAria });
     var head = h('tr'), body = h('tbody');
-    ['单位', '姓名', '身份证号码', '第一季度', '第二季度', '第三季度', '第四季度'].forEach(function (label) {
+    ['单位', '姓名', '身份证号码'].concat(cfg.headers).forEach(function (label) {
       head.appendChild(h('th', { text: label }));
     });
     table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    var ctx = { year: state.year, today: formatCalendarDay(now) };
     state.rows.forEach(function (row) {
       var tr = h('tr');
       cell(tr, String(row.departmentPath || '').replace(/\s*\/\s*/g, '')); personCell(tr, row, row.personnelName); personCell(tr, row, row.idCard);
-      for (var quarter = 1; quarter <= 4; quarter++) tr.appendChild(quarterCell(row, quarter));
+      cfg.rowCells(row, openCellForm, ctx).forEach(function (td) { tr.appendChild(td); });
       body.appendChild(tr);
     });
     if (!state.rows.length) body.appendChild(h('tr', {}, h('td', {
-      colspan: 7, class: 'empty-row', text: state.loading ? '加载中…' : failed ? '加载失败，请重试' : '暂无人员'
+      colspan: cfg.colspan, class: 'empty-row', text: state.loading ? '加载中…' : failed ? '加载失败，请重试' : '暂无人员，请先在「人员管理」中建档'
     })));
     tableBox.appendChild(table);
     // 不分页：全部人员一次展示，滚动即可
   }
-  function quarterCell(row, quarter) {
-    var entry = row['q' + quarter];
-    var ratingCls = entry ? DE_RATING_CLS[entry.rating] : 'is-unrated';
-    return h('td', { class: 'de-cell' },
-      h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
-        'aria-label': row.personnelName + '第' + quarter + '季度评定：' + (entry ? entry.rating : '未评定'),
-        title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写第' + quarter + '季度评定',
-        onclick: function () { openCellForm(row, quarter); } },
-        // 日期（仅月/日）在前、评定在后同一行紧凑排列、整体靠左；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
-        h('span', { class: 'de-rating-line' },
-          entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null,
-          h('b', { text: entry ? entry.rating : '未评定' }))));
+  function openCellForm(values, recordId) {
+    if (!alive() || state.writing || state.importing || state.formOpen) return;
+    openForm(values, { recordId: recordId, fixed: true });
   }
-  // 历年评比：按人员ID取全部年度记录（服务端 personnelIds 走权限校验），按年度×四季度矩阵展示
+  function afterChange() {
+    if (alive()) load();
+  }
+  // 历年记录：按人员ID取全部记录（服务端 personnelIds 走权限校验），渲染交给模块 cfg
   function openHistory(row) {
     if (!alive()) return;
     var box = h('div', { class: 'de-history' },
-      h('div', { class: 'de-history-empty', text: '正在加载 ' + row.personnelName + ' 的历年评比…' }));
-    openModal({ title: row.personnelName + ' · 历年双争评比', body: box, wide: true });
+      h('div', { class: 'de-history-empty', text: '正在加载 ' + row.personnelName + ' 的' + cfg.historyLabel + '…' }));
+    openModal({ title: row.personnelName + ' · ' + cfg.historyLabel, body: box, wide: true });
     // loadAllRows 自动按 200/页取全:历年记录超过 200 条时不再截断
     loadAllRows(endpoint + '?personnelIds=' + encodeURIComponent(row.personnelId)).then(function (data) {
       if (!alive() || !document.body.contains(box)) return;
-      renderHistory(box, row, (data && data.list) || []);
+      cfg.renderHistory(box, row, (data && data.list) || []);
     }).catch(function (e) {
       if (!alive() || !document.body.contains(box)) return;
       box.innerHTML = '';
       box.appendChild(h('div', { class: 'de-history-empty', text: e.message || '加载失败，请关闭后重试' }));
     });
-  }
-  function renderHistory(box, row, list) {
-    box.innerHTML = '';
-    var years = {};
-    list.forEach(function (r) { (years[r.year] = years[r.year] || {})[r.quarter] = r; });
-    var yearList = Object.keys(years).map(Number).sort(function (a, b) { return b - a; });
-    box.appendChild(h('div', { class: 'de-history-head' },
-      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
-      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条评定记录' })));
-    if (!yearList.length) {
-      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的评比记录' }));
-      return;
-    }
-    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年双争评比表' });
-    var head = h('tr');
-    ['年度', '第一季度', '第二季度', '第三季度', '第四季度'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
-    var body = h('tbody');
-    yearList.forEach(function (year) {
-      var tr = h('tr');
-      tr.appendChild(h('td', { class: 'de-h-year', text: year + ' 年' }));
-      for (var quarter = 1; quarter <= 4; quarter++) {
-        var entry = years[year][quarter];
-        var cls = entry ? (DE_RATING_CLS[entry.rating] || '') : 'is-unrated';
-        tr.appendChild(h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
-          h('span', { class: 'de-rating-line' },
-            h('b', { text: entry ? entry.rating : '—' }),
-            entry && entry.ratingDate ? h('small', { text: entry.ratingDate }) : null)));
-      }
-      body.appendChild(tr);
-    });
-    table.appendChild(h('thead', {}, head)); table.appendChild(body);
-    box.appendChild(table);
-    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
-  }
-  function openCellForm(row, quarter) {
-    if (!alive() || state.writing || state.importing || state.formOpen) return;
-    var entry = row['q' + quarter];
-    var values = { year: state.year, quarter: String(quarter),
-      personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
-      ratingDate: entry && entry.ratingDate ? entry.ratingDate : formatCalendarDay(now) };
-    if (entry) values.rating = entry.rating;
-    openForm(values, { recordId: entry ? entry.id : null, fixed: true });
-  }
-  function afterChange() {
-    if (alive()) load();
   }
   function openForm(values, options) {
     if (!alive() || state.writing || state.importing || state.formOpen) return;
@@ -9487,11 +9506,11 @@ function doubleExcellenceView() {
     options = options || {};
     var fixed = !!options.fixed, recordId = options.recordId || null;
     // 新增默认跟随正在查看的年度（而非系统当前年），避免查看历史年度时误录入今年；年度仍可手动调整
-    if (!values) values = { year: state.year, quarter: String(Math.floor(now.getMonth() / 3) + 1), ratingDate: formatCalendarDay(now) };
-    var form = buildForm(doubleExcellenceFields(), values);
+    if (!values) values = cfg.newValues(state.year, now);
+    var form = buildForm(cfg.fields(), values);
     if (fixed) {
-      // 单元格进入：人员与年度、季度由所在行列锁定，只允许改评定与评比日期。
-      ['year', 'quarter', 'personnelName', 'idCard'].forEach(function (key) {
+      // 单元格进入：人员与年度（季度）由所在行列锁定，只允许改评定与日期。
+      cfg.fixedKeys.forEach(function (key) {
         var input = form.inputs[key];
         if (!input) return;
         // 下拉容器没有 readOnly，用禁用锁住；输入框用只读保持可复制
@@ -9506,7 +9525,7 @@ function doubleExcellenceView() {
     var remove = recordId ? h('button', { class: 'btn btn-danger', text: '删除', onclick: function () {
       if (saving || removing) return;
       removing = true;
-      confirmBox('确定删除' + values.year + '年第' + values.quarter + '季度的这条评比记录吗？删除后不可恢复。', true).then(function (yes) {
+      confirmBox(cfg.deleteConfirmText(values), true).then(function (yes) {
         if (!yes || !alive()) return false;
         return DEL(endpoint + '/' + encodeURIComponent(recordId)).then(function () { return true; });
       }).then(function (changed) {
@@ -9519,7 +9538,7 @@ function doubleExcellenceView() {
       if (!alive()) { form.setError('页面或登录状态已变更，请关闭后重新进入'); return; }
       var data = form.get(), payload;
       if (!data || form.validatePerson && !form.validatePerson()) return;
-      try { payload = doubleExcellencePayload(data); } catch (e) { form.setError(e.message); return; }
+      try { payload = cfg.payload(data); } catch (e) { form.setError(e.message); return; }
       saving = true; state.writing = true; save.disabled = true;
       if (remove) remove.disabled = true;
       var controls = $all('input, button, textarea, select', form.el).map(function (el) {
@@ -9538,12 +9557,8 @@ function doubleExcellenceView() {
     var footer = [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })];
     if (remove) footer.push(remove);
     footer.push(save);
-    // 单元格进入：标题点明人员与季度，工具栏"新增"保持通用标题
-    var title = (recordId ? '编辑' : '新增') + '双争评比记录';
-    if (fixed && values.personnelName) {
-      title = (recordId ? '编辑' : '填写') + '评定：' + values.personnelName + ' ' + values.year + '年第' + values.quarter + '季度';
-    }
-    var m = openModal({ title: title, body: form.el,
+    // 单元格进入：标题点明人员与年度（季度），工具栏"新增"保持通用标题
+    var m = openModal({ title: cfg.formTitle(values, recordId, fixed), body: form.el,
       onClose: function () { state.formOpen = false; },
       beforeClose: function () { if ((saving || removing) && !saved) { form.setError('正在保存或删除，请稍候'); return false; } return true; },
       footer: footer });
@@ -9560,10 +9575,10 @@ function doubleExcellenceView() {
   function exportRecords() {
     if (!alive() || state.loading) return;
     var filters = state.filters;
-    // 无勾选与人员范围：导出当前年份＋筛选命中的全部评比记录（未评定不是记录）。
-    var query = doubleExcellenceQuery({ year: state.year, personnelName: filters.personnelName,
-      idCard: filters.idCard, departmentId: filters.departmentId }, true);
-    download('/export' + (query ? '?' + query : ''), '导出' + state.year + '年双争评比记录');
+    // 无勾选与人员范围：导出当前年份＋筛选命中的全部记录（未评定不是记录）。
+    var query = cfg.exportQuery({ year: state.year, personnelName: filters.personnelName,
+      idCard: filters.idCard, departmentId: filters.departmentId });
+    download('/export' + (query ? '?' + query : ''), cfg.exportTitle(state.year));
   }
   function setImportBusy(busy) {
     state.importing = busy;
@@ -9574,10 +9589,10 @@ function doubleExcellenceView() {
     var file = importInput.files && importInput.files[0]; importInput.value = '';
     if (!file || state.importing || state.writing || !alive()) return;
     if (!/\.xlsx$/i.test(file.name)) { toast('请选择下载模板填写的 .xlsx 文件', 'err'); return; }
-    if (file.size > 10 * 1024 * 1024) { toast('双争评比导入文件不能超过 10MiB，请拆分后重试', 'err'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast(cfg.importOversizeMsg, 'err'); return; }
     setImportBusy(true);
     var fd = new FormData(); fd.append('file', file);
-    var pm = showProgressModal('导入双争评比'); pm.setStatus('正在上传 ' + file.name + '…');
+    var pm = showProgressModal(cfg.importModalTitle); pm.setStatus('正在上传 ' + file.name + '…');
     postFormWithProgress(endpoint + '/import-excel', fd, function (pct) {
       pm.setProgress(pct * 0.5); pm.setStatus(pct >= 100 ? '正在处理数据…' : '正在上传… ' + pct + '%');
     }).then(function (result) {
@@ -9610,13 +9625,13 @@ function doubleExcellenceView() {
     $all('.scroll-btns', document).forEach(function (el) { el.remove(); });
     root.innerHTML = ''; inputs = {};
     toolbar = h('div', { class: 'toolbar' });
-    // 顶栏已显示"双争评比"模块名，工具栏不再重复标题，直接以年度切换开头
-    yearPrev = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '‹', 'aria-label': '上一年', title: '上一年', onclick: function () { setYear(state.year - 1); } });
-    yearNext = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '›', 'aria-label': '下一年', title: '下一年', onclick: function () { setYear(state.year + 1); } });
+    // 顶栏已显示模块名，工具栏不再重复标题，直接以年度切换开头
+    yearPrev = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '‹', 'aria-label': cfg.yearAria, title: cfg.yearAria, onclick: function () { setYear(state.year - 1); } });
+    yearNext = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '›', 'aria-label': cfg.yearAria === '上一年' ? '下一年' : '下一年度', title: cfg.yearAria === '上一年' ? '下一年' : '下一年度', onclick: function () { setYear(state.year + 1); } });
     yearText = h('span', { class: 'de-year-text', 'aria-live': 'polite', text: state.year + ' 年' });
     toolbar.appendChild(h('div', { class: 'de-year-nav', role: 'group', 'aria-label': '年份切换' }, yearPrev, yearText, yearNext));
     toolbar.appendChild(h('div', { class: 'spacer' }));
-    importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none', 'aria-label': '选择双争评比 Excel 文件' });
+    importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none', 'aria-label': cfg.importInputAria });
     importInput.addEventListener('change', importFile);
     var ioWrap = h('div', { class: 'dd io-dd' });
     var ioButton = h('button', { type: 'button', class: 'btn btn-ghost dd-btn io-btn', text: '导入导出 ▾', onclick: function (e) {
@@ -9629,18 +9644,18 @@ function doubleExcellenceView() {
       ioWrap.classList.remove('open');
       if (!alive() || state.importing || state.writing || state.confirmingImport) return;
       state.confirmingImport = true;
-      confirmBox('请使用六列模板填写。按身份证号码＋年份＋季度匹配：不存在则新增，已存在则更新评定和评比日期。人员必须已建档，评定仅限好、中、一般。确定继续导入吗？')
+      confirmBox(cfg.importConfirmText)
         .then(function (yes) { state.confirmingImport = false; if (yes && alive() && !state.importing) importInput.click(); })
         .catch(function () { state.confirmingImport = false; });
     } });
     var menu = h('div', { class: 'dd-list io-menu' }, importItem,
-      h('button', { type: 'button', class: 'dd-item de-io-item', text: '导出 Excel', title: '导出当前年份与筛选命中的全部评比记录（未评定不是记录）',
+      h('button', { type: 'button', class: 'dd-item de-io-item', text: '导出 Excel', title: '导出当前年度与筛选命中的全部记录（未评定不是记录）',
         onclick: function () { ioWrap.classList.remove('open'); exportRecords(); } }));
     menu.addEventListener('click', function (e) { e.stopPropagation(); });
     ioWrap.appendChild(ioButton); ioWrap.appendChild(menu);
     toolbar.appendChild(importInput); toolbar.appendChild(ioWrap);
-    toolbar.appendChild(h('button', { class: 'btn btn-ghost', text: '下载模板', onclick: function () { download('/template', '下载双争评比模板'); } }));
-    toolbar.appendChild(h('button', { class: 'btn btn-primary', text: '新增评比记录', onclick: function () { openForm(null, null); } }));
+    toolbar.appendChild(h('button', { class: 'btn btn-ghost', text: '下载模板', onclick: function () { download('/template', cfg.templateTitle); } }));
+    toolbar.appendChild(h('button', { class: 'btn btn-primary', text: cfg.addLabel, onclick: function () { openForm(null, null); } }));
     setImportBusy(state.importing);
     count = h('span', { class: 'de-count' });
     errorBox = h('div', { class: 'form-err de-error', role: 'alert' });
@@ -9661,7 +9676,7 @@ function doubleExcellenceView() {
     filterPanel = h('div', { class: 'filter-panel' + (filterOpen ? ' open' : '') }, filterInner);
     root.appendChild(h('div', { class: 'content-layout' }, main, filterPanel));
     filterTab = h('button', { type: 'button', class: 'filter-tab-btn' + (filterOpen ? ' panel-open' : ''), text: filterOpen ? '收 起' : '筛 选',
-      'aria-label': '切换双争评比筛选面板', 'aria-expanded': String(filterOpen), onclick: toggleFilter });
+      'aria-label': cfg.filterTabAria, 'aria-expanded': String(filterOpen), onclick: toggleFilter });
     document.body.appendChild(filterTab);
   }
   return { render: function (container) {
@@ -9670,6 +9685,177 @@ function doubleExcellenceView() {
     observer.observe(document.body, { childList: true, subtree: true });
   }, destroy: dispose };
 }
+
+/* 双争评比矩阵：一人一行 × 四个季度评定单元格 */
+var doubleExcellenceMatrixCfg = {
+  endpoint: '/api/double-excellence',
+  historyLabel: '历年双争评比',
+  tableAria: '双争评比年度四季度表',
+  yearAria: '上一年',
+  filterTabAria: '切换双争评比筛选面板',
+  importInputAria: '选择双争评比 Excel 文件',
+  headers: ['第一季度', '第二季度', '第三季度', '第四季度'],
+  colspan: 7,
+  statQuery: function (filters) { return doubleExcellenceQuery(filters, false); },
+  exportQuery: function (filters) { return doubleExcellenceQuery(filters, true); },
+  exportTitle: function (year) { return '导出' + year + '年双争评比记录'; },
+  importModalTitle: '导入双争评比',
+  importOversizeMsg: '双争评比导入文件不能超过 10MiB，请拆分后重试',
+  importConfirmText: '请使用六列模板填写。按身份证号码＋年份＋季度匹配：不存在则新增，已存在则更新评定和评比日期。人员必须已建档，评定仅限好、中、一般。确定继续导入吗？',
+  templateTitle: '下载双争评比模板',
+  addLabel: '新增评比记录',
+  newValues: function (year) { return { year: year, quarter: String(Math.floor(new Date().getMonth() / 3) + 1), ratingDate: formatCalendarDay(new Date()) }; },
+  fixedKeys: ['year', 'quarter', 'personnelName', 'idCard'],
+  fields: function () { return doubleExcellenceFields(); },
+  payload: function (data) { return doubleExcellencePayload(data); },
+  formTitle: function (values, recordId, fixed) {
+    var title = (recordId ? '编辑' : '新增') + ' · 双争评比记录';
+    if (fixed && values.personnelName) {
+      title = (recordId ? '编辑' : '填写') + '评定：' + values.personnelName + ' ' + values.year + '年第' + values.quarter + '季度';
+    }
+    return title;
+  },
+  deleteConfirmText: function (values) { return '确定删除' + values.year + '年第' + values.quarter + '季度的这条评比记录吗？删除后不可恢复。'; },
+  rowCells: function (row, openCellForm, ctx) {
+    var tds = [];
+    for (var quarter = 1; quarter <= 4; quarter++) {
+      (function (q) {
+        var entry = row['q' + q];
+        var ratingCls = entry ? DE_RATING_CLS[entry.rating] : 'is-unrated';
+        tds.push(h('td', { class: 'de-cell' },
+          h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
+            'aria-label': row.personnelName + '第' + q + '季度评定：' + (entry ? entry.rating : '未评定'),
+            title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写第' + q + '季度评定',
+            onclick: function () { openCellForm(cellFormValues(row, q, entry, ctx), entry ? entry.id : null); } },
+            // 日期（仅月/日）在前、评定在后同一行紧凑排列、整体靠左；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
+            h('span', { class: 'de-rating-line' },
+              entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null,
+              h('b', { text: entry ? entry.rating : '未评定' })))));
+      })(quarter);
+    }
+    return tds;
+  },
+  renderHistory: function (box, row, list) {
+    box.innerHTML = '';
+    var years = {};
+    list.forEach(function (r) { (years[r.year] = years[r.year] || {})[r.quarter] = r; });
+    var yearList = Object.keys(years).map(Number).sort(function (a, b) { return b - a; });
+    box.appendChild(h('div', { class: 'de-history-head' },
+      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
+      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条评定记录' })));
+    if (!yearList.length) {
+      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的评比记录' }));
+      return;
+    }
+    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年双争评比表' });
+    var head = h('tr');
+    ['年度', '第一季度', '第二季度', '第三季度', '第四季度'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
+    var body = h('tbody');
+    yearList.forEach(function (year) {
+      var tr = h('tr');
+      tr.appendChild(h('td', { class: 'de-h-year', text: year + ' 年' }));
+      for (var quarter = 1; quarter <= 4; quarter++) {
+        var entry = years[year][quarter];
+        var cls = entry ? (DE_RATING_CLS[entry.rating] || '') : 'is-unrated';
+        tr.appendChild(h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
+          h('span', { class: 'de-rating-line' },
+            h('b', { text: entry ? entry.rating : '—' }),
+            entry && entry.ratingDate ? h('small', { text: entry.ratingDate }) : null)));
+      }
+      body.appendChild(tr);
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    box.appendChild(table);
+    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
+  }
+};
+function cellFormValues(row, quarter, entry, ctx) {
+  var values = { year: ctx.year, quarter: String(quarter),
+    personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
+    ratingDate: entry && entry.ratingDate ? entry.ratingDate : ctx.today };
+  if (entry) values.rating = entry.rating;
+  return values;
+}
+
+/* 年度考评矩阵：一人一行 × 年度评定单元格 */
+var annualAppraisalMatrixCfg = {
+  endpoint: '/api/annual-appraisal',
+  historyLabel: '历年年度考评',
+  tableAria: '年度考评评定表',
+  yearAria: '上一年度',
+  filterTabAria: '切换年度考评筛选面板',
+  importInputAria: '选择年度考评 Excel 文件',
+  headers: ['年度评定'],
+  colspan: 4,
+  statQuery: function (filters) { return annualAppraisalQuery(filters); },
+  exportQuery: function (filters) { return annualAppraisalQuery(filters); },
+  exportTitle: function (year) { return '导出' + year + '年年度考评记录'; },
+  importModalTitle: '导入年度考评',
+  importOversizeMsg: '年度考评导入文件不能超过 10MiB，请拆分后重试',
+  importConfirmText: '请使用五列模板填写。按身份证号码＋年度匹配：不存在则新增，已存在则更新评定和考评日期。人员必须已建档，评定选项以数据字典为准。确定继续导入吗？',
+  templateTitle: '下载年度考评模板',
+  addLabel: '新增考评记录',
+  newValues: function (year) { return { year: year, ratingDate: formatCalendarDay(new Date()) }; },
+  fixedKeys: ['year', 'personnelName', 'idCard'],
+  fields: function () { return annualAppraisalFields(); },
+  payload: function (data) { return annualAppraisalPayload(data); },
+  formTitle: function (values, recordId, fixed) {
+    var title = (recordId ? '编辑' : '新增') + ' · 年度考评记录';
+    if (fixed && values.personnelName) {
+      title = (recordId ? '编辑' : '填写') + '考评：' + values.personnelName + ' ' + values.year + '年度';
+    }
+    return title;
+  },
+  deleteConfirmText: function (values) { return '确定删除' + values.year + '年度的这条考评记录吗？删除后不可恢复。'; },
+  rowCells: function (row, openCellForm, ctx) {
+    var entry = row.entry;
+    var ratingCls = entry ? (AA_RATING_CLS[entry.rating] || '') : 'is-unrated';
+    return [h('td', { class: 'de-cell' },
+      h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
+        'aria-label': row.personnelName + ' ' + ctx.year + '年度考评：' + (entry ? entry.rating : '未评定'),
+        title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写' + ctx.year + '年度考评',
+        onclick: function () {
+          var values = { year: ctx.year,
+            personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
+            ratingDate: entry && entry.ratingDate ? entry.ratingDate : ctx.today };
+          if (entry) values.rating = entry.rating;
+          openCellForm(values, entry ? entry.id : null);
+        } },
+        // 评定靠左、考评日期（仅月/日）紧随其后；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
+        h('span', { class: 'de-rating-line' },
+          h('b', { text: entry ? entry.rating : '未评定' }),
+          entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null)))];
+  },
+  renderHistory: function (box, row, list) {
+    box.innerHTML = '';
+    box.appendChild(h('div', { class: 'de-history-head' },
+      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
+      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条考评记录' })));
+    if (!list.length) {
+      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的考评记录' }));
+      return;
+    }
+    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年年度考评表' });
+    var head = h('tr');
+    ['年度', '评定', '考评日期'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
+    var body = h('tbody');
+    list.forEach(function (r) {
+      var cls = AA_RATING_CLS[r.rating] || '';
+      body.appendChild(h('tr', {},
+        h('td', { class: 'de-h-year', text: r.year + ' 年' }),
+        h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
+          h('span', { class: 'de-rating-line' }, h('b', { text: r.rating || '—' }))),
+        h('td', { class: 'de-h-cell' }, r.ratingDate || '—')));
+    });
+    table.appendChild(h('thead', {}, head)); table.appendChild(body);
+    box.appendChild(table);
+    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
+  }
+};
+
+function doubleExcellenceView() { return yearMatrixView(doubleExcellenceMatrixCfg); }
+function annualAppraisalView() { return yearMatrixView(annualAppraisalMatrixCfg); }
+
 
 /* ================= 年度考评：年度全员评定表 ================= */
 var annualAppraisalCfg = { key: 'annual-appraisal', title: '年度考评', icon: 'fileText' };
@@ -9712,376 +9898,6 @@ function annualAppraisalQuery(filters) {
   }).map(function (key) { return key + '=' + encodeURIComponent(String(filters[key]).trim()); }).join('&');
 }
 
-function annualAppraisalView() {
-  // 主页面即年度全员评定表：全部权限内人员一行一人，评定单元格点击即可填写或修改。
-  var endpoint = '/api/annual-appraisal', now = new Date(), currentYear = now.getFullYear();
-  var root = h('div', { class: 'double-excellence' }); // 复用双争矩阵的全部样式与对齐
-  var sessionToken = TOKEN, sessionUser = USER && USER.userId;
-  var state = { year: currentYear, filters: {},
-    total: 0, rows: [], loading: false, generation: 0,
-    writing: false, importing: false, confirmingImport: false, formOpen: false, disposed: false };
-  var inputs = {}, filterTab, filterPanel, main, toolbar, tableBox, pagerBox, errorBox, count, importInput, importItem;
-  var yearPrev, yearNext, yearText;
-  var filterOpen = false, closeTimer = null, animations = [], observer = null;
-  function alive() { return !state.disposed && TOKEN === sessionToken && USER && USER.userId === sessionUser && document.body.contains(root); }
-  function cancelAnimations() {
-    if (closeTimer !== null) { clearTimeout(closeTimer); closeTimer = null; }
-    animations.forEach(function (cancel) { cancel(); }); animations = [];
-  }
-  function dispose() {
-    if (state.disposed) return;
-    state.disposed = true; state.generation++; cancelAnimations();
-    if (filterTab) filterTab.remove();
-    if (observer) observer.disconnect();
-  }
-  function animate(el, dx) { var cancel = slideFrom(el, dx); if (typeof cancel === 'function') animations.push(cancel); }
-  function toggleFilter() {
-    if (!alive()) { dispose(); return; }
-    cancelAnimations(); filterOpen = !filterOpen;
-    if (filterOpen) {
-      filterPanel.classList.add('open'); animate(filterPanel, 270);
-      main.classList.add('filter-padding'); animate(main, 270);
-    } else {
-      filterPanel.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1)';
-      filterPanel.style.transform = 'translateX(100%)';
-      main.classList.remove('filter-padding'); animate(main, -270);
-      closeTimer = setTimeout(function () {
-        closeTimer = null;
-        if (!alive()) { dispose(); return; }
-        if (filterOpen) return;
-        filterPanel.classList.remove('open'); filterPanel.style.transition = ''; filterPanel.style.transform = '';
-      }, 310);
-    }
-    filterTab.classList.toggle('panel-open', filterOpen); filterTab.textContent = filterOpen ? '收 起' : '筛 选';
-    filterTab.setAttribute('aria-expanded', String(filterOpen));
-  }
-  function setYear(year) {
-    if (!alive()) return;
-    year = Number(year);
-    if (!isFinite(year) || year % 1 || year < 1900 || year > 9999 || year === state.year) return;
-    state.year = year; load();
-  }
-  function readFilters() {
-    var filters = {};
-    ['personnelName', 'idCard', 'departmentId'].forEach(function (key) {
-      if (inputs[key]) filters[key] = String(inputs[key].rawValue === undefined ? inputs[key].value || '' : inputs[key].rawValue).trim();
-    });
-    return filters;
-  }
-  function applyFilters() {
-    if (!alive()) return;
-    state.filters = readFilters();
-    load();
-  }
-  function load() {
-    if (!alive()) return;
-    var generation = ++state.generation;
-    state.rows = []; state.total = 0; state.loading = true; errorBox.textContent = '';
-    renderData();
-    var query = annualAppraisalQuery({ year: state.year, personnelName: state.filters.personnelName,
-      idCard: state.filters.idCard, departmentId: state.filters.departmentId });
-    // 与其它模块一致：一次加载全部人员（loadAllRows 自动循环按 200/页取全），列表不做分页
-    loadAllRows(endpoint + '/stats?' + query).then(function (data) {
-      if (!alive() || generation !== state.generation) return;
-      state.rows = data && data.list || [];
-      state.total = data && data.total || state.rows.length;
-      state.loading = false;
-      renderData();
-    }).catch(function (e) {
-      if (!alive() || generation !== state.generation) return;
-      state.loading = false;
-      errorBox.textContent = e.message || '加载失败，请重试';
-      renderData(true);
-    });
-  }
-  function cell(row, text) { row.appendChild(h('td', {}, text == null ? '' : String(text))); }
-  // 姓名与身份证号码列：点击查看该人历年考评
-  function personCell(tr, row, value) {
-    tr.appendChild(h('td', { class: 'de-person-cell' },
-      h('button', { type: 'button', class: 'btn-link de-person-btn',
-        title: '查看' + row.personnelName + '历年年度考评',
-        'aria-label': '查看' + row.personnelName + '历年年度考评',
-        onclick: function () { openHistory(row); } },
-        value == null ? '' : String(value))));
-  }
-  function renderData(failed) {
-    tableBox.innerHTML = ''; pagerBox.innerHTML = '';
-    yearText.textContent = state.year + ' 年';
-    yearPrev.disabled = state.year <= 1900;
-    yearNext.disabled = state.year >= 9999;
-    count.textContent = state.loading ? '加载中…' : failed ? '加载失败' : '共 ' + state.total + ' 人';
-    var table = h('table', { class: 'grid de-grid', 'aria-label': '年度考评评定表' });
-    var head = h('tr'), body = h('tbody');
-    ['单位', '姓名', '身份证号码', '年度评定'].forEach(function (label) {
-      head.appendChild(h('th', { text: label }));
-    });
-    table.appendChild(h('thead', {}, head)); table.appendChild(body);
-    state.rows.forEach(function (row) {
-      var tr = h('tr');
-      cell(tr, String(row.departmentPath || '').replace(/\s*\/\s*/g, '')); personCell(tr, row, row.personnelName); personCell(tr, row, row.idCard);
-      tr.appendChild(appraisalCell(row));
-      body.appendChild(tr);
-    });
-    if (!state.rows.length) body.appendChild(h('tr', {}, h('td', {
-      colspan: 4, class: 'empty-row', text: state.loading ? '加载中…' : failed ? '加载失败，请重试' : '暂无人员'
-    })));
-    tableBox.appendChild(table);
-    // 不分页：全部人员一次展示，滚动即可
-  }
-  function appraisalCell(row) {
-    var entry = row.entry;
-    var ratingCls = entry ? (AA_RATING_CLS[entry.rating] || '') : 'is-unrated';
-    return h('td', { class: 'de-cell' },
-      h('button', { type: 'button', class: 'de-cell-btn' + (ratingCls ? ' ' + ratingCls : ''),
-        'aria-label': row.personnelName + ' ' + state.year + '年度考评：' + (entry ? entry.rating : '未评定'),
-        title: entry ? entry.rating + (entry.ratingDate ? '（' + entry.ratingDate + '）' : '') + '，点击编辑' : '点击填写' + state.year + '年度考评',
-        onclick: function () { openCellForm(row); } },
-        // 评定靠左、考评日期（仅月/日）紧随其后；评定字中心线与表头文字对齐，完整日期见悬停提示与历年弹窗
-        h('span', { class: 'de-rating-line' },
-          h('b', { text: entry ? entry.rating : '未评定' }),
-          entry && entry.ratingDate ? h('small', { text: entry.ratingDate.slice(5).replace('-', '/') }) : null)));
-  }
-  function openCellForm(row) {
-    if (!alive() || state.writing || state.importing || state.formOpen) return;
-    var entry = row.entry;
-    var values = { year: state.year,
-      personnelName: row.personnelName, idCard: row.idCard, personnelId: row.personnelId,
-      ratingDate: entry && entry.ratingDate ? entry.ratingDate : formatCalendarDay(now) };
-    if (entry) values.rating = entry.rating;
-    openForm(values, { recordId: entry ? entry.id : null, fixed: true });
-  }
-  function afterChange() {
-    if (alive()) load();
-  }
-  // 历年考评：按人员ID取全部年度记录（服务端 personnelIds 走权限校验），按年度倒序列表展示
-  function openHistory(row) {
-    if (!alive()) return;
-    var box = h('div', { class: 'de-history' },
-      h('div', { class: 'de-history-empty', text: '正在加载 ' + row.personnelName + ' 的历年考评…' }));
-    openModal({ title: row.personnelName + ' · 历年年度考评', body: box, wide: true });
-    // loadAllRows 自动按 200/页取全:历年考评记录超过 200 条时不再截断
-    loadAllRows(endpoint + '?personnelIds=' + encodeURIComponent(row.personnelId)).then(function (data) {
-      if (!alive() || !document.body.contains(box)) return;
-      renderHistory(box, row, (data && data.list) || []);
-    }).catch(function (e) {
-      if (!alive() || !document.body.contains(box)) return;
-      box.innerHTML = '';
-      box.appendChild(h('div', { class: 'de-history-empty', text: e.message || '加载失败，请关闭后重试' }));
-    });
-  }
-  function renderHistory(box, row, list) {
-    box.innerHTML = '';
-    box.appendChild(h('div', { class: 'de-history-head' },
-      h('span', { class: 'de-history-who', text: '身份证号码 ' + (row.idCard || '—') }),
-      h('span', { class: 'de-history-count', text: '共 ' + list.length + ' 条考评记录' })));
-    if (!list.length) {
-      box.appendChild(h('div', { class: 'de-history-empty', text: '暂无任何年度的考评记录' }));
-      return;
-    }
-    var table = h('table', { class: 'de-history-grid', 'aria-label': row.personnelName + '历年年度考评表' });
-    var head = h('tr');
-    ['年度', '评定', '考评日期'].forEach(function (label) { head.appendChild(h('th', { text: label })); });
-    var body = h('tbody');
-    list.forEach(function (r) {
-      var cls = AA_RATING_CLS[r.rating] || '';
-      body.appendChild(h('tr', {},
-        h('td', { class: 'de-h-year', text: r.year + ' 年' }),
-        h('td', { class: 'de-h-cell' + (cls ? ' ' + cls : '') },
-          h('span', { class: 'de-rating-line' }, h('b', { text: r.rating || '—' }))),
-        h('td', { class: 'de-h-cell' }, r.ratingDate || '—')));
-    });
-    table.appendChild(h('thead', {}, head)); table.appendChild(body);
-    box.appendChild(table);
-    if (list.length >= 200) box.appendChild(h('div', { class: 'de-history-empty', text: '记录较多，仅显示最近 200 条' }));
-  }
-  function openForm(values, options) {
-    if (!alive() || state.writing || state.importing || state.formOpen) return;
-    state.formOpen = true;
-    options = options || {};
-    var fixed = !!options.fixed, recordId = options.recordId || null;
-    // 新增默认跟随正在查看的年度（而非系统当前年），避免查看历史年度时误录入今年；年度仍可手动调整
-    if (!values) values = { year: state.year, ratingDate: formatCalendarDay(now) };
-    var form = buildForm(annualAppraisalFields(), values);
-    if (fixed) {
-      // 单元格进入：人员与年度由所在行列锁定，只允许改评定与考评日期。
-      ['year', 'personnelName', 'idCard'].forEach(function (key) {
-        var input = form.inputs[key];
-        if (!input) return;
-        if (input.classList && input.classList.contains('dd')) input.disabled = true;
-        else input.readOnly = true;
-        input.classList.add('ro');
-      });
-    } else {
-      setupPersonLookup(form, { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' });
-    }
-    var saving = false, saved = false, removing = false;
-    var remove = recordId ? h('button', { class: 'btn btn-danger', text: '删除', onclick: function () {
-      if (saving || removing) return;
-      removing = true;
-      confirmBox('确定删除' + values.year + '年度的这条考评记录吗？删除后不可恢复。', true).then(function (yes) {
-        if (!yes || !alive()) return false;
-        return DEL(endpoint + '/' + encodeURIComponent(recordId)).then(function () { return true; });
-      }).then(function (changed) {
-        removing = false;
-        if (changed) { saved = true; m.close(true); if (alive()) { toast('已删除'); afterChange(); } }
-      }).catch(function (e) { removing = false; if (alive()) toast(e.message || '删除失败，请重试', 'err'); });
-    } }) : null;
-    var save = h('button', { class: 'btn btn-primary', text: '保存', onclick: function () {
-      if (saving || removing) return; // 删除进行中同样禁止保存,避免并发写同一条记录
-      if (!alive()) { form.setError('页面或登录状态已变更，请关闭后重新进入'); return; }
-      var data = form.get(), payload;
-      if (!data || form.validatePerson && !form.validatePerson()) return;
-      try { payload = annualAppraisalPayload(data); } catch (e) { form.setError(e.message); return; }
-      saving = true; state.writing = true; save.disabled = true;
-      if (remove) remove.disabled = true;
-      var controls = $all('input, button, textarea, select', form.el).map(function (el) {
-        var old = { el: el, disabled: el.disabled }; el.disabled = true; return old;
-      });
-      var request = recordId ? PUT(endpoint + '/' + encodeURIComponent(recordId), payload) : POST(endpoint, payload);
-      request.then(function () {
-        saved = true; m.close(true);
-        if (alive()) { toast('保存成功'); afterChange(); }
-      }).catch(function (e) { if (alive()) form.setError(e.message || '保存失败，请重试'); }).then(function () {
-        saving = false; state.writing = false; save.disabled = false;
-        if (remove) remove.disabled = false;
-        controls.forEach(function (old) { old.el.disabled = old.disabled; });
-      });
-    } });
-    var footer = [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })];
-    if (remove) footer.push(remove);
-    footer.push(save);
-    // 单元格进入：标题点明人员与年度，工具栏"新增"保持通用标题
-    var title = (recordId ? '编辑' : '新增') + '年度考评记录';
-    if (fixed && values.personnelName) {
-      title = (recordId ? '编辑' : '填写') + '考评：' + values.personnelName + ' ' + values.year + '年度';
-    }
-    var m = openModal({ title: title, body: form.el,
-      onClose: function () { state.formOpen = false; },
-      beforeClose: function () { if ((saving || removing) && !saved) { form.setError('正在保存或删除，请稍候'); return false; } return true; },
-      footer: footer });
-  }
-  function download(path, title) {
-    if (!alive()) return;
-    var pm = showProgressModal(title);
-    pm.setStatus('正在生成文件…');
-    apiBlobWithProgress(endpoint + path, function (pct) { pm.setProgress(pct); }).then(function (r) {
-      pm.close();
-      if (alive()) downloadBlob(r.blob, r.filename);
-    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '下载失败，请重试', 'err'); });
-  }
-  function exportRecords() {
-    if (!alive() || state.loading) return;
-    var filters = state.filters;
-    // 无勾选与人员范围：导出当前年度＋筛选命中的全部考评记录（未评定不是记录）。
-    var query = annualAppraisalQuery({ year: state.year, personnelName: filters.personnelName,
-      idCard: filters.idCard, departmentId: filters.departmentId });
-    download('/export' + (query ? '?' + query : ''), '导出' + state.year + '年年度考评记录');
-  }
-  function setImportBusy(busy) {
-    state.importing = busy;
-    if (importInput) importInput.disabled = busy;
-    if (importItem) { importItem.disabled = busy; importItem.textContent = busy ? '正在导入…' : '导入 Excel'; }
-  }
-  function importFile() {
-    var file = importInput.files && importInput.files[0]; importInput.value = '';
-    if (!file || state.importing || state.writing || !alive()) return;
-    if (!/\.xlsx$/i.test(file.name)) { toast('请选择下载模板填写的 .xlsx 文件', 'err'); return; }
-    if (file.size > 10 * 1024 * 1024) { toast('年度考评导入文件不能超过 10MiB，请拆分后重试', 'err'); return; }
-    setImportBusy(true);
-    var fd = new FormData(); fd.append('file', file);
-    var pm = showProgressModal('导入年度考评'); pm.setStatus('正在上传 ' + file.name + '…');
-    postFormWithProgress(endpoint + '/import-excel', fd, function (pct) {
-      pm.setProgress(pct * 0.5); pm.setStatus(pct >= 100 ? '正在处理数据…' : '正在上传… ' + pct + '%');
-    }).then(function (result) {
-      pm.close();
-      if (!alive()) return;
-      result = result || {};
-      var message = importResultSummary(result, false), errors = result.errors || [];
-      if (result.error || errors.length) openImportResultModal(message, errors, result.error || '');
-      else toast(message, result.failed ? 'info' : 'ok');
-      // 部分失败也可能有新增/更新，重新请求当前视图；失败文件仍可重选重试。
-      afterChange();
-    }).catch(function (e) { pm.close(); if (alive()) toast(e.message || '导入失败，请检查后重试', 'err'); })
-      .then(function () { setImportBusy(false); });
-  }
-  function filterField(key, label, options) {
-    var input = options ? makeDropdown(options, '全部') : h('input', { type: 'text', placeholder: '回车搜索' });
-    inputs[key] = input;
-    input.setAttribute('data-fkey', key);
-    input.value = state.filters[key] || '';
-    var control = options ? input.querySelector('.dd-btn') : input;
-    if (control) control.setAttribute('aria-label', label);
-    if (key === 'departmentId') input.classList.add('personnel-path-dropdown');
-    if (options) input.addEventListener('change', applyFilters);
-    else input.addEventListener('keydown', function (e) { if (e.key === 'Enter') applyFilters(); });
-    return h('div', { class: 'filter-field' }, h('label', { text: label }), input);
-  }
-  function render() {
-    // 只在挂载时构建主视图；普通筛选开关不会重建 DOM 或重置滚动。
-    $all('.filter-tab-btn', document).forEach(function (el) { el.remove(); });
-    $all('.scroll-btns', document).forEach(function (el) { el.remove(); });
-    root.innerHTML = ''; inputs = {};
-    toolbar = h('div', { class: 'toolbar' });
-    // 顶栏已显示"年度考评"模块名，工具栏不再重复标题，直接以年度切换开头
-    yearPrev = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '‹', 'aria-label': '上一年度', title: '上一年度', onclick: function () { setYear(state.year - 1); } });
-    yearNext = h('button', { type: 'button', class: 'btn btn-ghost de-year-btn', text: '›', 'aria-label': '下一年度', title: '下一年度', onclick: function () { setYear(state.year + 1); } });
-    yearText = h('span', { class: 'de-year-text', 'aria-live': 'polite', text: state.year + ' 年' });
-    toolbar.appendChild(h('div', { class: 'de-year-nav', role: 'group', 'aria-label': '年度切换' }, yearPrev, yearText, yearNext));
-    toolbar.appendChild(h('div', { class: 'spacer' }));
-    importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none', 'aria-label': '选择年度考评 Excel 文件' });
-    importInput.addEventListener('change', importFile);
-    var ioWrap = h('div', { class: 'dd io-dd' });
-    var ioButton = h('button', { type: 'button', class: 'btn btn-ghost dd-btn io-btn', text: '导入导出 ▾', onclick: function (e) {
-      e.stopPropagation(); if (!alive()) return;
-      var opening = !ioWrap.classList.contains('open');
-      $all('.dd.open, .cal.open').forEach(function (el) { el.classList.remove('open'); });
-      ioWrap.classList.toggle('open', opening);
-    } });
-    importItem = h('button', { type: 'button', class: 'dd-item de-io-item', text: '导入 Excel', onclick: function () {
-      ioWrap.classList.remove('open');
-      if (!alive() || state.importing || state.writing || state.confirmingImport) return;
-      state.confirmingImport = true;
-      confirmBox('请使用五列模板填写。按身份证号码＋年度匹配：不存在则新增，已存在则更新评定和考评日期。人员必须已建档，评定选项以数据字典为准。确定继续导入吗？')
-        .then(function (yes) { state.confirmingImport = false; if (yes && alive() && !state.importing) importInput.click(); })
-        .catch(function () { state.confirmingImport = false; });
-    } });
-    var menu = h('div', { class: 'dd-list io-menu' }, importItem,
-      h('button', { type: 'button', class: 'dd-item de-io-item', text: '导出 Excel', title: '导出当前年度与筛选命中的全部考评记录（未评定不是记录）',
-        onclick: function () { ioWrap.classList.remove('open'); exportRecords(); } }));
-    menu.addEventListener('click', function (e) { e.stopPropagation(); });
-    ioWrap.appendChild(ioButton); ioWrap.appendChild(menu);
-    toolbar.appendChild(importInput); toolbar.appendChild(ioWrap);
-    toolbar.appendChild(h('button', { class: 'btn btn-ghost', text: '下载模板', onclick: function () { download('/template', '下载年度考评模板'); } }));
-    toolbar.appendChild(h('button', { class: 'btn btn-primary', text: '新增考评记录', onclick: function () { openForm(null, null); } }));
-    setImportBusy(state.importing);
-    count = h('span', { class: 'de-count' });
-    errorBox = h('div', { class: 'form-err de-error', role: 'alert' });
-    tableBox = h('div', { class: 'table-wrap' }); pagerBox = h('div');
-    main = h('div', { class: 'content-main' },
-      h('div', { class: 'panel de-toolbar' }, toolbar), errorBox,
-      h('div', { class: 'panel' }, h('div', { class: 'de-list-head' }, count), tableBox, pagerBox));
-    var filterInner = h('div', { class: 'filter-panel-inner' }, h('h4', { text: '筛选条件' }),
-      filterField('personnelName', '姓名'), filterField('idCard', '身份证号码'),
-      filterField('departmentId', '单位（含下级）', Ctx.deptFlat.map(function (dept) { return { v: String(dept.id), l: dept.path || dept.name }; })));
-    filterInner.appendChild(h('div', { class: 'filter-actions' },
-      h('button', { class: 'btn btn-primary', text: '查询', onclick: applyFilters }),
-      h('button', { class: 'btn btn-ghost', text: '重置', onclick: function () {
-        if (!alive()) return;
-        Object.keys(inputs).forEach(function (key) { inputs[key].value = ''; });
-        applyFilters();
-      } })));
-    filterPanel = h('div', { class: 'filter-panel' + (filterOpen ? ' open' : '') }, filterInner);
-    root.appendChild(h('div', { class: 'content-layout' }, main, filterPanel));
-    filterTab = h('button', { type: 'button', class: 'filter-tab-btn' + (filterOpen ? ' panel-open' : ''), text: filterOpen ? '收 起' : '筛 选',
-      'aria-label': '切换年度考评筛选面板', 'aria-expanded': String(filterOpen), onclick: toggleFilter });
-    document.body.appendChild(filterTab);
-  }
-  return { render: function (container) {
-    container.appendChild(root); render(); load();
-    observer = new MutationObserver(function () { if (!alive()) dispose(); });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }, destroy: dispose };
-}
 
 function pendingModuleView(cfg) {
   return {
