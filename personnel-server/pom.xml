@@ -65,6 +65,32 @@
             </resource>
         </resources>
         <plugins>
+            <!-- SpotBugs 静态代码审查(4.7.3 线:最后支持 JDK8 运行的版本)
+                 触发方式:
+                   - mvn verify            → 高置信度缺陷将使构建失败(防新增高危问题)
+                   - mvn spotbugs:spotbugs -Dspotbugs.threshold=Medium → 生成全量报告,不挡构建
+                 日常 开发运行.bat / 打包脚本 用 package/test,不受影响 -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>4.7.3.6</version>
+                <configuration>
+                    <effort>Max</effort>
+                    <!-- 默认 High:verify 只拦截高置信度缺陷,存量中低优先级问题仅报告 -->
+                    <threshold>High</threshold>
+                    <xmlOutput>true</xmlOutput>
+                    <failOnError>false</failOnError>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

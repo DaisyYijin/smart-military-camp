@@ -30,5 +30,8 @@ packaging/jres/
 .zcode/
 NUL
 
+# 外部参考仓库(仅本地对比用,不入库)
+scaffold-master/
+
 # 根目录临时数据库备份(含真实人员数据,严禁入库)
 .tmp_db_backup*

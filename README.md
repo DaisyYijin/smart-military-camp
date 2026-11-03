@@ -48,6 +48,11 @@
 - **改前端**(HTML/CSS/JS):保存后浏览器按 F5 立即生效,**不用重启**
 - **改后端**(Java):重新双击 `开发运行.bat`(约 20 秒)
 
+代码静态审查(SpotBugs,已配置在 `personnel-server/pom.xml`):
+- 双击根目录 **`代码审查.bat`** → 全量报告(HTML)在 `personnel-server/target/spotbugs.html`
+- `mvn verify` 会在出现**高置信度缺陷**时构建失败,防止新增高危问题;`开发运行.bat` 与打包脚本走 `package`/`test`,不受影响
+- 首次运行需联网下载插件(已缓存到本机 Maven 仓库,之后离线可用)
+
 测试满意后再出发行包,二选一:
 ```bash
 bash packaging/build-release.sh            # Git Bash 里执行
