@@ -83,8 +83,7 @@ public class LeaveStatusSyncService {
                 "SELECT 1 FROM leave_record l WHERE l.personnel_id=personnel.id AND l.start_date <= ? AND l.end_date >= ?)",
                 today, today);
         int back = jdbc.update(
-                "UPDATE personnel SET status=CASE WHEN auto_leave_previous_status IN ('在职','在位') " +
-                "THEN auto_leave_previous_status ELSE '在职' END, auto_leave=0, auto_leave_previous_status='', updated_at=datetime('now','localtime') " +
+                "UPDATE personnel SET status='在位', auto_leave=0, auto_leave_previous_status='', updated_at=datetime('now','localtime') " +
                 "WHERE auto_leave=1 AND status='休假' AND NOT EXISTS (" +
                 "SELECT 1 FROM leave_record l WHERE l.personnel_id=personnel.id AND l.start_date <= ? AND l.end_date >= ?)",
                 today, today);

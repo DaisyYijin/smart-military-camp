@@ -144,6 +144,21 @@ public class DashboardController {
                     d, 2));
         }
 
+        // 在外登记:超期未归(danger)或10天内预计返回(info);可见性与在外登记列表一致
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT p.name AS name, a.reason AS reason, a.expected_return_date AS d FROM absence_record a " +
+                "JOIN personnel p ON a.personnel_id = p.id " +
+                "WHERE " + DataScope.personSql("a.personnel_id") + " AND a.actual_return_date = '' " +
+                "AND a.expected_return_date <> '' AND a.expected_return_date <= ? ORDER BY a.expected_return_date", plus10)) {
+            String d = String.valueOf(r.get("d"));
+            boolean overdue = d.compareTo(t0) < 0;
+            list.add(event(overdue ? "danger" : "info", "在外",
+                    r.get("name") + " " + r.get("reason") + (overdue
+                            ? "超期未归(预计 " + fmtDate(d) + " 返回,可延期或销假)"
+                            : "预计 " + fmtDate(d) + " 返回"),
+                    d, 2));
+        }
+
         // 按日期升序(最先发生的排前面),同日按严重程度
         Collections.sort(list, new Comparator<Map<String, Object>>() {
             @Override
