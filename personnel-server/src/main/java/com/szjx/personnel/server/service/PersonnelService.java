@@ -509,11 +509,8 @@ public class PersonnelService {
         requireFilled(p.getPost(), old == null ? null : old.getPost(), "职务/岗位");
         requireFilled(p.getEntryDate(), old == null ? null : old.getEntryDate(), "入伍/入职日期");
         requireFilled(p.getEquivEntryDate(), old == null ? null : old.getEquivEntryDate(), "相当入伍时间");
-        requireFilled(p.getNation(), old == null ? null : old.getNation(), "民族");
-        requireFilled(p.getNativePlace(), old == null ? null : old.getNativePlace(), "籍贯所在地");
-        requireFilled(p.getEnlistPlace(), old == null ? null : old.getEnlistPlace(), "入伍所在地");
-        requireFilled(p.getBloodType(), old == null ? null : old.getBloodType(), "血型");
-        requireFilled(p.getOnlyChild(), old == null ? null : old.getOnlyChild(), "是否独生子女");
+        // 民族/籍贯/入伍地/血型/独生子女/政治面貌/婚姻状况等字典档案属性不再强制:
+        // 字典项可被管理员改名或精简,硬校验会随字典漂移失效;档案属性允许渐进完善
         requireFilled(p.getAddress(), old == null ? null : old.getAddress(), "详细地址");
         if (!StringUtils.hasText(p.getStatus())) {
             throw new IllegalArgumentException("状态不能为空");

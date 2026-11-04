@@ -29,7 +29,7 @@ app:
   data-dir: data
   auth:
     # 登录令牌有效期(小时)
-    token-expire-hours: 24
+    token-expire-hours: 12
     # 可信反向代理地址(逗号分隔);仅当直连来源在列表内才采信 X-Forwarded-For 作为审计来源IP,留空=一律用直连地址
     trusted-proxies: ""
 
