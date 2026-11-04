@@ -86,6 +86,57 @@ public class PersonnelService {
         return personnelDao.findById(id);
     }
 
+    /** 支持批量修改的管理性字段白名单:身份类字段(姓名/证件号等)不允许批量覆盖 */
+    private static final java.util.Set<String> BATCH_EDIT_FIELDS = new java.util.HashSet<String>(java.util.Arrays.asList(
+            "departmentId", "status", "category", "politicalStatus", "maritalStatus", "locationPoint"));
+
+    /** 批量编辑:对勾选人员应用同一组白名单字段,逐条复用 update(完整校验/权限/状态联动),返回成功失败计数 */
+    @Transactional
+    public java.util.Map<String, Object> batchUpdate(java.util.List<Long> ids, java.util.Map<String, Object> patch) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("请先勾选人员");
+        }
+        if (patch == null || patch.isEmpty()) {
+            throw new IllegalArgumentException("请选择要修改的字段和值");
+        }
+        for (String key : patch.keySet()) {
+            if (!BATCH_EDIT_FIELDS.contains(key)) {
+                throw new IllegalArgumentException("不支持批量修改:" + key);
+            }
+        }
+        int ok = 0;
+        java.util.List<String> errors = new java.util.ArrayList<String>();
+        for (Long id : ids) {
+            try {
+                Personnel old = personnelDao.findById(id);
+                if (old == null) {
+                    throw new IllegalArgumentException("人员不存在");
+                }
+                Object v;
+                if ((v = patch.get("departmentId")) != null) {
+                    old.setDepartmentId(v instanceof Number ? Long.valueOf(((Number) v).longValue()) : Long.valueOf(String.valueOf(v)));
+                }
+                if ((v = patch.get("status")) != null) { old.setStatus(String.valueOf(v)); }
+                if ((v = patch.get("category")) != null) { old.setCategory(String.valueOf(v)); }
+                if ((v = patch.get("politicalStatus")) != null) { old.setPoliticalStatus(String.valueOf(v)); }
+                if ((v = patch.get("maritalStatus")) != null) { old.setMaritalStatus(String.valueOf(v)); }
+                if ((v = patch.get("locationPoint")) != null) { old.setLocationPoint(String.valueOf(v)); }
+                update(id, old);
+                ok++;
+            } catch (Exception e) {
+                errors.add(e.getMessage() == null ? "处理失败" : e.getMessage());
+            }
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<String, Object>();
+        result.put("total", ids.size());
+        result.put("ok", ok);
+        result.put("fail", ids.size() - ok);
+        if (!errors.isEmpty()) {
+            result.put("errors", errors.subList(0, Math.min(3, errors.size())));
+        }
+        return result;
+    }
+
     @Transactional
     public Personnel update(Long id, Personnel p) {
         Personnel old = personnelDao.findById(id);

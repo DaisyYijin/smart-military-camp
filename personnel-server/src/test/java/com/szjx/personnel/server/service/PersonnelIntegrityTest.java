@@ -114,6 +114,29 @@ public class PersonnelIntegrityTest {
         return p;
     }
 
+    @Test void batchUpdateAppliesWhitelistedFieldsAndRejectsOthers() {
+        Personnel a = person("110105199001010011");
+        Personnel b = person("110105199001010022");
+        long ia = dao.insert(a), ib = dao.insert(b);
+        java.util.Map<String, Object> patch = new java.util.LinkedHashMap<String, Object>();
+        patch.put("status", "休假");
+        patch.put("category", "军士");
+        java.util.Map<String, Object> r = service.batchUpdate(java.util.Arrays.asList(ia, ib), patch);
+        assertEquals(2, ((Number) r.get("ok")).intValue(), "两条都应成功");
+        assertEquals(0, ((Number) r.get("fail")).intValue());
+        assertEquals("休假", jdbc.queryForObject("SELECT status FROM personnel WHERE id=?", String.class, ia));
+        assertEquals("军士", jdbc.queryForObject("SELECT category FROM personnel WHERE id=?", String.class, ib));
+        // 非白名单字段(姓名)整体拒绝,不做任何修改
+        java.util.Map<String, Object> bad = new java.util.LinkedHashMap<String, Object>();
+        bad.put("name", "新名字");
+        try {
+            service.batchUpdate(java.util.Arrays.asList(ia), bad);
+            org.junit.jupiter.api.Assertions.fail("应拒绝非白名单字段");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("110105199001010011", jdbc.queryForObject("SELECT id_card FROM personnel WHERE id=?", String.class, ia));
+        }
+    }
+
     @Test void partialPhotoUpdatePreservesEveryModelPropertyAndEmptyStringsClear() {
         Personnel old = person("11010519491231002x");
         BeanWrapper bean = new BeanWrapperImpl(old);

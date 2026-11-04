@@ -225,6 +225,17 @@ public class PersonnelController {
         return ApiResponse.ok(personnelService.create(p));
     }
 
+    /** 批量编辑:对勾选人员应用同一组白名单字段(单位/状态/类别等管理性字段) */
+    @PostMapping("/batch-update")
+    public ApiResponse batchUpdate(@RequestBody BatchUpdateRequest request) {
+        return ApiResponse.ok(personnelService.batchUpdate(request.ids, request.patch));
+    }
+
+    public static class BatchUpdateRequest {
+        public java.util.List<Long> ids;
+        public java.util.Map<String, Object> patch;
+    }
+
     @PutMapping("/{id:\\d+}")
     public ApiResponse update(@PathVariable Long id, @RequestBody Personnel p) {
         return ApiResponse.ok(personnelService.update(id, p));
