@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -44,6 +45,25 @@ class DictServiceTest {
         jdbc.execute("CREATE TABLE equipment(id INTEGER PRIMARY KEY AUTOINCREMENT, brand TEXT DEFAULT '')");
         dao = new DictDao(jdbc);
         service = new DictService(dao, jdbc);
+    }
+
+    @Test void listTypesOutputsBusinessGroupsWithFallbackForUnknown() {
+        jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort) VALUES('blood_type','A',1)");
+        jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort) VALUES('card_status','正常',1)");
+        jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort) VALUES('region_province','北京',1)");
+        jdbc.update("INSERT INTO sys_dict(dict_type, dict_label, sort) VALUES('custom_domain','x',1)");
+        java.util.List<java.util.Map<String, Object>> types = service.listTypes();
+        java.util.Map<String, String> groupOf = new java.util.LinkedHashMap<String, String>();
+        java.util.List<String> order = new java.util.ArrayList<String>();
+        for (java.util.Map<String, Object> t : types) {
+            groupOf.put(String.valueOf(t.get("type")), String.valueOf(t.get("group")));
+            order.add(String.valueOf(t.get("type")));
+        }
+        assertEquals("人员档案", groupOf.get("blood_type"));
+        assertEquals("证件与卡", groupOf.get("card_status"));
+        assertEquals("行政区划", groupOf.get("region_province"));
+        assertEquals("其他", groupOf.get("custom_domain"), "未映射的自建类型应落入其他组");
+        assertTrue(order.indexOf("blood_type") < order.indexOf("region_province"), "人员档案组应排在行政区划组之前");
     }
 
     private long addLocation(String label) {

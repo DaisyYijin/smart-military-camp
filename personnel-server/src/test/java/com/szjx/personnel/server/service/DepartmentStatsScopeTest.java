@@ -46,6 +46,7 @@ class DepartmentStatsScopeTest {
         jdbc.execute("CREATE TABLE fitness_record(id INTEGER PRIMARY KEY,personnel_id INTEGER,test_date TEXT,grade TEXT DEFAULT '良好')");
         jdbc.execute("CREATE TABLE double_excellence_record(id INTEGER PRIMARY KEY,personnel_id INTEGER,year INTEGER,quarter INTEGER,rating TEXT DEFAULT '',rating_date TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE annual_appraisal_record(id INTEGER PRIMARY KEY,personnel_id INTEGER,year INTEGER,rating TEXT DEFAULT '',rating_date TEXT DEFAULT '')");
+        jdbc.execute("CREATE TABLE absence_record(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, reason TEXT, leave_date TEXT, expected_return_date TEXT DEFAULT '', actual_return_date TEXT DEFAULT '')");
         jdbc.update("INSERT INTO department(id,name,parent_id,leader_id) VALUES(1,'A单位',0,0),(2,'B单位',1,3),(3,'B子单位',2,0),(4,'C单位',1,0)");
         jdbc.update("INSERT INTO personnel(id,name,department_id) VALUES(1,'B人员',2),(2,'B下级人员',3),(3,'C人员',4),(4,'未分配人员',0)");
         for (int i = 1; i <= 4; i++) {

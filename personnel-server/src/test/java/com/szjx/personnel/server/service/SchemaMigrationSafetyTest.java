@@ -30,6 +30,27 @@ class SchemaMigrationSafetyTest {
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict", Integer.class));
     }
 
+    @Test void bloodTypeUpgradeKeepsDictIdMigratesPersonnelAndIsIdempotent() {
+        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, blood_type TEXT DEFAULT '')");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(10,'blood_type','A',2,0)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(11,'blood_type','B',3,0)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(12,'blood_type','AB',4,0)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(13,'blood_type','O',5,0)");
+        jdbc.update("INSERT INTO personnel(name,blood_type) VALUES('张三','A')");
+        jdbc.update("INSERT INTO personnel(name,blood_type) VALUES('李四','O')");
+        Object dictSeed = ReflectionTestUtils.getField(initializer, "dictSeed");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateBloodTypeRh");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateBloodTypeRh"); // 重复执行必须无副作用
+        // 旧字典项沿用原 id 改名为 RH+ 表述
+        assertEquals("A型RH+", jdbc.queryForObject("SELECT dict_label FROM sys_dict WHERE id=10", String.class));
+        assertEquals("O型RH+", jdbc.queryForObject("SELECT dict_label FROM sys_dict WHERE id=13", String.class));
+        // 旧值全部消失,不再出现裸 ABO 简称
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict WHERE dict_type='blood_type' AND dict_label IN ('A','B','AB','O')", Integer.class));
+        // 人员历史值同步为 RH 阳性新称
+        assertEquals("A型RH+", jdbc.queryForObject("SELECT blood_type FROM personnel WHERE name='张三'", String.class));
+        assertEquals("O型RH+", jdbc.queryForObject("SELECT blood_type FROM personnel WHERE name='李四'", String.class));
+    }
+
     @Test void failureAfterCopyRollsBackDictionaryAndTemporaryTable() {
         JdbcTemplate failing = new JdbcTemplate(jdbc.getDataSource()) {
             @Override public void execute(String sql) {

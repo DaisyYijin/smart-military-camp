@@ -29,6 +29,7 @@ public class DictService {
         TYPE_NAMES.put("fitness_item", "体能项目");
         TYPE_NAMES.put("fitness_grade", "评定等级");
         TYPE_NAMES.put("personnel_status", "人员状态");
+        TYPE_NAMES.put("absence_reason", "在外事由");
         TYPE_NAMES.put("rank", "军衔");
         TYPE_NAMES.put("equipment_category", "装备类别");
         TYPE_NAMES.put("equipment_brand", "装备品牌");
@@ -105,6 +106,25 @@ public class DictService {
         DICT_TABLE_COLUMN.put("annual_rating", "annual_appraisal_record.rating");
     }
 
+    /** 字典类型业务分组(有序):管理页左侧按组分段显示;未列出的类型自动归入"其他"组 */
+    private static final java.util.LinkedHashMap<String, java.util.List<String>> DICT_GROUPS = new java.util.LinkedHashMap<String, java.util.List<String>>();
+    static {
+        String[][] groups = {
+            {"人员档案", "gender,nation,blood_type,political_status,marital_status,education,edu_degree,edu_form,personnel_category,rank,personnel_status,personnel_location,only_child,family_relation,follow_army_status,housing_type,house_nature"},
+            {"证件与卡", "card_type,card_status,license_status,license_type,has_cert"},
+            {"在外与休假", "absence_reason,leave_type,holiday_type"},
+            {"军事训练与考评", "military_type,fitness_item,fitness_grade,de_rating,annual_rating"},
+            {"装备与物资", "equipment_category,equipment_status,equipment_location,equipment_brand,material_category,material_location,device_type,device_status"},
+            {"手机与借还", "phone_brand,loan_status"},
+            {"车辆", "vehicle_type,vehicle_brand,vehicle_model,vehicle_fuel,vehicle_status,vehicle_status_sub"},
+            {"奖惩", "reward_punish_kind"},
+            {"行政区划", "region_province,region_city,region_district"},
+        };
+        for (String[] g : groups) {
+            DICT_GROUPS.put(g[0], java.util.Arrays.asList(g[1].split(",")));
+        }
+    }
+
     private final DictDao dictDao;
     private final JdbcTemplate jdbc;
 
@@ -118,17 +138,34 @@ public class DictService {
         return dictDao.findByTypeEnabled(type);
     }
 
-    /** 所有类型及其全部项(管理页面用) */
+    /** 所有类型及其全部项(管理页面用):按业务分组有序输出,每项含 group 字段,未映射类型归入"其他"组 */
     public List<Map<String, Object>> listTypes() {
+        List<String> types = dictDao.findTypes(); // 组内仍按类型 key 字母序,整体顺序由业务分组决定
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (String type : dictDao.findTypes()) {
-            Map<String, Object> m = new HashMap<String, Object>();
-            m.put("type", type);
-            m.put("name", TYPE_NAMES.get(type) == null ? type : TYPE_NAMES.get(type));
-            m.put("items", dictDao.findByType(type));
-            result.add(m);
+        java.util.Set<String> emitted = new java.util.HashSet<String>();
+        for (java.util.Map.Entry<String, java.util.List<String>> g : DICT_GROUPS.entrySet()) {
+            for (String type : types) {
+                if (g.getValue().contains(type)) {
+                    result.add(typeEntry(type, g.getKey()));
+                    emitted.add(type);
+                }
+            }
+        }
+        for (String type : types) {
+            if (!emitted.contains(type)) {
+                result.add(typeEntry(type, "其他"));
+            }
         }
         return result;
+    }
+
+    private Map<String, Object> typeEntry(String type, String group) {
+        Map<String, Object> m = new HashMap<String, Object>();
+        m.put("type", type);
+        m.put("name", TYPE_NAMES.get(type) == null ? type : TYPE_NAMES.get(type));
+        m.put("group", group);
+        m.put("items", dictDao.findByType(type));
+        return m;
     }
 
     public DictItem create(DictItem d) {

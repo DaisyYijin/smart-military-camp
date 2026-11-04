@@ -32,12 +32,13 @@ class DictSchemaSeed {
         addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
         addDict("de_rating", new String[]{"好", "中", "一般"});
         addDict("annual_rating", new String[]{"优秀", "称职", "一般称职", "不称职"});
-        addDict("personnel_status", new String[]{"在职", "休假", "培训", "借调", "离职", "其他"});
-        addDict("personnel_category", new String[]{"军官", "士官", "义务兵", "文职人员", "其他"});
+        addDict("personnel_status", new String[]{"在位", "出差", "休假", "培训", "借调", "离职", "其他"});
+        addDict("absence_reason", new String[]{"出差", "学习", "其他"});
+        addDict("personnel_category", new String[]{"军官", "军士", "义务兵", "文职人员", "其他"});
         // 军衔按人员类别挂接(级联下拉)
         attachDictChildren("personnel_category", "军官", "rank",
                 new String[]{"少尉", "中尉", "上尉", "少校", "中校", "上校", "大校"});
-        attachDictChildren("personnel_category", "士官", "rank",
+        attachDictChildren("personnel_category", "军士", "rank",
                 new String[]{"下士", "中士", "二级上士", "一级上士", "三级军士长", "二级军士长", "一级军士长"});
         attachDictChildren("personnel_category", "义务兵", "rank", new String[]{"列兵", "上等兵"});
         attachDictChildren("personnel_category", "其他", "rank", new String[]{"无"});
@@ -58,7 +59,7 @@ class DictSchemaSeed {
         addDictChildren("vehicle_brand", "东风", "vehicle_model", new String[]{"猛士EQ2050", "猛士EQ2081", "东风天锦"});
         addDictChildren("vehicle_brand", "北汽", "vehicle_model", new String[]{"勇士BJ2022", "BJ80"});
         addDictChildren("vehicle_brand", "丰田", "vehicle_model", new String[]{"普拉多", "考斯特", "兰德酷路泽"});
-        addDict("blood_type", new String[]{"未知", "A", "B", "AB", "O"});
+        addDict("blood_type", new String[]{"未知", "A型RH+", "A型RH-", "B型RH+", "B型RH-", "AB型RH+", "AB型RH-", "O型RH+", "O型RH-"});
         addDict("nation", new String[]{"汉族", "蒙古族", "回族", "藏族", "维吾尔族", "苗族", "彝族", "壮族",
                 "布依族", "朝鲜族", "满族", "侗族", "瑶族", "白族", "土家族", "哈尼族", "哈萨克族", "傣族",
                 "黎族", "傈僳族", "佤族", "畲族", "高山族", "拉祜族", "水族", "东乡族", "纳西族", "景颇族",
@@ -84,6 +85,59 @@ class DictSchemaSeed {
         addDict("has_cert", new String[]{"有", "无"});
         addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
         log.info("已初始化默认数据字典");
+    }
+
+    /** 旧称更名：沿用旧字典项 ID，保留军衔父子关系；已有新称时合并而不丢失自定义选项。 */
+    void migratePersonnelTerms() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> {
+            renamePersonnelDict("personnel_category", "士官", "军士");
+            renamePersonnelDict("personnel_status", "在职", "在位");
+            jdbc.update("UPDATE personnel SET category='军士' WHERE category='士官'");
+            jdbc.update("UPDATE personnel SET status='在位' WHERE status='在职'");
+            jdbc.update("UPDATE personnel SET auto_leave_previous_status='在位' WHERE auto_leave_previous_status='在职'");
+        });
+    }
+
+    /** 血型升级为 ABO+RH 完整表述:沿用旧字典项 ID(历史 A/B/AB/O 视为 RH 阳性),人员表历史值同步;重复执行无副作用。 */
+    void migrateBloodTypeRh() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> {
+            renamePersonnelDict("blood_type", "A", "A型RH+");
+            renamePersonnelDict("blood_type", "B", "B型RH+");
+            renamePersonnelDict("blood_type", "AB", "AB型RH+");
+            renamePersonnelDict("blood_type", "O", "O型RH+");
+            jdbc.update("UPDATE personnel SET blood_type='A型RH+' WHERE blood_type='A'");
+            jdbc.update("UPDATE personnel SET blood_type='B型RH+' WHERE blood_type='B'");
+            jdbc.update("UPDATE personnel SET blood_type='AB型RH+' WHERE blood_type='AB'");
+            jdbc.update("UPDATE personnel SET blood_type='O型RH+' WHERE blood_type='O'");
+        });
+    }
+
+    private void renamePersonnelDict(String type, String oldLabel, String newLabel) {
+        List<Map<String, Object>> oldItems = jdbc.queryForList(
+                "SELECT id,parent_id FROM sys_dict WHERE dict_type=? AND dict_label=?", type, oldLabel);
+        for (Map<String, Object> old : oldItems) {
+            long oldId = ((Number) old.get("id")).longValue();
+            long parentId = old.get("parent_id") == null ? 0 : ((Number) old.get("parent_id")).longValue();
+            List<Map<String, Object>> target = jdbc.queryForList(
+                    "SELECT id FROM sys_dict WHERE dict_type=? AND dict_label=? AND COALESCE(parent_id,0)=?",
+                    type, newLabel, parentId);
+            if (target.isEmpty()) {
+                jdbc.update("UPDATE sys_dict SET dict_label=? WHERE id=?", newLabel, oldId);
+                continue;
+            }
+            long targetId = ((Number) target.get(0).get("id")).longValue();
+            // 两个同名父项并存时，旧项的 ID 继续作为子项父级；先清除会冲突的同名子项。
+            jdbc.update("DELETE FROM sys_dict WHERE parent_id=? AND EXISTS (" +
+                    "SELECT 1 FROM sys_dict old WHERE old.parent_id=? AND old.dict_type=sys_dict.dict_type " +
+                    "AND old.dict_label=sys_dict.dict_label)", targetId, oldId);
+            jdbc.update("UPDATE sys_dict SET parent_id=? WHERE parent_id=?", oldId, targetId);
+            jdbc.update("DELETE FROM sys_dict WHERE id=?", targetId);
+            jdbc.update("UPDATE sys_dict SET dict_label=? WHERE id=?", newLabel, oldId);
+        }
     }
 
     /** 将装备台账中已有的存放位置与非空品牌迁入字典,保留历史自定义值且可重复执行 */

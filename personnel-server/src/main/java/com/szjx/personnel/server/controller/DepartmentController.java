@@ -40,6 +40,20 @@ public class DepartmentController {
         return ApiResponse.ok(departmentService.update(id, d));
     }
 
+    /** 同级单位拖动排序 */
+    @PutMapping("/reorder")
+    public ApiResponse reorder(@RequestBody(required = false) ReorderRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("排序信息不能为空");
+        }
+        departmentService.reorder(request.ids);
+        return ApiResponse.ok();
+    }
+
+    public static class ReorderRequest {
+        public java.util.List<Long> ids;
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse delete(@PathVariable Long id) {
         departmentService.delete(id);

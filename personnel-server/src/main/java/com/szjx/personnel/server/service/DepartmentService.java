@@ -29,6 +29,30 @@ public class DepartmentService {
         return departmentDao.tree();
     }
 
+    /** 同级单位拖动排序:ids 为同一父级下的完整顺序,逐个写 sort(1..n);跨级拖动拒绝(可见范围外单位视为不存在) */
+    @Transactional
+    public void reorder(List<Long> ids) {
+        if (ids == null || ids.size() < 2) {
+            throw new IllegalArgumentException("排序信息不能为空");
+        }
+        java.util.Map<Long, Long> parentOf = new java.util.HashMap<Long, Long>();
+        for (Department d : departmentDao.findAll()) {
+            parentOf.put(d.getId(), d.getParentId() == null ? Long.valueOf(0L) : d.getParentId());
+        }
+        Long parent = null;
+        for (Long id : ids) {
+            Long p = parentOf.get(id);
+            if (p == null) {
+                throw new IllegalArgumentException("单位不存在");
+            }
+            if (parent == null) { parent = p; }
+            else if (!parent.equals(p)) {
+                throw new IllegalArgumentException("只能调整同级单位之间的顺序");
+            }
+        }
+        departmentDao.reorder(ids);
+    }
+
     public Department create(Department d) {
         DataScope.requireDepartment(d.getParentId());
         validateLeader(d);

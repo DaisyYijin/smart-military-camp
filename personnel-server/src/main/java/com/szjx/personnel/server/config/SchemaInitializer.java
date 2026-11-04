@@ -141,6 +141,22 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_vehicle_fault_history_vehicle ON vehicle_fault_history(vehicle_id)");
     }
 
+    /** 人员外出登记(临时出差/学习等);personnel.auto_absence 标记本服务置过的状态,手工改状态即放弃自动管理。 */
+    private void initializeAbsence() {
+        jdbc.execute("CREATE TABLE IF NOT EXISTS absence_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "reason TEXT NOT NULL," +
+                "leave_date TEXT NOT NULL," +
+                "expected_return_date TEXT DEFAULT ''," +
+                "actual_return_date TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime')))");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_absence_personnel ON absence_record(personnel_id)");
+        ensureColumn("personnel", "auto_absence", "auto_absence INTEGER DEFAULT 0");
+    }
+
     /** 借还独立建表；旧库仅补列/索引，不重建、不清理已有记录。 */
     private void initializeItemLoans() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS item_loan (" +
@@ -265,7 +281,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "actual_department_id INTEGER DEFAULT 0," +
                 "actual_post TEXT DEFAULT ''," +
                 "actual_post_date TEXT DEFAULT ''," +
-                "status TEXT DEFAULT '在职'," +
+                "status TEXT DEFAULT '在位'," +
                 "entry_date TEXT DEFAULT ''," +
                 "equiv_entry_date TEXT DEFAULT ''," +
                 "address TEXT DEFAULT ''," +
@@ -809,9 +825,12 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
         initializeVehicleFaultHistory();
         initializeItemLoans();
+        initializeAbsence();
         initializeDoubleExcellence();
         initializeAnnualAppraisal();
 
+        dictSeed.migratePersonnelTerms();
+        dictSeed.migrateBloodTypeRh();
         dictSeed.initDefaultDict();
         dictSeed.migrateEquipmentLedgerValues();
         dictSeed.seedRegionDict();

@@ -45,6 +45,14 @@ public class DepartmentDao {
     }
 
     /** 各单位直属人员数 */
+    /** 同级排序:按传入顺序批量写 sort(1..n),id 不变;父级一致性由 Service 校验 */
+    public void reorder(java.util.List<Long> ids) {
+        int sort = 1;
+        for (Long id : ids) {
+            jdbc.update("UPDATE department SET sort=? WHERE id=?", Integer.valueOf(sort++), id);
+        }
+    }
+
     public Map<Long, Long> personnelCounts() {
         Map<Long, Long> m = new HashMap<Long, Long>();
         for (Map<String, Object> r : jdbc.queryForList(
