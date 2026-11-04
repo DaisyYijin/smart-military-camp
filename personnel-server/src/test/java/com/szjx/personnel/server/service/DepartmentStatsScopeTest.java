@@ -33,7 +33,7 @@ class DepartmentStatsScopeTest {
         jdbc = PersonnelIntegrityTest.temporaryDatabase(temp);
         jdbc.execute("CREATE TABLE department(id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER DEFAULT 0, sort INTEGER DEFAULT 0, remark TEXT DEFAULT '', leader_id INTEGER DEFAULT 0)");
         jdbc.execute("CREATE TABLE account_department(user_id INTEGER,department_id INTEGER)");
-        jdbc.execute("CREATE TABLE driver_license(id INTEGER PRIMARY KEY,personnel_id INTEGER,license_type TEXT DEFAULT '',license_status TEXT DEFAULT '')");
+        jdbc.execute("CREATE TABLE driver_license(id INTEGER PRIMARY KEY,personnel_id INTEGER,license_type TEXT DEFAULT '',license_status TEXT DEFAULT '',expiry_date TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, department_id INTEGER, actual_department_id INTEGER DEFAULT 0, gender TEXT DEFAULT '男', status TEXT DEFAULT '在职', category TEXT DEFAULT '', rank TEXT DEFAULT '', education TEXT DEFAULT '', political_status TEXT DEFAULT '', native_place TEXT DEFAULT '', enlist_place TEXT DEFAULT '', entry_date TEXT DEFAULT '2026-01-01', birthday TEXT DEFAULT '', party_full_date TEXT DEFAULT '', location_point TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE equipment(id INTEGER PRIMARY KEY,name TEXT, keeper_id INTEGER, status TEXT DEFAULT '维修',category TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE material(id INTEGER PRIMARY KEY,name TEXT, keeper_id INTEGER, quantity REAL DEFAULT 0,min_quantity REAL DEFAULT 1,category TEXT DEFAULT '')");

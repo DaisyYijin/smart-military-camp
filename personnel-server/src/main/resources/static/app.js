@@ -2847,12 +2847,83 @@ function crudView(cfg) {
     });
     toolbar.appendChild(batchBtn);
     recordBatchBtn = batchBtn;
+    // 批量编辑:仅配置了 batchEdit 的模块(人员管理)显示,与删除所选共用勾选状态
+    var batchEditBtn = null;
+    if (cfg.batchEdit) {
+      batchEditBtn = h('button', {
+        class: 'btn btn-ghost', text: '批量编辑', disabled: true, title: '对勾选的人员批量修改单位/状态等字段',
+        onclick: function () { openBatchEdit(); }
+      });
+      toolbar.appendChild(batchEditBtn);
+    }
     function syncBatchBtn() {
       var n = selectedIds().length;
       batchBtn.disabled = locked() || n === 0;
       batchBtn.textContent = state.deleting ? '删除处理中…' : (n ? '删除所选(' + n + ')' : '删除所选');
+      if (batchEditBtn) {
+        batchEditBtn.disabled = locked() || n === 0;
+        batchEditBtn.textContent = n ? '批量编辑(' + n + ')' : '批量编辑';
+      }
     }
     selectionChanged = syncBatchBtn;
+    // 批量编辑弹窗:选字段+值(字典/单位下拉),确认后提交白名单 patch 并刷新
+    function openBatchEdit() {
+      if (!cfg.batchEdit || locked()) return;
+      var ids = selectedIds();
+      if (!ids.length) return;
+      var fields = cfg.batchEdit.fields || [];
+      if (!fields.length) return;
+      var fieldSel = h('select', { class: 'input', style: 'width:100%' });
+      fields.forEach(function (f, i) {
+        fieldSel.appendChild(h('option', { value: String(i), text: f.label }));
+      });
+      var valueBox = h('div');
+      function renderValue() {
+        valueBox.innerHTML = '';
+        var f = fields[Number(fieldSel.value)] || fields[0];
+        var sel = h('select', { class: 'input', style: 'width:100%' });
+        if (f.type === 'dept') {
+          (Ctx.deptFlat || []).forEach(function (d) {
+            sel.appendChild(h('option', { value: String(d.id), text: d.name }));
+          });
+        } else {
+          (dictLabels(f.dict) || []).forEach(function (l) {
+            sel.appendChild(h('option', { value: l, text: l }));
+          });
+        }
+        if (!sel.options.length) {
+          sel.appendChild(h('option', { value: '', text: '(暂无可选项)' }));
+        }
+        valueBox.appendChild(sel);
+        valueBox._sel = sel;
+      }
+      fieldSel.onchange = renderValue;
+      renderValue();
+      var m = openModal({
+        title: '批量编辑 · 已选 ' + ids.length + ' 人',
+        body: h('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+          h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c)' }, '选择要修改的字段和新值,将应用到全部勾选的人员:'),
+          fieldSel, valueBox),
+        footer: [
+          h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+          h('button', {
+            class: 'btn btn-primary', text: '应用修改', onclick: function () {
+              var f = fields[Number(fieldSel.value)] || fields[0];
+              var sel = valueBox._sel;
+              var val = sel ? sel.value : '';
+              if (!val) { toast('请选择新值', 'err'); return; }
+              var patch = {};
+              patch[f.key] = val;
+              POST(cfg.batchEdit.endpoint, { ids: ids, patch: patch }).then(function (r) {
+                m.close();
+                toast('批量修改完成:成功 ' + (r.ok || 0) + ' 条' + ((r.fail || 0) ? ',失败 ' + r.fail + ' 条' + ((r.errors && r.errors[0]) ? ':' + r.errors[0] : '') : ''), (r.fail || 0) ? 'info' : 'ok');
+                afterChange();
+              }).catch(function (e) { toast(e.message || '批量修改失败', 'err'); });
+            }
+          })
+        ]
+      });
+    }
     function batchDelete() {
       if (locked()) return;
       var ids = selectedIds();
@@ -5161,6 +5232,15 @@ function statusOptions() {
 }
 
 var personnelCfg = {
+  // 批量编辑:勾选后工具栏按钮,白名单字段与后端 BATCH_EDIT_FIELDS 对应
+  batchEdit: { endpoint: '/api/personnel/batch-update', fields: [
+    { key: 'departmentId', label: '编制单位', type: 'dept' },
+    { key: 'status', label: '人员状态', dict: 'personnel_status' },
+    { key: 'category', label: '人员类别', dict: 'personnel_category' },
+    { key: 'politicalStatus', label: '政治面貌', dict: 'political_status' },
+    { key: 'maritalStatus', label: '婚姻状况', dict: 'marital_status' },
+    { key: 'locationPoint', label: '所在点位', dict: 'personnel_location' }
+  ] },
   key: 'personnel', title: '人员管理', icon: 'users',
   endpoint: '/api/personnel', wide: true,
   filters: [
@@ -5863,7 +5943,64 @@ function openLeaveHistory(rw, act) {
   });
 }
 
+/* 休假/在外月度统计弹窗:按月汇总各人员重叠天数,可导出 Excel */
+function openLeaveStats() {
+  var now = new Date();
+  function p2(n) { return n < 10 ? '0' + n : '' + n; }
+  var yearInput = h('input', { type: 'number', class: 'input', value: String(now.getFullYear()), style: 'width:90px' });
+  var monthInput = h('input', { type: 'number', class: 'input', value: String(now.getMonth() + 1), min: '1', max: '12', style: 'width:70px' });
+  var body = h('div');
+  function load() {
+    body.innerHTML = '';
+    body.appendChild(h('div', { class: 'loading-inline', text: '加载中…' }));
+    GET('/api/report/leave-absence/summary?year=' + yearInput.value + '&month=' + monthInput.value).then(function (rows) {
+      rows = rows || [];
+      body.innerHTML = '';
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.appendChild(h('thead', {}, h('tr', {},
+        h('th', { text: '姓名' }), h('th', { text: '单位' }), h('th', { text: '休假天数' }), h('th', { text: '在外天数' }))));
+      var tb = h('tbody');
+      rows.forEach(function (r) {
+        tb.appendChild(h('tr', {},
+          h('td', { text: r.name || '' }), h('td', { text: r.deptName || '' }),
+          h('td', { text: String(r.leaveDays) }), h('td', { text: String(r.absenceDays) })));
+      });
+      table.appendChild(tb);
+      body.appendChild(h('div', { class: 'table-wrap', style: 'max-height:56vh;overflow:auto' }, table));
+      if (!rows.length) { body.appendChild(h('div', { class: 'empty-row', text: '当月没有休假或在外记录' })); }
+    }).catch(function (e) {
+      body.innerHTML = '';
+      body.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败' }));
+    });
+  }
+  var m = openModal({
+    title: '休假/在外月度统计', wide: true,
+    body: h('div', {},
+      h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap' },
+        yearInput, h('span', { text: '年' }), monthInput, h('span', { text: '月' }),
+        h('button', { class: 'btn btn-primary', text: '查询', onclick: load }),
+        h('button', {
+          class: 'btn btn-ghost', text: '导出 Excel', onclick: function () {
+            var y = yearInput.value, mo = monthInput.value;
+            apiBlob('/api/report/leave-absence/excel?year=' + y + '&month=' + mo).then(function (r) {
+              downloadBlob(r.blob, r.filename || ('休假在外统计-' + y + p2(Number(mo)) + '.xlsx'));
+            }).catch(function (e) { toast(e.message || '导出失败', 'err'); });
+          }
+        })),
+      body),
+    footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })]
+  });
+  load();
+}
+
 var leaveCfg = {
+  toolbarExtra: function (bar) {
+    bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '月度统计',
+      title: '按月统计各人员休假/在外天数,可导出 Excel',
+      onclick: function () { openLeaveStats(); }
+    }));
+  },
   key: 'leave', title: '休假管理', icon: 'calendar', endpoint: '/api/leave',
   clickKey: 'personnelName', addLabel: '新增休假记录',
   filters: [
@@ -7598,7 +7735,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆', '在外'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆', '证件', '在外'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {

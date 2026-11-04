@@ -32,6 +32,7 @@ class DashboardLeavePlanEventTest {
         jdbc.execute("CREATE TABLE vehicle(id INTEGER PRIMARY KEY, plate_no TEXT, insurance_expiry TEXT, inspection_expiry TEXT)");
         jdbc.execute("CREATE TABLE item_loan(id INTEGER PRIMARY KEY, item_name TEXT, borrower_name TEXT, expected_return_date TEXT, returned INTEGER DEFAULT 0, owner_user_id INTEGER)");
         jdbc.execute("CREATE TABLE absence_record(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, reason TEXT, leave_date TEXT, expected_return_date TEXT DEFAULT '', actual_return_date TEXT DEFAULT '')");
+        jdbc.execute("CREATE TABLE driver_license(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, license_no TEXT DEFAULT '', expiry_date TEXT DEFAULT '')");
         jdbc.update("INSERT INTO personnel(id,name,id_card) VALUES(1,'张三','110105199001011234')");
         jdbc.update("INSERT INTO personnel(id,name,id_card) VALUES(2,'李四','320101198805051234')");
         controller = new DashboardController(jdbc, new com.szjx.personnel.server.dao.ItemLoanDao(jdbc));

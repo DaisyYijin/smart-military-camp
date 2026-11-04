@@ -144,6 +144,18 @@ public class DashboardController {
                     d, 2));
         }
 
+        // 驾驶证到期:已到期持续提醒,30天内将到期预警(数据来自人员档案-驾驶证子表)
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT p.name AS name, dl.expiry_date AS d FROM driver_license dl " +
+                "JOIN personnel p ON dl.personnel_id = p.id " +
+                "WHERE " + DataScope.departmentSql("p.department_id") + " AND dl.expiry_date LIKE '____-__-__' AND dl.expiry_date <= ?", plus30)) {
+            String d = String.valueOf(r.get("d"));
+            boolean overdue = d.compareTo(t0) < 0;
+            list.add(event(overdue ? "danger" : "warn", "证件",
+                    r.get("name") + (overdue ? " 驾驶证已到期(" : " 驾驶证将于 ") + fmtDate(d) + (overdue ? ")" : " 到期"),
+                    d, 3));
+        }
+
         // 在外登记:超期未归(danger)或10天内预计返回(info);可见性与在外登记列表一致
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT p.name AS name, a.reason AS reason, a.expected_return_date AS d FROM absence_record a " +

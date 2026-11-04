@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import com.szjx.personnel.server.auth.DataScope;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,102 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
     public ApiResponse progress(@RequestParam String id) { return ApiResponse.ok(getProgress(id)); }
 
     /* ================= 下级导出 ================= */
+
+    /** 休假/在外月度汇总:按人员统计当月重叠天数(跨月按区间交集计算),包级开放供测试直调 */
+    @GetMapping("/leave-absence/summary")
+    public ApiResponse leaveAbsenceSummary(@RequestParam int year, @RequestParam int month) {
+        return ApiResponse.ok(leaveAbsenceRows(year, month));
+    }
+
+    List<Map<String, Object>> leaveAbsenceRows(int year, int month) {
+        java.time.LocalDate mStart = java.time.LocalDate.of(year, month, 1);
+        java.time.LocalDate mEnd = mStart.withDayOfMonth(mStart.lengthOfMonth());
+        java.time.LocalDate today = java.time.LocalDate.now();
+        // 原始区间取出,重叠天数在 Java 侧按 LocalDate 交集计算(规避 SQLite 方言坑,脏日期跳过)
+        java.util.Map<Long, Object[]> spans = new java.util.HashMap<Long, Object[]>();
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT personnel_id, start_date, end_date FROM leave_record " +
+                "WHERE start_date<>'' AND end_date<>'' AND start_date<=? AND end_date>=?",
+                mEnd.toString(), mStart.toString())) {
+            long pid = ((Number) r.get("personnel_id")).longValue();
+            long days = overlapDays(String.valueOf(r.get("start_date")), String.valueOf(r.get("end_date")), mStart, mEnd);
+            if (days <= 0) { continue; }
+            Object[] acc = spans.get(pid);
+            spans.put(pid, new Object[]{acc == null ? days : ((Number) acc[0]).longValue() + days,
+                    acc == null ? 0L : ((Number) acc[1]).longValue()});
+        }
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT personnel_id, leave_date, actual_return_date FROM absence_record " +
+                "WHERE leave_date<>'' AND leave_date<=? AND COALESCE(NULLIF(actual_return_date,''), ?)>=?",
+                mEnd.toString(), today.toString(), mStart.toString())) {
+            long pid = ((Number) r.get("personnel_id")).longValue();
+            String end = String.valueOf(r.get("actual_return_date"));
+            long days = overlapDays(String.valueOf(r.get("leave_date")),
+                    end == null || end.isEmpty() ? today.toString() : end, mStart, mEnd);
+            if (days <= 0) { continue; }
+            Object[] acc = spans.get(pid);
+            spans.put(pid, new Object[]{acc == null ? 0L : ((Number) acc[0]).longValue(),
+                    acc == null ? days : ((Number) acc[1]).longValue() + days});
+        }
+        List<Map<String, Object>> result = new java.util.ArrayList<Map<String, Object>>();
+        for (Map<String, Object> p : jdbc.queryForList(
+                "SELECT p.id, p.name AS name, IFNULL(d.name,'') AS deptName FROM personnel p " +
+                "LEFT JOIN department d ON d.id = p.department_id " +
+                "WHERE " + DataScope.departmentSql("p.department_id") + " ORDER BY deptName, name")) {
+            Object[] acc = spans.get(((Number) p.get("id")).longValue());
+            if (acc == null) { continue; }
+            Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
+            row.put("name", p.get("name"));
+            row.put("deptName", p.get("deptName"));
+            row.put("leaveDays", ((Number) acc[0]).longValue());
+            row.put("absenceDays", ((Number) acc[1]).longValue());
+            result.add(row);
+        }
+        return result;
+    }
+
+    /** 区间交集天数:[start,end] 与 [mStart,mEnd] 的重叠天数(含端点);非法日期返回 0 */
+    private static long overlapDays(String start, String end, java.time.LocalDate mStart, java.time.LocalDate mEnd) {
+        try {
+            java.time.LocalDate s = java.time.LocalDate.parse(start);
+            java.time.LocalDate e = java.time.LocalDate.parse(end);
+            java.time.LocalDate lo = s.isBefore(mStart) ? mStart : s;
+            java.time.LocalDate hi = e.isAfter(mEnd) ? mEnd : e;
+            long days = java.time.temporal.ChronoUnit.DAYS.between(lo, hi) + 1;
+            return days > 0 ? days : 0;
+        } catch (Exception ex) {
+            return 0;
+        }
+    }
+
+    /** 休假/在外月度汇总 Excel 导出 */
+    @GetMapping("/leave-absence/excel")
+    public ResponseEntity<byte[]> leaveAbsenceExcel(@RequestParam int year, @RequestParam int month) throws Exception {
+        List<Map<String, Object>> rows = leaveAbsenceRows(year, month);
+        org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("休假在外汇总");
+        String[] headers = {"姓名", "单位", "休假天数", "在外天数"};
+        org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+        for (int i = 0; i < headers.length; i++) {
+            header.createCell(i).setCellValue(headers[i]);
+        }
+        int r = 1;
+        for (Map<String, Object> row : rows) {
+            org.apache.poi.ss.usermodel.Row xr = sheet.createRow(r++);
+            xr.createCell(0).setCellValue(String.valueOf(row.get("name")));
+            xr.createCell(1).setCellValue(String.valueOf(row.get("deptName")));
+            xr.createCell(2).setCellValue(((Number) row.get("leaveDays")).intValue());
+            xr.createCell(3).setCellValue(((Number) row.get("absenceDays")).intValue());
+        }
+        for (int i = 0; i < headers.length; i++) { sheet.setColumnWidth(i, 16 * 256); }
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        wb.write(out);
+        wb.close();
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=leave-absence-" + year + String.format("%02d", month) + ".xlsx")
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .body(out.toByteArray());
+    }
 
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@RequestParam(required = false) String scope,
