@@ -3463,62 +3463,64 @@ function subRecordsPanel(kind, personnelId, opt) {
     renderTimer = setTimeout(render, 0);
   }
 
-  function openEditor(r, c) {
-    if (c.virtual || c.auto) {
-      return; // 虚拟列(年龄)和自动填充列(性别/出生日期)不可手动编辑
-    }
-    var td = table.querySelector('td[data-row="' + r.__id + '"][data-col="' + c.key + '"]');
-    if (!td) {
-      return;
-    }
-    td.innerHTML = '';
-    td.classList.add('editing');
-    var editor;
-    if (c.type === 'date') {
-      editor = makeDateField();
-      if (r[c.key]) {
-        editor.value = r[c.key];
+  /** 行编辑弹窗:该行全部可编辑列在一个表单弹窗中从容修改(与主表单同风格,窄列不再受限) */
+  function openRowForm(r) {
+    var fields = opt.columns.filter(function (c) { return !c.virtual && !c.auto; }).map(function (c) {
+      var f = { key: c.key, label: c.label, required: !!c.required };
+      if (c.type === 'date') { f.type = 'date'; }
+      else if (c.type === 'select') {
+        f.type = 'select';
+        f.options = typeof c.options === 'function' ? c.options() : (c.options || []);
       }
-      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.rawValue === undefined ? editor.value : editor.rawValue); });
-    } else if (c.type === 'select') {
-      var ddOpts = typeof c.options === 'function' ? c.options() : (c.options || []);
-      editor = makeDropdown(ddOpts, '请选择');
-      if (r[c.key]) {
-        editor.value = r[c.key];
-      }
-      editor.addEventListener('change', function () { commitCellEdit(r, c, editor.value); });
-      var btn = editor.querySelector('.dd-btn');
-      if (btn) {
-        btn.addEventListener('blur', function () {
-          setTimeout(function () {
-            // 下拉展开期间的失焦是打开动作的一部分(焦点移入列表),不是离开单元格,不应提交;提交会因值未变触发空行自动移除,表现为"卡类型刚点开就消失"
-            var holder = btn.closest && btn.closest('.dd');
-            if (holder && holder.classList.contains('open')) { return; }
-            commitCellEdit(r, c, r[c.key]);
-          }, 150);
-        });
-      }
-    } else {
-      editor = h('input', { type: 'text', style: 'width:100%' });
-      editor.value = r[c.key] || '';
-      editor.addEventListener('blur', function () { commitCellEdit(r, c, editor.value); });
-      editor.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { editor.blur(); }
-        if (e.key === 'Tab') {
-          e.preventDefault();
-          editor.blur();
-          var cols = opt.columns.filter(function (x) { return !x.virtual && !x.auto; });
-          var ci = cols.indexOf(c);
-          var next = cols[ci + 1] || cols[0];
-          if (next) { setTimeout(function () { openEditor(r, next); }, 50); }
-        }
-      });
-    }
-    td.appendChild(editor);
-    var focusEl = editor.tagName === 'INPUT' ? editor : editor.querySelector('input,.dd-btn');
-    if (focusEl) {
-      setTimeout(function () { focusEl.focus(); if (focusEl.select) { focusEl.select(); } }, 0);
-    }
+      if (c.placeholder) { f.placeholder = c.placeholder; }
+      return f;
+    });
+    var preset = {};
+    fields.forEach(function (f) { preset[f.key] = r[f.key] || ''; });
+    var form = buildForm(fields, preset);
+    var m = openModal({
+      title: '编辑' + opt.name,
+      body: form.el,
+      onClose: function () {
+        // 关闭时未填任何内容的新行自动移除,不留空白行(点添加又放弃的场景);填了一半的保留黄色待填行
+        if (autoRemoveIfEmpty(r)) { deferredRender(); }
+      },
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', {
+          class: 'btn btn-primary', text: '保存', onclick: function () {
+            var data = form.get();
+            if (!data) { return; }
+            for (var i = 0; i < fields.length; i++) {
+              if (fields[i].type === 'date' && data[fields[i].key] && !parseCalendarDay(data[fields[i].key])) {
+                toast('「' + fields[i].label + '」不是有效日期，请修正后保存', 'err');
+                return;
+              }
+            }
+            fields.forEach(function (f) {
+              var v = String(data[f.key] == null ? '' : data[f.key]).trim();
+              if (String(r[f.key] || '') === v) { return; }
+              r[f.key] = v;
+              // 体能成绩按年龄重算等级;身份证解析带出性别/出生日期(与原行内编辑联动一致)
+              if (f.key === 'score' && v && opt.age !== undefined) {
+                var g = calcFitnessGrade(r.item || '', v, calcAgeAt(opt.birthday, r.test_date) || opt.age);
+                if (g) { r.points = g; r.grade = gradeForPoints(g); }
+              }
+              if (f.key === 'test_date' && r.score) {
+                var g2 = calcFitnessGrade(r.item || '', r.score, calcAgeAt(opt.birthday, v) || opt.age);
+                if (g2) { r.points = g2; r.grade = gradeForPoints(g2); }
+              }
+              if (f.key === 'id_card' && v) {
+                var parsed = parseIdCard(v);
+                if (parsed) { r.gender = parsed.gender; r.birth_date = parsed.birthDate; }
+              }
+            });
+            m.close();
+            saveRow(r);
+          }
+        })
+      ]
+    });
   }
 
   /** 全部字段为空的行自动移除(点了添加又没填任何内容) */
@@ -3534,42 +3536,6 @@ function subRecordsPanel(kind, personnelId, opt) {
       return true;
     }
     return false;
-  }
-
-  function commitCellEdit(r, c, value) {
-    value = String(value == null ? '' : value).trim();
-    if (c.type === 'date' && value) {
-      var day = parseCalendarDay(value);
-      if (!day) { toast('「' + c.label + '」不是有效日期，请修正后保存', 'err'); return; }
-      value = formatCalendarDay(day);
-    }
-    if (String(r[c.key] || '') === value) {
-      autoRemoveIfEmpty(r);
-      deferredRender();
-      return;
-    }
-    r[c.key] = value;
-    // 体能成绩失焦:按矩阵自动计算等级分数(需要知道本人年龄)
-    if (c.key === 'score' && value && opt.age !== undefined) {
-      var age = calcAgeAt(opt.birthday, r.test_date) || opt.age;
-      var g = calcFitnessGrade(r.item || '', value, age);
-      if (g) { r.points = g; r.grade = gradeForPoints(g); }
-    }
-    // 考核日期变更后也重算(年龄可能跨档)
-    if (c.key === 'test_date' && r.score) {
-      var age2 = calcAgeAt(opt.birthday, value) || opt.age;
-      var g2 = calcFitnessGrade(r.item || '', r.score, age2);
-      if (g2) { r.points = g2; r.grade = gradeForPoints(g2); }
-    }
-    // 身份证号失焦:自动填充性别和出生日期
-    if (c.key === 'id_card' && value) {
-      var parsed = parseIdCard(value);
-      if (parsed) {
-        r.gender = parsed.gender;
-        r.birth_date = parsed.birthDate;
-      }
-    }
-    saveRow(r);
   }
 
   function saveRow(r) {
@@ -3625,7 +3591,7 @@ function subRecordsPanel(kind, personnelId, opt) {
     var r = rows.filter(function (x) { return x.__id === td.getAttribute('data-row'); })[0];
     var c = colByKey(td.getAttribute('data-col'));
     if (r && c) {
-      openEditor(r, c);
+      openRowForm(r);
     }
   });
 
@@ -3665,7 +3631,7 @@ function subRecordsPanel(kind, personnelId, opt) {
         rows.push(r);
         render();
         var firstReq = opt.columns.filter(function (c) { return c.required; })[0] || opt.columns[0];
-        setTimeout(function () { openEditor(r, firstReq); }, 30);
+        setTimeout(function () { openRowForm(r); }, 30);
       }
     }),
     h('span', { style: 'color:#a6b3c4;font-size:12px', text: '黄色行=必填未填完' })));
@@ -5191,7 +5157,7 @@ function openFitnessStdManager() {
 
 function statusOptions() {
   var l = dictLabels('personnel_status');
-  return l.length ? l : ['在职', '休假', '培训', '借调', '离职', '其他'];
+  return l.length ? l : ['在位', '休假', '培训', '借调', '离职', '其他'];
 }
 
 var personnelCfg = {
@@ -5320,29 +5286,29 @@ var personnelCfg = {
     { key: 'entryDate', label: '入伍/入职日期', type: 'date', required: true },
     { key: 'equivEntryDate', label: '相当入伍时间', type: 'date', required: true },
     { section: '更多资料' },
-    { key: 'nation', label: '民族', type: 'select', required: true, options: function () { return dictLabels('nation'); } },
-    { key: 'bloodType', label: '血型', type: 'select', required: true, options: function () { return dictLabels('blood_type'); } },
-    { key: 'enlistPlace', label: '入伍所在地', type: 'region', required: true },
-    { key: 'nativePlace', label: '籍贯所在地', type: 'region', required: true },
+    { key: 'nation', label: '民族', type: 'select', options: function () { return dictLabels('nation'); } },
+    { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
+    { key: 'enlistPlace', label: '入伍所在地', type: 'region' },
+    { key: 'nativePlace', label: '籍贯所在地', type: 'region' },
 
 
 
-    { key: 'onlyChild', label: '独生子女', type: 'select', required: true, options: function () { return dictLabels('only_child'); } },
+    { key: 'onlyChild', label: '独生子女', type: 'select', options: function () { return dictLabels('only_child'); } },
     { key: 'address', label: '详细地址', span: 'full', required: true, placeholder: '街道/门牌号等具体住址' },
     { section: '党团籍信息' },
-    { key: 'politicalStatus', label: '政治面貌', type: 'select', required: true, options: function () { return dictLabels('political_status'); } },
+    { key: 'politicalStatus', label: '政治面貌', type: 'select', options: function () { return dictLabels('political_status'); } },
     { key: 'partyApplyDate', label: '提交申请书时间', type: 'date' },
     { key: 'partyActivistDate', label: '积极分子时间', type: 'date' },
     { key: 'partyCandidateDate', label: '预备党员时间', type: 'date' },
     { key: 'partyFullDate', label: '转正时间', type: 'date' },
-    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date', requiredIf: function (v) { return ['党员', '团员', '中共党员', '共青团员'].indexOf(v.politicalStatus) >= 0; } },
-    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委', requiredIf: function (v) { return v.politicalStatus === '党员' || v.politicalStatus === '中共党员'; } },
+    { key: 'partyJoinDate', label: '入党/入团日期', type: 'date' },
+    { key: 'partyOrgLocation', label: '组织关系所在地', placeholder: '如:XX部队XX党委' },
     { key: 'partyPost', label: '党内职务', placeholder: '如:支部委员、党委书记' },
     { key: 'partyRemark', label: '党团备注', type: 'textarea', span: 'full' },
     { section: '婚姻状况' },
-    { key: 'maritalStatus', label: '婚姻状况', type: 'select', required: true, options: function () { return dictLabels('marital_status'); } },
-    { key: 'marriageDate', label: '结婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '已婚' || v.maritalStatus === '离异'; } },
-    { key: 'divorceDate', label: '离婚日期', type: 'date', requiredIf: function (v) { return v.maritalStatus === '离异'; } },
+    { key: 'maritalStatus', label: '婚姻状况', type: 'select', options: function () { return dictLabels('marital_status'); } },
+    { key: 'marriageDate', label: '结婚日期', type: 'date' },
+    { key: 'divorceDate', label: '离婚日期', type: 'date' },
     { key: 'followArmyDate', label: '随军时间', type: 'date' },
     { key: 'followArmyStatus', label: '随军条件', type: 'select', options: function () { var l = dictLabels('follow_army_status'); return l.length ? l : ['符合', '不符合', '未申请']; } },
     { key: 'marriageRemark', label: '婚姻备注', type: 'textarea', span: 'full' },
@@ -5963,6 +5929,104 @@ var leaveCfg = {
   }
 };
 
+var absenceCfg = {
+  key: 'absence', title: '在外登记', icon: 'calendar', endpoint: '/api/absence',
+  clickKey: 'personnelName', addLabel: '新增在外登记',
+  personLookup: { idCard: 'idCard', name: 'personnelName', pid: 'personnelId' },
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号' },
+    { key: 'reason', label: '事由', type: 'select', options: function () { return dictLabels('absence_reason'); } }
+  ],
+  moreFilters: [
+    { key: 'leaveDateFrom', label: '离开日期从', type: 'date' },
+    { key: 'leaveDateTo', label: '离开日期至', type: 'date' }
+  ],
+  columns: [
+    { key: 'departmentPath', label: '单位' },
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号', render: function (r) { return r.idCard || '—'; } },
+    { key: 'reason', label: '事由', render: function (r) { return badge(r.reason); } },
+    { key: 'leaveDate', label: '离开日期' },
+    { key: 'expectedReturnDate', label: '预计返回', render: function (r) {
+        if (!r.expectedReturnDate) { return '<span class="badge gray">未定</span>'; }
+        if (r.actualReturnDate) { return esc(r.expectedReturnDate); }
+        var now = new Date();
+        function p2(n) { return n < 10 ? '0' + n : '' + n; }
+        var today = now.getFullYear() + '-' + p2(now.getMonth() + 1) + '-' + p2(now.getDate());
+        if (String(r.expectedReturnDate) < today) {
+          var days = Math.round((now - new Date(String(r.expectedReturnDate).replace(/-/g, '/'))) / 86400000);
+          return '<span class="badge red" title="到期未归,可点「延期」顺延或「归队」销假">' + esc(r.expectedReturnDate) + ' 超期' + days + '天</span>';
+        }
+        return esc(r.expectedReturnDate);
+      } },
+    { key: 'actualReturnDate', label: '实际返回', render: function (r) {
+        return r.actualReturnDate || '<span class="badge orange">未返回</span>';
+      } },
+    { key: 'remark', label: '备注' }
+  ],
+  rowTitle: function (r) { return r.personnelName + ' · ' + (r.reason || '') + '在外'; },
+  delTip: function (r) {
+    return '确定删除「' + r.personnelName + '」的这条在外记录吗?' +
+      (r.actualReturnDate ? '' : '(未返回记录删除后,人员状态将恢复「在位」)');
+  },
+  // 行内一键归队:未归行显示,确认后以当天日期销假并刷新
+  rowActions: [
+    { key: 'edit', label: '编辑' },
+    { key: 'postpone', label: '延期', visible: function (row) { return !row.actualReturnDate; },
+      onClick: function (row, act) {
+        var dateEl = makeDateField();
+        if (row.expectedReturnDate) { dateEl.value = row.expectedReturnDate; }
+        var m = openModal({
+          title: '延期 · ' + row.personnelName,
+          body: h('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+            h('div', { style: 'font-size:13px;color:var(--c-sub, #66788c)' },
+              '当前预计 ' + (row.expectedReturnDate || '返期未定') + ' 返回,请填写新的预计返回日期:'),
+            dateEl),
+          footer: [
+            h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+            h('button', {
+              class: 'btn btn-primary', text: '确定延期', onclick: function () {
+                var v = String(dateEl.rawValue === undefined ? dateEl.value : dateEl.rawValue).trim();
+                if (!v) { toast('请填写新的预计返回日期', 'err'); return; }
+                POST('/api/absence/' + row.id + '/postpone?date=' + encodeURIComponent(v)).then(function () {
+                  m.close();
+                  toast('已延期至 ' + v);
+                  act.refresh();
+                }).catch(function (e) { toast(e.message || '延期失败', 'err'); });
+              }
+            })
+          ]
+        });
+      } },
+    { key: 'return', label: '归队', visible: function (row) { return !row.actualReturnDate; },
+      onClick: function (row, act) {
+        confirmBox('确认「' + row.personnelName + '」今日归队吗?人员状态将恢复「在位」', true).then(function (yes) {
+          if (!yes) { return; }
+          POST('/api/absence/' + row.id + '/return').then(function () {
+            toast('已登记归队,状态恢复「在位」');
+            act.refresh();
+          }).catch(function (e) { toast(e.message || '归队失败', 'err'); });
+        });
+      } },
+    { key: 'del', label: '删除', danger: true }
+  ],
+  form: [
+    { key: 'idCard', label: '身份证号', required: true, placeholder: '输入后自动带出姓名' },
+    { key: 'personnelName', label: '姓名', readonly: true, placeholder: '按身份证号自动获取' },
+    { key: 'personnelId', type: 'hidden', required: true },
+    { key: 'reason', label: '在外事由', type: 'select', required: true, options: function () { return dictLabels('absence_reason'); } },
+    { key: 'leaveDate', label: '离开单位日期', type: 'date', required: true },
+    { key: 'expectedReturnDate', label: '预计返回日期', type: 'date', hint: '可留空表示返期未定;到期未归可在列表点「延期」顺延' },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full', placeholder: '如:前往地点、承办事项等' }
+  ],
+  beforeSave: function (data) {
+    delete data.idCard;
+    delete data.personnelName;
+    return data;
+  }
+};
+
 var phoneCfg = {
   key: 'phone', title: '手机管理', icon: 'smartphone', endpoint: '/api/phone',
   clickKey: 'personnelName', addLabel: '新增手机设备',
@@ -6243,6 +6307,37 @@ function departmentView() {
   var statsEl = h('div', { class: 'dept-stats' });
   var stats = { depts: 0, assigned: 0, personTotal: 0 };
 
+  var deptDragRow = null, deptDropRow = null, deptDropAfter = false, deptDragMoved = false, deptOrderSaving = false;
+
+  function clearDeptDropMarks() {
+    $all('.dept-row', root).forEach(function (el) { el.classList.remove('dept-drop-before', 'dept-drop-after'); });
+  }
+
+  /** 同级拖动落定:按当前 DOM 顺序收集同父级单位 ids,提交后端重写 sort 并整树刷新 */
+  function endDeptDrag(commit) {
+    var moved = deptDragRow;
+    var parentKey = moved ? moved.getAttribute('data-parent') : '';
+    if (moved) moved.classList.remove('dept-dragging');
+    clearDeptDropMarks();
+    deptDragRow = null;
+    deptDropRow = null;
+    if (!commit || !moved || !deptDragMoved) { deptDragMoved = false; return; }
+    deptDragMoved = false;
+    var ids = [];
+    $all('.dept-row[data-id]', root).forEach(function (row) {
+      if (row.getAttribute('data-parent') === parentKey) ids.push(Number(row.getAttribute('data-id')));
+    });
+    if (ids.length < 2 || deptOrderSaving) return;
+    deptOrderSaving = true;
+    PUT('/api/departments/reorder', { ids: ids }).then(function () {
+      toast('排序已保存');
+      return refreshDepts();
+    }).then(function () { loadStats(); renderTree(); }).catch(function (e) {
+      toast(e.message || '排序保存失败', 'err');
+      refreshDepts().then(function () { loadStats(); renderTree(); });
+    }).then(function () { deptOrderSaving = false; });
+  }
+
   function walk(nodes, fn) {
     nodes.forEach(function (n) {
       fn(n);
@@ -6329,7 +6424,7 @@ function departmentView() {
     });
   }
 
-  function nodeRow(node, depth) {
+  function nodeRow(node, depth, parentId, canDrag) {
     var hasKids = node.children && node.children.length;
     var expand = hasKids
       ? h('span', { class: 'tw', text: node._open === false ? '▸' : '▾', onclick: function () { node._open = node._open === false; renderTree(); } })
@@ -6337,7 +6432,8 @@ function departmentView() {
     var nameHtml = kw && node._hit
       ? esc(node.name).split(esc(kw)).join('<b>' + esc(kw) + '</b>')
       : esc(node.name);
-    var row = h('div', { class: 'dept-row' }, expand,
+    var row = h('div', { class: 'dept-row' },
+      canDrag ? h('span', { class: 'dept-drag-handle', 'aria-hidden': 'true', title: '按住拖动排序', text: '⠿' }) : null, expand,
       h('span', { class: 'dept-ic', html: iconSvg('building') }),
       h('span', {
         class: 'name clickable', html: nameHtml, title: '点击查看该单位人员',
@@ -6364,6 +6460,51 @@ function departmentView() {
           }
         })));
     row.style.paddingLeft = (10 + depth * 22) + 'px';
+    // 同级拖动排序:与数据字典一致,仅同一父级内可互拖,跨父级/搜索中不可拖
+    if (canDrag) {
+      row.setAttribute('data-id', String(node.id));
+      row.setAttribute('data-parent', parentId == null ? '' : String(parentId));
+      row.setAttribute('draggable', 'true');
+      row.addEventListener('dragstart', function (e) {
+        if (deptOrderSaving) { if (e.preventDefault) e.preventDefault(); return; }
+        deptDragRow = row;
+        deptDragMoved = false;
+        deptDropRow = null;
+        row.classList.add('dept-dragging');
+        if (e.dataTransfer) {
+          try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(node.id));
+          } catch (err) { /* 忽略不支持数据传输的浏览器 */ }
+        }
+      });
+      row.addEventListener('dragover', function (e) {
+        if (!deptDragRow || deptDragRow === row) return;
+        if (deptDragRow.getAttribute('data-parent') !== row.getAttribute('data-parent')) {
+          clearDeptDropMarks();
+          deptDropRow = null;
+          return;
+        }
+        if (e.preventDefault) e.preventDefault();
+        if (e.dataTransfer) { try { e.dataTransfer.dropEffect = 'move'; } catch (err) { /* 忽略 */ } }
+        var rect = row.getBoundingClientRect();
+        deptDropAfter = typeof e.clientY === 'number' && e.clientY > rect.top + (rect.bottom - rect.top) / 2;
+        clearDeptDropMarks();
+        row.classList.add(deptDropAfter ? 'dept-drop-after' : 'dept-drop-before');
+        deptDropRow = row;
+      });
+      row.addEventListener('drop', function (e) {
+        if (!deptDragRow || !deptDropRow || deptDragRow === deptDropRow) return;
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        var reference = deptDropAfter ? deptDropRow.nextSibling : deptDropRow;
+        while (reference && reference.nodeType !== 1) reference = reference.nextSibling;
+        deptDropRow.parentNode.insertBefore(deptDragRow, reference);
+        deptDragMoved = true;
+        endDeptDrag(true);
+      });
+      row.addEventListener('dragend', function () { endDeptDrag(false); });
+    }
     return row;
   }
 
@@ -6376,14 +6517,15 @@ function departmentView() {
     }
     if (kw) { filterTree(Ctx.deptTree); }
     var found = 0;
-    (function emit(nodes, depth) {
+    (function emit(nodes, depth, parentId) {
+      var canDrag = !kw && nodes.length > 1; // 搜索过滤时禁拖;同级仅一行无排序意义
       nodes.forEach(function (n) {
         if (kw && !n._keep) { return; }
         found++;
-        box.appendChild(nodeRow(n, depth));
-        if (n._open !== false && n.children && n.children.length) { emit(n.children, depth + 1); }
+        box.appendChild(nodeRow(n, depth, parentId, canDrag));
+        if (n._open !== false && n.children && n.children.length) { emit(n.children, depth + 1, n.id); }
       });
-    })(Ctx.deptTree, 0);
+    })(Ctx.deptTree, 0, null);
     if (kw && !found) {
       box.appendChild(h('div', { class: 'empty-row', text: '没有名称包含「' + kw + '」的单位' }));
     }
@@ -6506,6 +6648,13 @@ function dictView() {
   var root = h('div');
   var currentType = null;
   var pendingHighlightPid = null; // 点击"N个下级"跳转后,高亮该父项的下级行
+  var typeQuery = '';
+  var itemQuery = '';
+
+  function dictMatch(item, query) {
+    return String(item.dictLabel || '').toLowerCase().indexOf(query) >= 0 ||
+      String(item.remark || '').toLowerCase().indexOf(query) >= 0;
+  }
 
   function typeGroup(t) {
     for (var i = 0; i < Ctx.dictTypes.length; i++) {
@@ -6515,14 +6664,28 @@ function dictView() {
   }
 
   function renderTypeList() {
-    var box = $('.dict-types', root);
+    var box = $('.dict-types-list', root);
     box.innerHTML = '';
-    Ctx.dictTypes.forEach(function (g) {
+    var query = typeQuery.toLowerCase();
+    var matches = Ctx.dictTypes.filter(function (g) {
+      return !query || String(g.name || '').toLowerCase().indexOf(query) >= 0 ||
+        String(g.type).toLowerCase().indexOf(query) >= 0 ||
+        (g.items || []).some(function (d) { return dictMatch(d, query); });
+    });
+    var lastGroup = null;
+    matches.forEach(function (g) {
+      // 后端按业务分组有序输出;按组分段插入小标题,搜索过滤后仅命中的组显示标题
+      var gn = g.group || '其他';
+      if (gn !== lastGroup) {
+        box.appendChild(h('div', { class: 'dict-group-title', text: gn }));
+        lastGroup = gn;
+      }
       box.appendChild(h('div', {
         class: 'dict-type-item' + (g.type === currentType ? ' active' : ''),
-        onclick: function () { currentType = g.type; renderTypeList(); renderItems(); }
+        onclick: function () { currentType = g.type; itemQuery = ''; $('.dict-item-search', root).value = ''; renderTypeList(); renderItems(); }
       }, h('span', { text: g.name || g.type }), h('span', { class: 'n', text: String((g.items || []).length) })));
     });
+    if (!matches.length) box.appendChild(h('div', { class: 'dict-search-empty', text: '没有匹配的字典类型或选项' }));
   }
 
   /** 记住最后浏览的字典类型,刷新后停留在原处 */
@@ -6598,6 +6761,10 @@ function dictView() {
       return best;
     }
 
+    var query = itemQuery.toLowerCase();
+    if (query) ordered = ordered.filter(function (d) {
+      return dictMatch(d, query) || String(d._parentLabel || '').toLowerCase().indexOf(query) >= 0;
+    });
     var groupCounts = {};
     ordered.forEach(function (d) {
       var key = String(d.parentId || 0);
@@ -6621,7 +6788,7 @@ function dictView() {
             ? ' <span class="badge blue dict-child-link" data-ctype="' + esc(ct || '') + '" data-pid="' + d.id + '" title="点击查看下级">' + childCount + '个下级 ›</span>'
             : '');
         }
-        var dragCell = groupCounts[groupKey] > 1
+        var dragCell = !itemQuery && groupCounts[groupKey] > 1
           ? '<td class="dict-sort-cell" title="按住拖动排序"><span class="dict-drag-handle" aria-hidden="true">⠿</span></td>'
           : '<td class="dict-drag-col"></td>';
         return '<tr' + rowFlash + ' data-id="' + d.id + '" data-parent="' + groupKey + '">' + dragCell +
@@ -6632,9 +6799,10 @@ function dictView() {
           (isChild ? '' : '<button class="btn-link" data-sub="' + d.id + '">添加下级</button>') +
           '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
-      }).join('') : '<tr><td colspan="6" class="empty-row">该类型暂无选项</td></tr>') + '</tbody>';
+      }).join('') : '<tr><td colspan="6" class="empty-row">' + (itemQuery ? '没有匹配的字典选项' : '该类型暂无选项') + '</td></tr>') + '</tbody>';
     pendingHighlightPid = null;
     var dictDragRow = null, dictDropRow = null, dictDropAfter = false, dictDragMoved = false, dictOrderSaving = false;
+    // 搜索结果并非完整同级列表，禁止拖动排序以免遗漏未显示的项。
     function clearDictDropMarks() {
       $all('tr.dict-drop-before, tr.dict-drop-after', table).forEach(function (row) {
         row.classList.remove('dict-drop-before', 'dict-drop-after');
@@ -6665,7 +6833,7 @@ function dictView() {
     }
     $all('tbody tr[data-id]', table).forEach(function (tr) {
       var groupKey = tr.getAttribute('data-parent');
-      if ((groupCounts[groupKey] || 0) < 2) return;
+      if (itemQuery || (groupCounts[groupKey] || 0) < 2) return;
       tr.setAttribute('draggable', 'true');
       tr.addEventListener('dragstart', function (e) {
         if (dictOrderSaving) { if (e.preventDefault) e.preventDefault(); return; }
@@ -6715,6 +6883,8 @@ function dictView() {
         var ctype = link.getAttribute('data-ctype');
         if (ctype && typeGroup(ctype)) {
           currentType = ctype;
+          itemQuery = '';
+          $('.dict-item-search', root).value = '';
           pendingHighlightPid = link.getAttribute('data-pid');
           renderTypeList();
           renderItems();
@@ -6747,6 +6917,15 @@ function dictView() {
       h('div', { class: 'toolbar' },
         h('strong', { text: (g.name || currentType) + '(' + currentType + ')' }),
         h('div', { class: 'spacer' }),
+        h('input', { class: 'dict-item-search', type: 'search', placeholder: '搜索选项或备注', 'aria-label': '搜索字典选项',
+          value: itemQuery, oninput: function (e) {
+            var pos = e.target.selectionStart;
+            itemQuery = e.target.value;
+            renderItems();
+            var search = $('.dict-item-search', root);
+            search.focus();
+            if (pos != null) search.setSelectionRange(pos, pos);
+          } }),
         h('button', { class: 'btn btn-primary', text: '新增字典选项', onclick: function () { openForm(null); } })),
       h('div', { class: 'table-wrap' }, table)));
   }
@@ -6852,7 +7031,10 @@ function dictView() {
 
   function render(container) {
     root.appendChild(h('div', { class: 'dict-layout' },
-      h('div', { class: 'panel dict-types' }),
+      h('div', { class: 'panel dict-types' },
+        h('input', { class: 'dict-type-search', type: 'search', placeholder: '搜索类型或选项', 'aria-label': '搜索字典类型',
+          oninput: function (e) { typeQuery = e.target.value.trim(); renderTypeList(); } }),
+        h('div', { class: 'dict-types-list' })),
       h('div', { class: 'dict-main' })));
     renderAll();
     container.appendChild(root);
@@ -7243,7 +7425,7 @@ function drawGauge(d, drill) {
     return 'M ' + polar(a1, R) + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + polar(a2, R);
   }
   var color = pct >= 95 ? 'var(--c-ok, #2ea44f)' : pct >= 80 ? 'var(--pri, #2f6fd6)' : 'var(--c-warn, #e8960e)';
-  var val = drill ? drill.valOf('在职') : null;
+  var val = drill ? drill.valOf('在位') : null;
   var svg = ['<svg viewBox="0 0 240 160" style="width:100%;max-width:280px;display:block;margin:0 auto">'];
   svg.push('<path d="' + arc(start, start + sweep) + '" fill="none" stroke="var(--c-bg, #edf1f6)" stroke-width="' + SW + '" stroke-linecap="round"/>');
   if (pct > 0) {
@@ -7416,7 +7598,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆', '在外'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {
@@ -9912,11 +10094,15 @@ function pendingModuleView(cfg) {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
 var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
 var NAV_GROUPS = [
+  { key: 'personnel-group', icon: 'users', label: '人员管理', children: [
+    { key: 'personnel', label: '人员档案' },
+    { key: 'absence', label: '在外登记' }
+  ] },
   { key: 'military', icon: 'flag', label: '军事管理', children: [
     { key: 'military', label: '军事考核' },
     { key: 'fitness', label: '体能考核' }
@@ -10034,7 +10220,6 @@ function renderShell() {
     groupParents[g.key] = item;
   }
   addMenu('stats', 'chart', '仪表盘');   // 仪表盘置顶
-  addMenu('personnel', personnelCfg.icon, '人员管理');
   NAV_GROUPS.forEach(addGroupMenu);
   [materialCfg, leaveCfg, phoneCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   PENDING_MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });

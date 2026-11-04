@@ -361,27 +361,7 @@
     });
   }
 
-  /* 字典导航中让卡状态紧跟卡类型显示，保持同级入口 */
-  function placeCardStatusAfterCardType() {
-    var list = document.querySelector('.dict-types');
-    if (!list) return;
-    var cardType = null, cardStatus = null;
-    Array.prototype.slice.call(list.children).forEach(function (node) {
-      if (!node.classList || !node.classList.contains('dict-type-item')) return;
-      node.style.display = 'flex';
-      node.style.width = '100%';
-      node.style.boxSizing = 'border-box';
-      var label = node.firstElementChild ? node.firstElementChild.textContent.trim() : '';
-      if (label === '卡类型') cardType = node;
-      if (label === '卡状态') cardStatus = node;
-    });
-    if (cardType && cardStatus && cardType.nextElementSibling !== cardStatus) {
-      list.insertBefore(cardStatus, cardType.nextElementSibling);
-    }
-  }
-  if (document.body && typeof MutationObserver !== 'undefined') {
-    new MutationObserver(placeCardStatusAfterCardType).observe(document.body, { childList: true, subtree: true });
-  }
+  /* 历史补丁已移除:"卡状态紧跟卡类型"现由字典业务分组(证件与卡)保证;原 MutationObserver 补丁因列表外包 .dict-types-list 早已失效空转 */
 
   /* ================= 1. 侧栏分组子菜单动画 ================= */
 

@@ -418,8 +418,19 @@ table.grid td.empty-row { text-align: center; }
 }
 .dict-type-item:hover { background: #f2f6fc; }
 .dict-type-item.active { background: #e4edfb; color: var(--pri-dark, #16437e); font-weight: 600; }
-.dict-type-item .n { font-size: 12px; color: var(--c-muted, #8a97a8); font-weight: 400; }
+.dict-type-item .n { font-size: 12px; color: var(--c-muted, #8a97a8); font-weight: 400; flex: none; }
 .dict-main { flex: 1; min-width: 0; }
+/* 字典搜索:左侧按类型名/类型键/选项内容过滤,右侧按选项与备注过滤 */
+.dict-type-search, .dict-item-search {
+  height: 30px; border: 1px solid #c5cdd8; border-radius: var(--r-s, 4px);
+  padding: 0 10px; font-size: 13px; outline: none; background: #fff; color: var(--c-body, #445262);
+}
+.dict-type-search:focus, .dict-item-search:focus { border-color: var(--pri, #2f6fd6); }
+.dict-type-search { width: calc(100% - 12px); margin: 0 6px 8px; }
+.dict-item-search { width: 200px; flex: none; }
+.dict-search-empty { padding: 10px 12px; font-size: 12px; color: var(--c-faint, #97a4b5); }
+.dict-group-title { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--c-faint, #97a4b5); padding: 10px 12px 4px; }
+.dict-group-title:first-child { padding-top: 4px; }
 
 /* ---------- 统计页 ---------- */
 .stats-cards { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -647,7 +658,8 @@ body.dash-sorting, body.dash-sorting * { cursor: grabbing !important; user-selec
   /* 小屏侧栏自适应由 JS 自动收起处理(与FLIP动画一致),不再用CSS硬移位 */
   .form-grid { grid-template-columns: 1fr; }
   .dict-layout { flex-direction: column; }
-  .dict-types { width: 100%; display: flex; flex-wrap: wrap; position: static; max-height: none; overflow: visible; }
+  /* 小屏仍保持单列列表(每行一项),限高内部滚动;横向平铺会让"血型/学位"等类型项并排,与组标题交错难以扫读 */
+  .dict-types { width: 100%; display: flex; flex-direction: column; position: static; max-height: 40vh; overflow-y: auto; }
 }
 
 /* ---------- 侧边栏收起 ---------- */
@@ -1136,6 +1148,10 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .dict-drag-col { width: 32px; }
 .dict-sort-cell { width: 32px; cursor: move; user-select: none; white-space: nowrap; }
 .dict-drag-handle { color: #b0bccb; margin-right: 4px; }
+.dept-drag-handle { color: #b0bccb; margin-right: 4px; cursor: grab; user-select: none; }
+.dept-row.dict-dragging { opacity: .45; }
+.dept-row.dept-drop-before { box-shadow: inset 0 2px 0 var(--pri, #2f6fd6); }
+.dept-row.dept-drop-after { box-shadow: inset 0 -2px 0 var(--pri, #2f6fd6); }
 tr.dict-dragging { opacity: .45; }
 tr.dict-drop-before td { box-shadow: inset 0 2px 0 var(--pri, #2f6fd6); }
 tr.dict-drop-after td { box-shadow: inset 0 -2px 0 var(--pri, #2f6fd6); }
@@ -1335,10 +1351,6 @@ tr.dict-drop-after td { box-shadow: inset 0 -2px 0 var(--pri, #2f6fd6); }
 .btn-primary:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(47,111,214,.3); }
 .btn-danger:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(217,70,62,.3); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
-
-/* 字典类型项统一chip样式 */
-.dict-type-item { min-width: 88px; display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; }
-.dict-type-item .n { flex: none; min-width: 20px; text-align: center; }
 
 /* 弹窗tab溢出渐隐 */
 .tabs { mask-image: linear-gradient(to right, #000 95%, transparent); }
