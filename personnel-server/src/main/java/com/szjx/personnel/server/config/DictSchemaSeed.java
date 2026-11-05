@@ -100,6 +100,16 @@ class DictSchemaSeed {
         });
     }
 
+    /** 学历形式选项细化:旧"全日制"沿用原字典项 id 改名为"普通全日制"(人员表历史值同步);非全日制保留兜底。 */
+    void migrateEduForm() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> {
+            renamePersonnelDict("edu_form", "全日制", "普通全日制");
+            jdbc.update("UPDATE personnel SET edu_form='普通全日制' WHERE edu_form='全日制'");
+        });
+    }
+
     /** 血型升级为 ABO+RH 完整表述:沿用旧字典项 ID(历史 A/B/AB/O 视为 RH 阳性),人员表历史值同步;重复执行无副作用。 */
     void migrateBloodTypeRh() {
         org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(

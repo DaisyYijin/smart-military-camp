@@ -463,7 +463,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         dictSeed.addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
         dictSeed.addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
         dictSeed.addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
-        dictSeed.addDict("edu_form", new String[]{"全日制", "非全日制"});
+        dictSeed.addDict("edu_form", new String[]{"普通全日制", "非全日制", "成人高考(函授)", "成人高考(业余)", "自学考试", "网络教育", "开放教育"});
 
         // 体能考核分数
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
@@ -831,6 +831,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
         dictSeed.migratePersonnelTerms();
         dictSeed.migrateBloodTypeRh();
+        dictSeed.migrateEduForm();
         // 私家车价格单位统一为元:历史以万元记录的值(0<price<1000)一次性换算;换算后不再命中条件,幂等
         try {
             jdbc.update("UPDATE private_vehicle SET price = CAST(CAST(price AS REAL) * 10000 AS INTEGER) " +

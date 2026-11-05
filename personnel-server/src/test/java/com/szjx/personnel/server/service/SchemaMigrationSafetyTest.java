@@ -30,6 +30,21 @@ class SchemaMigrationSafetyTest {
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict", Integer.class));
     }
 
+    @Test void eduFormUpgradesQuanRiZhiAndKeepsFallback() {
+        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, edu_form TEXT DEFAULT '')");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(20,'edu_form','全日制',1,0)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(21,'edu_form','非全日制',2,0)");
+        jdbc.update("INSERT INTO personnel(name,edu_form) VALUES('张三','全日制')");
+        jdbc.update("INSERT INTO personnel(name,edu_form) VALUES('李四','非全日制')");
+        Object dictSeed = ReflectionTestUtils.getField(initializer, "dictSeed");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateEduForm");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateEduForm"); // 幂等
+        assertEquals("普通全日制", jdbc.queryForObject("SELECT dict_label FROM sys_dict WHERE id=20", String.class), "旧项沿用 id 改名");
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict WHERE dict_type='edu_form' AND dict_label='全日制'", Integer.class));
+        assertEquals("普通全日制", jdbc.queryForObject("SELECT edu_form FROM personnel WHERE name='张三'", String.class), "人员历史值同步");
+        assertEquals("非全日制", jdbc.queryForObject("SELECT edu_form FROM personnel WHERE name='李四'", String.class), "非全日制兜底保留");
+    }
+
     @Test void vehiclePriceMillionToYuanMigrationIsIdempotent() {
         jdbc.execute("CREATE TABLE private_vehicle(id INTEGER PRIMARY KEY AUTOINCREMENT, price TEXT DEFAULT '')");
         jdbc.update("INSERT INTO private_vehicle(price) VALUES('15')");
