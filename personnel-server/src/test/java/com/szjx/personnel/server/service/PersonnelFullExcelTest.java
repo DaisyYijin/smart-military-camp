@@ -47,7 +47,7 @@ class PersonnelFullExcelTest {
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(excel.template()))) {
             Sheet main = wb.getSheet("人员信息");
             assertEquals("入学时间", main.getRow(0).getCell(36).getStringCellValue());
-            assertEquals("学历证书编号", main.getRow(0).getCell(42).getStringCellValue());
+            assertEquals("学制", main.getRow(0).getCell(42).getStringCellValue());
             assertEquals("配偶姓名", main.getRow(0).getCell(43).getStringCellValue());
             assertEquals("照片文件名", main.getRow(0).getCell(51).getStringCellValue());
             assertEquals("导出人员编号", main.getRow(0).getCell(52).getStringCellValue());

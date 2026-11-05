@@ -50,6 +50,9 @@ public class DictService {
         TYPE_NAMES.put("gender", "性别");
         TYPE_NAMES.put("reward_punish_kind", "奖惩类型");
         TYPE_NAMES.put("personnel_post", "岗位职务");
+        TYPE_NAMES.put("party_post", "党内职务");
+        TYPE_NAMES.put("follow_army", "是否随军");
+        TYPE_NAMES.put("edu_length", "学制");
         TYPE_NAMES.put("reward_content", "奖惩内容");
         TYPE_NAMES.put("only_child", "是否独生子女");
         TYPE_NAMES.put("family_relation", "家庭关系");
@@ -112,7 +115,7 @@ public class DictService {
     private static final java.util.LinkedHashMap<String, java.util.List<String>> DICT_GROUPS = new java.util.LinkedHashMap<String, java.util.List<String>>();
     static {
         String[][] groups = {
-            {"人员档案", "gender,nation,blood_type,political_status,marital_status,education,edu_degree,edu_form,personnel_category,rank,personnel_status,personnel_location,personnel_post,only_child,family_relation,follow_army_status,housing_type,house_nature"},
+            {"人员档案", "gender,nation,blood_type,political_status,marital_status,education,edu_degree,edu_form,edu_length,personnel_category,rank,personnel_status,personnel_location,personnel_post,party_post,follow_army,only_child,family_relation,follow_army_status,housing_type,house_nature"},
             {"证件与卡", "card_type,card_status,license_status,license_type,has_cert"},
             {"在外与休假", "absence_reason,leave_type,holiday_type"},
             {"军事训练与考评", "military_type,fitness_item,fitness_grade,de_rating,annual_rating"},

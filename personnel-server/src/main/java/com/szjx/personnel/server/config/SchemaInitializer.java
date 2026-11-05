@@ -520,6 +520,8 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         ensureColumn("personnel", "edu_degree", "edu_degree TEXT DEFAULT ''");
         ensureColumn("personnel", "edu_form", "edu_form TEXT DEFAULT ''");
         ensureColumn("personnel", "edu_cert_no", "edu_cert_no TEXT DEFAULT ''");
+        ensureColumn("personnel", "follow_army", "follow_army TEXT DEFAULT ''");
+        ensureColumn("personnel", "edu_length", "edu_length TEXT DEFAULT ''");
 
         // 奖惩情况(人员的子记录,kind 区分 奖励/处分)
         jdbc.execute("CREATE TABLE IF NOT EXISTS reward_punish (" +

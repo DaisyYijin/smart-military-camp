@@ -63,6 +63,8 @@ public class Personnel {
     private String partyFullDate;      // 转正时间
     private String followArmyDate;     // 随军时间
     private String followArmyStatus;   // 随军条件
+    private String followArmy;        // 是否随军(是/否,字典 follow_army)
+    private String eduLength;         // 学制(字典 edu_length)
     private Double height;        // 身高(cm)
     private Double weight;        // 体重(kg)
     private String createdAt;
@@ -465,6 +467,12 @@ public class Personnel {
     public void setPartyFullDate(String v) { this.partyFullDate = v; }
     public String getFollowArmyDate() { return followArmyDate; }
     public void setFollowArmyDate(String v) { this.followArmyDate = v; }
+    public String getEduLength() { return eduLength; }
+    public void setEduLength(String v) { this.eduLength = v; }
+
+    public String getFollowArmy() { return followArmy; }
+    public void setFollowArmy(String v) { this.followArmy = v; }
+
     public String getFollowArmyStatus() { return followArmyStatus; }
     public void setFollowArmyStatus(String v) { this.followArmyStatus = v; }
 

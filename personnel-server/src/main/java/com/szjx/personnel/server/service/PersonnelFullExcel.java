@@ -55,7 +55,7 @@ public class PersonnelFullExcel {
         "提交申请书时间", "积极分子时间", "预备党员时间", "转正时间",
         "婚姻状况", "结婚日期", "离婚日期", "随军时间", "随军条件",
         "学历", "是否独生子女", "身高(cm)", "体重(kg)", "详细地址",
-        "入学时间", "毕业时间", "毕业院校", "专业", "学位", "学历形式", "学历证书编号",
+        "入学时间", "毕业时间", "毕业院校", "专业", "学位", "学历形式", "学制",
         "配偶姓名", "配偶工作单位", "配偶电话", "配偶身份证号", "配偶职业", "党团备注", "婚姻备注", "备注", "照片文件名", "导出人员编号", "军人证件号", "单位完整路径（只读）",
         "实际单位"
     };
@@ -66,7 +66,7 @@ public class PersonnelFullExcel {
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
         "marital_status", "marriage_date", "divorce_date", "follow_army_date", "follow_army_status",
         "education", "only_child", "height", "weight", "address",
-        "edu_enroll_date", "edu_graduate_date", "edu_school", "edu_major", "edu_degree", "edu_form", "edu_cert_no",
+        "edu_enroll_date", "edu_graduate_date", "edu_school", "edu_major", "edu_degree", "edu_form", "edu_length",
         "spouse_name", "spouse_work", "spouse_phone", "spouse_id_card", "spouse_job", "party_remark", "marriage_remark", "remark", "photo", "__source_id", "military_id_no", "department_path",
         "actual_department_name"
     };
@@ -110,7 +110,7 @@ public class PersonnelFullExcel {
         "party_apply_date", "party_activist_date", "party_candidate_date", "party_full_date",
         "marital_status", "marriage_date", "divorce_date", "follow_army_date", "follow_army_status",
         "education", "only_child", "height", "weight", "address",
-        "edu_enroll_date", "edu_graduate_date", "edu_school", "edu_major", "edu_degree", "edu_form", "edu_cert_no",
+        "edu_enroll_date", "edu_graduate_date", "edu_school", "edu_major", "edu_degree", "edu_form", "edu_length",
         "spouse_name", "spouse_work", "spouse_phone", "spouse_id_card", "spouse_job", "party_remark", "marriage_remark", "remark"
     };
 
