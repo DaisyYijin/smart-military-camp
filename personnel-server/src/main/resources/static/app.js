@@ -5313,6 +5313,7 @@ var personnelCfg = {
     { key: 'status', label: '状态', render: function (r) { return badge(r.status); } },
     { key: 'phone', label: '手机号' },
     { key: 'entryDate', label: '入伍日期' },
+    { key: 'equivEntryDate', label: '相当入伍年月', type: 'date', hint: '大学生士兵兵龄折算认定时间;早于入伍日期即折算加兵龄,军龄与军衔套改按此计算' },
     { key: '__service', label: '军龄', render: function (r) { var y = calcServiceYears(r.equivEntryDate || r.entryDate); return y ? y + '年' : '—'; } }
   ],
   rowTitle: function (r) { return r.name; },
@@ -7735,7 +7736,7 @@ function dashboardView() {
     eventsBox.innerHTML = '';
     var counts = {};
     lastEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
-    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆', '证件', '在外'].filter(function (t) { return t === '全部' || counts[t]; });
+    var chipDefs = ['全部', '物资', '休假', '借还', '生日', '党务', '装备', '车辆', '证件', '军衔', '在外'].filter(function (t) { return t === '全部' || counts[t]; });
     var chipBar = h('div', { class: 'ev-chips' });
     chipDefs.forEach(function (t) {
       chipBar.appendChild(h('button', {

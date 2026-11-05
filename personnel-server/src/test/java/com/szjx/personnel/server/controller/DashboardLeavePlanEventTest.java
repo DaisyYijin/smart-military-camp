@@ -24,7 +24,7 @@ class DashboardLeavePlanEventTest {
     @BeforeEach
     void setUp() {
         jdbc = PersonnelIntegrityTest.temporaryDatabase(temp);
-        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, id_card TEXT, birthday TEXT DEFAULT '', party_full_date TEXT DEFAULT '')");
+        jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, id_card TEXT, birthday TEXT DEFAULT '', party_full_date TEXT DEFAULT '', rank TEXT DEFAULT '', entry_date TEXT DEFAULT '', equiv_entry_date TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE leave_plan(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, year TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, days REAL, status TEXT, remark TEXT)");
         jdbc.execute("CREATE TABLE leave_record(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, year TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, days REAL)");
         jdbc.execute("CREATE TABLE material(id INTEGER PRIMARY KEY, name TEXT, quantity REAL, min_quantity REAL)");

@@ -156,6 +156,27 @@ public class DashboardController {
                     d, 3));
         }
 
+        // 军衔套改提醒:义务兵按相当入伍时间(无则实际入伍时间)推服役窗口;列兵满一年晋升上等兵,上等兵满两年套改军士。
+        // 晋升/套改后军衔变更即不再命中,提醒自然消失;只提醒不自动改衔。
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT p.name AS name, p.rank AS rank, p.entry_date AS entryDate, p.equiv_entry_date AS equivEntryDate " +
+                "FROM personnel p WHERE " + DataScope.departmentSql("p.department_id") + " AND p.rank IN ('列兵','上等兵')")) {
+            String base = String.valueOf(r.get("equivEntryDate"));
+            if (base == null || base.isEmpty() || "null".equals(base)) { base = String.valueOf(r.get("entryDate")); }
+            if (base == null || base.isEmpty() || "null".equals(base)) { continue; }
+            java.time.LocalDate baseDate;
+            try { baseDate = java.time.LocalDate.parse(base); } catch (Exception ex) { continue; }
+            String rankName = String.valueOf(r.get("rank"));
+            java.time.LocalDate due = baseDate.plusMonths("上等兵".equals(rankName) ? 24 : 12);
+            if (due.isAfter(today.plusDays(30))) { continue; }
+            boolean overdue = due.isBefore(today);
+            boolean corporal = "上等兵".equals(rankName);
+            list.add(event(overdue ? "danger" : "warn", "军衔",
+                    r.get("name") + " " + rankName + (overdue ? " 已满期可" : " 将于 " + fmtDate(due.toString()) + " 满")
+                            + (corporal ? "两年,可套改军士" : "一年,可晋升上等兵"),
+                    due.toString(), 2));
+        }
+
         // 在外登记:超期未归(danger)或10天内预计返回(info);可见性与在外登记列表一致
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT p.name AS name, a.reason AS reason, a.expected_return_date AS d FROM absence_record a " +
