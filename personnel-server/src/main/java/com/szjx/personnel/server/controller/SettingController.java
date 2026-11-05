@@ -22,7 +22,7 @@ public class SettingController {
             java.util.Arrays.asList("fitness_grade_rule",
                     "siteName", "siteTitle", "siteSubtitle", "siteLogo", "siteFavicon",
                     "themeColor", "pageSize", "backupKeep", "bmi_standard",
-                    "dashWidgets", "dashStatCards"));
+                    "dashWidgets", "dashStatCards", "rank_promotion_rules"));
 
     /** 免登录读取的界面配置(登录页也要显示标题/LOGO) */
     public static final String[] PUBLIC_KEYS = {"siteName", "siteTitle", "siteSubtitle",
@@ -67,7 +67,7 @@ public class SettingController {
                         + "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", key, value);
             }
         }
-        if ("fitness_grade_rule".equals(key) || "bmi_standard".equals(key)) {
+        if ("fitness_grade_rule".equals(key) || "bmi_standard".equals(key) || "rank_promotion_rules".equals(key)) {
             try {
                 com.fasterxml.jackson.databind.JsonNode node =
                         new com.fasterxml.jackson.databind.ObjectMapper().readTree(v == null ? "[]" : v);

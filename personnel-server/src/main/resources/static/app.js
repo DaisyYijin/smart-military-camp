@@ -5324,6 +5324,11 @@ var personnelCfg = {
   addLabel: '新增人员信息',
   toolbarExtra: function (bar, act) {
     bar.appendChild(h('button', {
+      class: 'btn btn-ghost', text: '晋升规则',
+      title: '配置军衔/警衔晋升链(各衔级满多少月晋升什么),适配部队/武警/公安不同制度',
+      onclick: function () { openRankRuleManager(); }
+    }));
+    bar.appendChild(h('button', {
       class: 'btn btn-ghost', text: '删除撤回',
       title: '恢复最近删除的人员及其全部关联记录(手机、休假、体能、子表、保管关联、照片)',
       onclick: function () { openPersonnelUndo(); }
@@ -5941,6 +5946,64 @@ function openLeaveHistory(rw, act) {
     body.innerHTML = '';
     body.appendChild(h('div', { class: 'empty-row', text: e.message }));
   });
+  });
+}
+
+/* 军衔晋升规则管理:适配部队/武警/公安等不同衔级制度,规则存系统设置 rank_promotion_rules(JSON数组) */
+function openRankRuleManager() {
+  var rulesBox = h('div');
+  var rules = [];
+  function bindRow(r, rank, months, next) {
+    function bind() { r.rank = rank.value; r.months = Number(months.value) || 0; r.next = next.value; }
+    rank.addEventListener('change', bind);
+    months.addEventListener('change', bind);
+    next.addEventListener('change', bind);
+  }
+  function renderRules() {
+    rulesBox.innerHTML = '';
+    rules.forEach(function (r, i) {
+      var rank = h('input', { type: 'text', value: r.rank || '', style: 'width:110px' });
+      var months = h('input', { type: 'number', min: '1', value: r.months || '', style: 'width:80px' });
+      var next = h('input', { type: 'text', value: r.next || '', style: 'width:110px' });
+      bindRow(r, rank, months, next);
+      rulesBox.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px' },
+        rank,
+        h('span', { text: '满' }), months, h('span', { text: '个月晋升为' }), next,
+        h('button', { class: 'btn-link danger', text: '删除', onclick: function () { rules.splice(i, 1); renderRules(); } })));
+    });
+  }
+  var m = openModal({
+    title: '军衔晋升规则(按相当入伍年月累计)',
+    body: h('div', {},
+      h('div', { text: '按衔级从低到高配置;月数为自入伍(或相当入伍)起累计服役月。例如 "列兵 满 12 个月晋升为 上等兵"。武警/公安单位可按警衔制度自行调整。', style: 'color:var(--c-sub, #66788c);font-size:13px;margin-bottom:12px;line-height:1.6' }),
+      rulesBox,
+      h('button', { class: 'btn btn-ghost', text: '添加规则', onclick: function () { rules.push({ rank: '', months: 12, next: '' }); renderRules(); } })),
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+      h('button', {
+        class: 'btn btn-primary', text: '保存', onclick: function () {
+          var bad = rules.filter(function (r) { return !r.rank || !r.next || !(r.months > 0); });
+          if (bad.length) { toast('每条规则需填写当前军衔、晋升目标与大于0的累计月数', 'err'); return; }
+          PUT('/api/setting/rank_promotion_rules', rules).then(function () {
+            m.close();
+            toast('军衔晋升规则已保存,仪表盘提醒即刻生效');
+          }).catch(function (e) { toast(e.message || '保存失败', 'err'); });
+        }
+      })
+    ]
+  });
+  var defaults = [
+    { rank: '列兵', months: 12, next: '上等兵' },
+    { rank: '上等兵', months: 24, next: '下士' },
+    { rank: '下士', months: 60, next: '中士' },
+    { rank: '中士', months: 96, next: '二级上士' }
+  ];
+  GET('/api/setting/rank_promotion_rules').then(function (list) {
+    rules = (list && list.length) ? list : defaults;
+    renderRules();
+  }).catch(function () {
+    rules = defaults;
+    renderRules();
   });
 }
 

@@ -156,8 +156,8 @@ public class DashboardController {
                     d, 3));
         }
 
-        // 军衔晋升提醒:按相当入伍时间(无则实际入伍时间)累计服役年限推各衔满期窗口。
-        // 晋升链(累计月):列兵12→上等兵、上等兵24→下士、下士60→中士、中士96→二级上士;
+        // 军衔晋升提醒:晋升链可配置(系统设置 rank_promotion_rules,武警/公安等单位可按警衔制度自定义);
+        // 未配置或配置损坏时取部队默认(累计月):列兵12→上等兵、上等兵24→下士、下士60→中士、中士96→二级上士。
         // 晋升后军衔变更即不再命中,提醒自然消失;只提醒不自动改衔。
         String[][] rankStages = {
                 {"列兵", "12", "上等兵"},
@@ -165,6 +165,20 @@ public class DashboardController {
                 {"下士", "60", "中士"},
                 {"中士", "96", "二级上士"},
         };
+        try {
+            String json = jdbc.queryForObject("SELECT svalue FROM sys_setting WHERE skey='rank_promotion_rules'", String.class);
+            if (json != null && json.trim().startsWith("[")) {
+                java.util.List<String[]> parsed = new java.util.ArrayList<String[]>();
+                for (com.fasterxml.jackson.databind.JsonNode n : new com.fasterxml.jackson.databind.ObjectMapper().readTree(json)) {
+                    if (n.has("rank") && n.has("months") && n.has("next")) {
+                        parsed.add(new String[]{n.get("rank").asText(), n.get("months").asText(), n.get("next").asText()});
+                    }
+                }
+                if (!parsed.isEmpty()) { rankStages = parsed.toArray(new String[0][]); }
+            }
+        } catch (Exception ignore) {
+            // 无配置或配置损坏时使用默认链
+        }
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT p.name AS name, p.rank AS rank, p.entry_date AS entryDate, p.equiv_entry_date AS equivEntryDate " +
                 "FROM personnel p WHERE " + DataScope.departmentSql("p.department_id") +
