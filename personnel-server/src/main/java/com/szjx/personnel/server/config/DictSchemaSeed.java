@@ -73,7 +73,10 @@ class DictSchemaSeed {
         addDict("only_child", new String[]{"否", "是"});
         addDict("gender", new String[]{"男", "女"});
         addDict("reward_punish_kind", new String[]{"奖励", "处分"});
-        addDict("reward_content", new String[]{"一等功", "二等功", "三等功", "嘉奖", "通报表彰", "警告", "严重警告", "记过", "记大过", "其他"});
+        // 奖惩内容:奖励(嘉奖/三等功/二等功/一等功/荣誉称号) + 行政处分(警告~除名) + 党纪处分(党内警告~开除党籍),与部队奖惩体系对应
+        addDict("reward_content", new String[]{"一等功", "二等功", "三等功", "嘉奖", "荣誉称号", "通报表彰",
+                "警告", "严重警告", "记过", "记大过", "降职降衔", "撤职", "除名",
+                "党内警告", "党内严重警告", "撤销党内职务", "留党察看", "开除党籍", "其他"});
         addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
         addDict("license_type", new String[]{"军本", "地方本"});
         addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
