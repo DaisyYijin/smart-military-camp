@@ -3829,7 +3829,7 @@ var REWARD_SUB = {
     { key: 'kind', label: '类型', type: 'select', options: ['奖励', '处分'], required: true, w: 85, render: function (r) { return badge(r.kind); } },
     { key: 'occur_date', label: '日期', type: 'date', required: true, w: 105 },
     { key: 'reason', label: '事由', required: true },
-    { key: 'content', label: '内容', required: true },
+    { key: 'content', label: '内容', type: 'select', required: true, options: function () { return dictLabels('reward_content'); } },
     { key: 'remark', label: '备注', w: 130 }
   ]
 };

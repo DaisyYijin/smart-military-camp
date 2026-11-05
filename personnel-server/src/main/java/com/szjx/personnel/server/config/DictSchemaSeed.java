@@ -73,6 +73,7 @@ class DictSchemaSeed {
         addDict("only_child", new String[]{"否", "是"});
         addDict("gender", new String[]{"男", "女"});
         addDict("reward_punish_kind", new String[]{"奖励", "处分"});
+        addDict("reward_content", new String[]{"一等功", "二等功", "三等功", "嘉奖", "通报表彰", "警告", "严重警告", "记过", "记大过", "其他"});
         addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
         addDict("license_type", new String[]{"军本", "地方本"});
         addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});

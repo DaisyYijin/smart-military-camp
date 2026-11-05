@@ -49,6 +49,7 @@ public class DictService {
         TYPE_NAMES.put("personnel_location", "人员所在地点");
         TYPE_NAMES.put("gender", "性别");
         TYPE_NAMES.put("reward_punish_kind", "奖惩类型");
+        TYPE_NAMES.put("reward_content", "奖惩内容");
         TYPE_NAMES.put("only_child", "是否独生子女");
         TYPE_NAMES.put("family_relation", "家庭关系");
         TYPE_NAMES.put("license_type", "驾驶证类型");
@@ -117,7 +118,7 @@ public class DictService {
             {"装备与物资", "equipment_category,equipment_status,equipment_location,equipment_brand,material_category,material_location,device_type,device_status"},
             {"手机与借还", "phone_brand,loan_status"},
             {"车辆", "vehicle_type,vehicle_brand,vehicle_model,vehicle_fuel,vehicle_status,vehicle_status_sub"},
-            {"奖惩", "reward_punish_kind"},
+            {"奖惩", "reward_punish_kind,reward_content"},
             {"行政区划", "region_province,region_city,region_district"},
         };
         for (String[] g : groups) {
