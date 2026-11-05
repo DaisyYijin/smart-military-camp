@@ -258,7 +258,7 @@ test('login removes legacy plaintext password, remembers username only, and pres
 
 function shell(h, hash, lastView) {
   const c = h.context;
-  for (const key of ['personnel', 'military', 'fitness', 'equipment', 'material', 'vehicle', 'leave', 'absence', 'phone']) c[`${key}Cfg`] = { key, title: key, icon: '' };
+  for (const key of ['personnel', 'military', 'fitness', 'equipment', 'material', 'vehicle', 'leave', 'leavePlan', 'absence', 'phone']) c[`${key}Cfg`] = { key, title: key, icon: '' };
   for (const [name, key] of [['equipmentGunCfg', 'equipment-gun'], ['equipmentLargeCfg', 'equipment-large'], ['equipmentSmallCfg', 'equipment-small']]) c[name] = { key, title: key };
   for (const [name, key] of [['departmentView', 'department'], ['dictView', 'dict'], ['settingsView', 'settings'], ['dashboardView', 'stats'], ['backupView', 'backup'], ['logView', 'log'], ['accountsView', 'accounts']]) c[name] = (initialTab) => {
     if (key === 'settings') (h.settingsTabs ||= []).push(initialTab);

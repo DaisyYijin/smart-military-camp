@@ -10231,7 +10231,44 @@ function pendingModuleView(cfg) {
 
 /* ================= 主框架 ================= */
 
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
+/* 休假计划:年度休假安排,与休假登记互补;自 ext-features 手写页回归 crudView 统一形态(分页列表/统一筛选/Excel) */
+var leavePlanCfg = {
+  key: 'leave-plan', title: '休假计划', icon: 'calendar', endpoint: '/api/leave-plan',
+  clickKey: 'personnel_name', addLabel: '新增休假计划',
+  filters: [
+    { key: 'personnelName', label: '姓名' },
+    { key: 'idCard', label: '身份证号' },
+    { key: 'leaveType', label: '休假类型', type: 'select', options: function () { return dictLabels('leave_type'); } }
+  ],
+  moreFilters: [
+    { key: 'year', label: '年度', placeholder: '如 2026' },
+    { key: 'startDate', label: '开始日期', type: 'date' },
+    { key: 'endDate', label: '结束日期', type: 'date' }
+  ],
+  columns: [
+    { key: 'department_path', label: '单位' },
+    { key: 'personnel_name', label: '姓名', render: function (r) { return '<b>' + esc(r.personnel_name || '') + '</b>'; } },
+    { key: 'id_card', label: '身份证号' },
+    { key: 'year', label: '年度', render: function (r) { return r.year || '—'; } },
+    { key: 'leave_type', label: '休假类型', render: function (r) { return badge(r.leave_type); } },
+    { key: 'start_date', label: '计划开始' },
+    { key: 'end_date', label: '计划结束' },
+    { key: 'days', label: '天数', render: function (r) { return r.days || '—'; } },
+    { key: 'remark', label: '备注', render: function (r) { return esc(r.remark || '—'); } }
+  ],
+  rowTitle: function (r) { return r.personnel_name; },
+  delTip: function (r) { return '确定删除「' + (r.personnel_name || '') + '」的这条休假计划吗?删除后不可恢复。'; },
+  form: [
+    { key: 'personnelId', label: '人员', type: 'personnel', required: true },
+    { key: 'year', label: '年度', required: true, placeholder: '如 2026' },
+    { key: 'leaveType', label: '休假类型', type: 'select', required: true, options: function () { return dictLabels('leave_type'); } },
+    { key: 'startDate', label: '开始日期', type: 'date', required: true },
+    { key: 'endDate', label: '结束日期', type: 'date', required: true },
+    { key: 'days', label: '天数', type: 'number', required: true },
+    { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
+  ]
+};
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
 var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
@@ -10250,6 +10287,10 @@ var NAV_GROUPS = [
     { key: 'equipment-gun', label: '枪支管理' },
     { key: 'equipment-large', label: '大型装备' },
     { key: 'equipment-small', label: '小型装备' }
+  ] },
+  { key: 'leave-group', icon: 'calendar', label: '休假管理', children: [
+    { key: 'leave', label: '休假登记' },
+    { key: 'leave-plan', label: '休假计划' }
   ] }
 ];
 var NAV_VIEWS = MODULES.concat([equipmentGunCfg, equipmentLargeCfg, equipmentSmallCfg], PENDING_MODULES);
@@ -10500,3 +10541,18 @@ function renderShell() {
     if (TOKEN) forceLogin('无法验证登录状态:' + e.message);
   });
 })();
+
+/* 全局快捷键:"/" 聚焦当前页面第一个可见输入框(输入态不拦截;Esc 关闭弹窗由 openModal 自带) */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== '/' || e.ctrlKey || e.altKey || e.metaKey) return;
+  var t = e.target;
+  var tag = t && t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+  var inputs = document.querySelectorAll('input[type=text], input[type=search], input[type=number], input:not([type])');
+  for (var i = 0; i < inputs.length; i++) {
+    var el = inputs[i];
+    if (el.disabled || el.readOnly) continue;
+    var r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) { e.preventDefault(); el.focus(); if (el.select) el.select(); return; }
+  }
+});
