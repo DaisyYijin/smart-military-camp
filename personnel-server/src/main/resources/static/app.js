@@ -8713,11 +8713,20 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
   var MODULES = [];   // [{key,label}]
   var restoring = false;
 
+  /* 备份模块key → 中文名:优先从 MODULES 查 title;不在 MODULES 里的备份专用模块(如字典/单位/仪表盘)走兜底映射 */
+  var BACKUP_MODULE_NAMES = {
+    'personnel': '人员管理', 'department': '单位管理', 'dict': '数据字典/系统数据',
+    'dashboard': '仪表盘布局', 'equipment': '装备管理', 'material': '物资管理',
+    'item-loans': '物品借还', 'vehicle': '车辆管理', 'leave': '休假管理',
+    'fitness': '体能考核', 'phone': '手机管理', 'military': '军事考核',
+    'double-excellence': '双争评比', 'annual-appraisal': '年度考评',
+    'leave-plan': '休假计划', 'absence': '在外登记'
+  };
   function moduleLabel(key) {
     for (var i = 0; i < MODULES.length; i++) {
       if (MODULES[i].key === key) return MODULES[i].title || MODULES[i].label || key;
     }
-    return key;
+    return BACKUP_MODULE_NAMES[key] || key;
   }
 
   /** 模块勾选组;返回 {el, get, setAll} */
