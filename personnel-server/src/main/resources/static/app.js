@@ -4085,7 +4085,7 @@ function openPersonProfile(rw, act) {
 
     // 时间范围:快捷(本月/近N月/全部) + 自定义最近N个月
     var chipDefs = [['本月', 1], ['近2月', 2], ['近3月', 3], ['近4月', 4], ['近5月', 5], ['近6月', 6], ['近12月', 12], ['全部', 0]];
-    var custom = h('input', { type: 'number', min: '1', max: '120', placeholder: 'N', style: 'width:54px;height:26px;padding:0 6px;border:1px solid #c5cdd8;border-radius:4px;font-size:13px' });
+    var custom = h('input', { type: 'number', min: '1', max: '120', placeholder: '次数', style: 'width:54px;height:26px;padding:0 6px;border:1px solid #c5cdd8;border-radius:4px;font-size:13px' });
     var bar = h('div', { style: 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 4px' },
       h('span', { style: 'font-size:13px;color:var(--c-sub, #66788c)', text: '时间范围:' }));
     chipDefs.forEach(function (cd) {
