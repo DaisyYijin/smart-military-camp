@@ -831,6 +831,13 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
         dictSeed.migratePersonnelTerms();
         dictSeed.migrateBloodTypeRh();
+        // 私家车价格单位统一为元:历史以万元记录的值(0<price<1000)一次性换算;换算后不再命中条件,幂等
+        try {
+            jdbc.update("UPDATE private_vehicle SET price = CAST(CAST(price AS REAL) * 10000 AS INTEGER) " +
+                    "WHERE TRIM(IFNULL(price,'')) <> '' AND CAST(price AS REAL) > 0 AND CAST(price AS REAL) < 1000");
+        } catch (org.springframework.dao.DataAccessException e) {
+            // 旧库尚无 price 列时静默跳过(该列由 ensureColumn 补齐)
+        }
         dictSeed.initDefaultDict();
         dictSeed.migrateEquipmentLedgerValues();
         dictSeed.seedRegionDict();

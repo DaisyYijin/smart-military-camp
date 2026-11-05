@@ -121,7 +121,7 @@ class ExcelImportDateCompatibilityTest {
             {"家庭成员", "family_member", "出生日期", "birth_date"},
             {"驾驶证", "driver_license", "初领日期", "issue_date", "有效期至", "expiry_date", "年审日期", "review_date"},
             {"个人卡号", "personal_card", "开户日期", "open_date"},
-            {"私家车", "private_vehicle", "购置日期", "purchase_date", "保险到期", "insurance_date"},
+            {"私家车", "private_vehicle", "购置日期", "purchase_date"},
             {"住房情况", "housing_info", "购置时间", "purchase_date"}
     };
 

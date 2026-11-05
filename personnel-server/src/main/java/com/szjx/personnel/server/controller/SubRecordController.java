@@ -60,7 +60,7 @@ public class SubRecordController {
         COLS.put("card", new String[]{"card_type", "card_no", "bank_name", "branch_name", "open_date", "card_status", "remark"});
 
         ORDER.put("pvehicle", "id");
-        COLS.put("pvehicle", new String[]{"plate_no", "brand", "color", "purchase_date", "price", "insurance_date", "vehicle_status", "owner_name", "remark"});
+        COLS.put("pvehicle", new String[]{"plate_no", "brand", "color", "purchase_date", "price", "vehicle_status", "remark"});
 
         ORDER.put("housing", "id");
         COLS.put("housing", new String[]{"housing_type", "address", "area", "house_nature", "has_cert", "loan_status", "purchase_date", "owner_name", "remark"});

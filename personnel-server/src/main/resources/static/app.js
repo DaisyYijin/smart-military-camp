@@ -3789,10 +3789,8 @@ var PVEHICLE_SUB = {
     { key: 'brand', label: '品牌型号', w: 100 },
     { key: 'color', label: '颜色', w: 55 },
     { key: 'purchase_date', label: '购置日期', type: 'date', w: 90 },
-    { key: 'price', label: '价格(万)', w: 70 },
-    { key: 'insurance_date', label: '保险到期', type: 'date', w: 90 },
+    { key: 'price', label: '价格(元)', w: 85 },
     { key: 'vehicle_status', label: '状态', type: 'select', options: function () { var l = dictLabels('vehicle_status_sub'); return l.length ? l : ['正常', '出售', '报废']; }, w: 55 },
-    { key: 'owner_name', label: '登记在谁名下', w: 100 },
     { key: 'remark', label: '备注' }
   ]
 };

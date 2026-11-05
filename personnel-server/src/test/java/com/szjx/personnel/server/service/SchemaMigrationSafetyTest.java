@@ -30,6 +30,22 @@ class SchemaMigrationSafetyTest {
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict", Integer.class));
     }
 
+    @Test void vehiclePriceMillionToYuanMigrationIsIdempotent() {
+        jdbc.execute("CREATE TABLE private_vehicle(id INTEGER PRIMARY KEY AUTOINCREMENT, price TEXT DEFAULT '')");
+        jdbc.update("INSERT INTO private_vehicle(price) VALUES('15')");
+        jdbc.update("INSERT INTO private_vehicle(price) VALUES('12.5')");
+        jdbc.update("INSERT INTO private_vehicle(price) VALUES('150000')");
+        jdbc.update("INSERT INTO private_vehicle(price) VALUES('')");
+        String sql = "UPDATE private_vehicle SET price = CAST(CAST(price AS REAL) * 10000 AS INTEGER) " +
+                "WHERE TRIM(IFNULL(price,'')) <> '' AND CAST(price AS REAL) > 0 AND CAST(price AS REAL) < 1000";
+        jdbc.update(sql);
+        jdbc.update(sql);
+        assertEquals("150000", jdbc.queryForObject("SELECT price FROM private_vehicle WHERE id=1", String.class));
+        assertEquals("125000", jdbc.queryForObject("SELECT price FROM private_vehicle WHERE id=2", String.class));
+        assertEquals("150000", jdbc.queryForObject("SELECT price FROM private_vehicle WHERE id=3", String.class), "已是元的值不受影响");
+        assertEquals("", jdbc.queryForObject("SELECT price FROM private_vehicle WHERE id=4", String.class));
+    }
+
     @Test void bloodTypeUpgradeKeepsDictIdMigratesPersonnelAndIsIdempotent() {
         jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, blood_type TEXT DEFAULT '')");
         jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(10,'blood_type','A',2,0)");
