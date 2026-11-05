@@ -5961,10 +5961,16 @@ function openRankRuleManager() {
   }
   function renderRules() {
     rulesBox.innerHTML = '';
+    // 衔级选项直接来自军衔字典(rank):字典里改了衔名,这里与提醒引擎同步可选
+    var rankNames = (typeof dictItems === 'function' ? dictItems('rank') : []).map(function (d) { return String(d.dictLabel || '').trim(); }).filter(function (x) { return x; });
+    if (!rankNames.length) { rankNames = ['列兵', '上等兵', '下士', '中士', '二级上士']; }
+    var opts = rankNames.map(function (x) { return { v: x, l: x }; });
     rules.forEach(function (r, i) {
-      var rank = h('input', { type: 'text', value: r.rank || '', style: 'width:110px' });
+      var rank = makeDropdown(opts, '当前衔级');
+      rank.value = r.rank || '';
       var months = h('input', { type: 'number', min: '1', value: r.months || '', style: 'width:80px' });
-      var next = h('input', { type: 'text', value: r.next || '', style: 'width:110px' });
+      var next = makeDropdown(opts, '晋升为');
+      next.value = r.next || '';
       bindRow(r, rank, months, next);
       rulesBox.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px' },
         rank,
