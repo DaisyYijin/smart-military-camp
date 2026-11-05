@@ -66,14 +66,7 @@ public class BackupService {
     private static final String PERSONNEL_TRASH_PREFIX = "photos/personnel-trash/";
     // 校验限额常量与ZIP安全校验工具已拆至 BackupArchiveGuard(static导入复用)
     public static final long MAX_UPLOAD_BYTES = 100L * 1024 * 1024;
-    // 固定升级前的完整12项,不可按数量或未来的动态模块清单推断用户全选。
-    private static final Set<String> PRE_DOUBLE_EXCELLENCE_MODULES = Collections.unmodifiableSet(
-            new LinkedHashSet<String>(Arrays.asList("personnel", "department", "dict", "dashboard", "equipment",
-                    "material", "item-loans", "vehicle", "leave", "fitness", "phone", "military")));
-    // 固定年度考评加入前的完整13项(双争已含);历史默认清单同样静态固定,不从动态清单推导。
-    private static final Set<String> PRE_ANNUAL_APPRAISAL_MODULES = Collections.unmodifiableSet(
-            new LinkedHashSet<String>(Arrays.asList("personnel", "department", "dict", "dashboard", "equipment",
-                    "material", "item-loans", "vehicle", "leave", "fitness", "phone", "military", "double-excellence")));
+    // 历史默认清单常量与设置读写已拆至 BackupSettingsStore(组合复用)
 
     /** 模块 → 数据表(模块 key 与网页端菜单一致) */
     public static final Map<String, String[]> MODULE_TABLES = new LinkedHashMap<String, String[]>();
@@ -98,6 +91,7 @@ public class BackupService {
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final BackupSettingsStore settingsStore;
 
     public BackupService(JdbcTemplate jdbc, PlatformTransactionManager txManager) {
         this(jdbc, txManager, new File("data"));
@@ -117,6 +111,7 @@ public class BackupService {
         this.dir = new File(root, "backup");
         this.photosDir = new File(root, "photos");
         this.settingsFile = new File(root, "backup-settings.json");
+        this.settingsStore = new BackupSettingsStore(mapper, settingsFile);
     }
 
     private List<String> tablesFor(String module) {
@@ -160,68 +155,11 @@ public class BackupService {
     }
 
     public synchronized Settings loadSettings() {
-        if (!settingsFile.exists()) { return new Settings(); }
-        Settings settings;
-        com.fasterxml.jackson.databind.JsonNode document;
-        try {
-            document = mapper.readTree(settingsFile);
-            settings = mapper.treeToValue(document, Settings.class);
-        } catch (Exception e) {
-            log.warn("备份设置读取失败,使用默认: {}", e.getMessage());
-            return new Settings();
-        }
-        if (settings == null) { return new Settings(); }
-        if (settings.modules == null) { settings.modules = allModuleKeys(); }
-        // 旧版本默认清单升级(双争/年度考评加入前保存的设置):精确匹配已知历史清单后补齐到当前全部模块,
-        // 首次读取即持久化,包括自动备份关闭/尚未到期时;只改原JSON的modules。
-        // 不调用saveSettings,避免改写其它设置值或补齐原文件未声明的默认字段;用户显式缩小过的清单不受影响。
-        Set<String> selected = new LinkedHashSet<String>(settings.modules);
-        if (selected.size() < allModuleKeys().size()
-                && (PRE_DOUBLE_EXCELLENCE_MODULES.equals(selected) || PRE_ANNUAL_APPRAISAL_MODULES.equals(selected))) {
-            settings.modules = new ArrayList<String>(allModuleKeys());
-            ((com.fasterxml.jackson.databind.node.ObjectNode) document).set("modules", mapper.valueToTree(settings.modules));
-            writeSettings(document);
-        }
-        return settings;
+        return settingsStore.load();
     }
 
     public synchronized void saveSettings(Settings s) {
-        if (s.intervalHours < 1) {
-            s.intervalHours = 1;
-        }
-        if (s.keepCount < 1) {
-            s.keepCount = 1;
-        }
-        if (s.keepCount > 200) {
-            s.keepCount = 200;
-        }
-        if (s.modules == null) {
-            s.modules = allModuleKeys();
-        } else {
-            for (String m : s.modules) {
-                if (!MODULE_TABLES.containsKey(m)) {
-                    throw new IllegalArgumentException("未知模块: " + m);
-                }
-            }
-        }
-        if (s.enabled && s.modules.isEmpty()) { throw new IllegalArgumentException("启用自动备份需至少选择一个模块"); }
-        writeSettings(s);
-    }
-
-    private void writeSettings(Object settings) {
-        try {
-            File parent = settingsFile.getParentFile();
-            if (parent != null && !parent.exists()) {
-                parent.mkdirs();
-            }
-            java.nio.file.Path tmp = java.nio.file.Files.createTempFile(parent.toPath(), "settings-", ".tmp");
-            try {
-                mapper.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), settings);
-                java.nio.file.Files.move(tmp, settingsFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } finally { java.nio.file.Files.deleteIfExists(tmp); }
-        } catch (Exception e) {
-            throw new RuntimeException("备份设置保存失败: " + e.getMessage(), e);
-        }
+        settingsStore.save(s);
     }
 
     /* ================= 备份 ================= */
@@ -1230,31 +1168,17 @@ public class BackupService {
      * "不允许的操作",但普通读写是允许的(备份写入即成功)。此时把"移动"降级为"复制+删除"。
      */
     static void moveFileCompat(java.nio.file.Path src, java.nio.file.Path dst) throws java.io.IOException {
-        try {
-            java.nio.file.Files.move(src, dst);
-            return;
-        } catch (java.nio.file.FileSystemException e) {
-            if (!moveFallbackAllowed(e)) { throw e; }
-        }
-        copyAndDelete(src, dst);
+        com.szjx.personnel.server.util.BackupFileOps.moveFileCompat(src, dst);
     }
 
     /** 仅对"操作被系统拒绝"类错误降级;目标冲突/源缺失等照常抛出,避免误覆盖。 */
     static boolean moveFallbackAllowed(java.nio.file.FileSystemException e) {
-        if (e instanceof java.nio.file.AccessDeniedException) { return true; }
-        String reason = e.getReason() == null ? "" : e.getReason();
-        String low = reason.toLowerCase(java.util.Locale.ROOT);
-        return low.contains("not permitted") || low.contains("denied") || reason.contains("不允许") || reason.contains("权限");
+        return com.szjx.personnel.server.util.BackupFileOps.moveFallbackAllowed(e);
     }
 
     /** 复制后删除源;若删除也被拒绝,源文件留存于临时目录(不影响恢复正确性,照片仍可事后手动找回)。 */
     static void copyAndDelete(java.nio.file.Path src, java.nio.file.Path dst) throws java.io.IOException {
-        java.nio.file.Files.copy(src, dst, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        try {
-            java.nio.file.Files.delete(src);
-        } catch (java.io.IOException e) {
-            log.warn("受限目录下已复制 {} 至 {},但源文件删除失败(留存于原临时目录)", src, dst);
-        }
+        com.szjx.personnel.server.util.BackupFileOps.copyAndDelete(src, dst);
     }
 
     /** Only direct files are switched, so nested asset folders and trash survive personnel restore. */
@@ -1311,20 +1235,11 @@ public class BackupService {
     }
 
     private static void rejectSymlink(java.nio.file.Path path) throws java.io.IOException {
-        java.nio.file.Path current = path.toAbsolutePath();
-        while (current != null) {
-            if (java.nio.file.Files.isSymbolicLink(current)) { throw new IllegalArgumentException("不允许符号链接路径"); }
-            current = current.getParent();
-        }
+        com.szjx.personnel.server.util.BackupFileOps.rejectSymlink(path);
     }
 
     private static void deleteTree(java.nio.file.Path path) {
-        if (!java.nio.file.Files.exists(path)) { return; }
-        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(path)) {
-            files.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-                try { java.nio.file.Files.deleteIfExists(p); } catch (Exception e) { log.warn("暂存清理失败: {}", p); }
-            });
-        } catch (Exception e) { log.warn("暂存目录清理失败: {}", path); }
+        com.szjx.personnel.server.util.BackupFileOps.deleteTree(path);
     }
 
     /* ================= 自动备份调度 ================= */
