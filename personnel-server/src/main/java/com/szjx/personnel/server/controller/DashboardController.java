@@ -156,24 +156,33 @@ public class DashboardController {
                     d, 3));
         }
 
-        // 军衔套改提醒:义务兵按相当入伍时间(无则实际入伍时间)推服役窗口;列兵满一年晋升上等兵,上等兵满两年套改军士。
-        // 晋升/套改后军衔变更即不再命中,提醒自然消失;只提醒不自动改衔。
+        // 军衔晋升提醒:按相当入伍时间(无则实际入伍时间)累计服役年限推各衔满期窗口。
+        // 晋升链(累计月):列兵12→上等兵、上等兵24→下士、下士60→中士、中士96→二级上士;
+        // 晋升后军衔变更即不再命中,提醒自然消失;只提醒不自动改衔。
+        String[][] rankStages = {
+                {"列兵", "12", "上等兵"},
+                {"上等兵", "24", "下士"},
+                {"下士", "60", "中士"},
+                {"中士", "96", "二级上士"},
+        };
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT p.name AS name, p.rank AS rank, p.entry_date AS entryDate, p.equiv_entry_date AS equivEntryDate " +
-                "FROM personnel p WHERE " + DataScope.departmentSql("p.department_id") + " AND p.rank IN ('列兵','上等兵')")) {
+                "FROM personnel p WHERE " + DataScope.departmentSql("p.department_id") +
+                " AND p.rank IN ('列兵','上等兵','下士','中士')")) {
             String base = String.valueOf(r.get("equivEntryDate"));
             if (base == null || base.isEmpty() || "null".equals(base)) { base = String.valueOf(r.get("entryDate")); }
             if (base == null || base.isEmpty() || "null".equals(base)) { continue; }
             java.time.LocalDate baseDate;
             try { baseDate = java.time.LocalDate.parse(base); } catch (Exception ex) { continue; }
             String rankName = String.valueOf(r.get("rank"));
-            java.time.LocalDate due = baseDate.plusMonths("上等兵".equals(rankName) ? 24 : 12);
+            String[] stage = null;
+            for (String[] s : rankStages) { if (s[0].equals(rankName)) { stage = s; break; } }
+            if (stage == null) { continue; }
+            java.time.LocalDate due = baseDate.plusMonths(Long.parseLong(stage[1]));
             if (due.isAfter(today.plusDays(30))) { continue; }
             boolean overdue = due.isBefore(today);
-            boolean corporal = "上等兵".equals(rankName);
             list.add(event(overdue ? "danger" : "warn", "军衔",
-                    r.get("name") + " " + rankName + (overdue ? " 已满期可" : " 将于 " + fmtDate(due.toString()) + " 满")
-                            + (corporal ? "两年,可套改军士" : "一年,可晋升上等兵"),
+                    r.get("name") + " " + rankName + (overdue ? " 已满期可晋升" : " 将于 " + fmtDate(due.toString()) + " 满期晋升") + stage[2],
                     due.toString(), 2));
         }
 
