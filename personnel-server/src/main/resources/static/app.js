@@ -6995,25 +6995,6 @@ function dictView() {
       return best;
     }
 
-    /** 添加下级时的目标类型:优先父项已有子项的主流类型(如类别项下的军衔),
-     *  无先例时回退"本类型全部子项的主流类型"(全新类别也归入既有子类型,如 rank),再无则当前类型。 */
-    function subTypeFor(d) {
-      var direct = childMainType(d);
-      if (direct) { return direct; }
-      var counts = {};
-      Ctx.dictTypes.forEach(function (g2) {
-        (g2.items || []).forEach(function (x) {
-          if (!x.parentId) { return; }
-          var pid = String(x.parentId);
-          var parentInCurrent = ((typeGroup(currentType) || {}).items || []).some(function (p) { return String(p.id) === pid; });
-          if (parentInCurrent) { counts[g2.type] = (counts[g2.type] || 0) + 1; }
-        });
-      });
-      var best = null, bestN = -1;
-      Object.keys(counts).forEach(function (t) { if (counts[t] > bestN) { bestN = counts[t]; best = t; } });
-      return best || currentType;
-    }
-
     var query = itemQuery.toLowerCase();
     if (query) ordered = ordered.filter(function (d) {
       return dictMatch(d, query) || String(d._parentLabel || '').toLowerCase().indexOf(query) >= 0;
@@ -7184,6 +7165,31 @@ function dictView() {
   }
 
   /** item=编辑对象;parentItem=新增下级时的父项 */
+  /** 添加下级时的目标类型:优先父项已有子项的主流类型(如类别项下的军衔),
+   *  无先例时回退"本类型全部子项的主流类型"(全新类别也归入既有子类型,如 rank),再无则当前类型。
+   *  定义于 dictView 顶层:openForm(保存时)与 renderItems 均可访问。 */
+  function subTypeFor(d) {
+    function mainType(filter) {
+      var counts = {};
+      Ctx.dictTypes.forEach(function (g2) {
+        (g2.items || []).forEach(function (x) {
+          if (filter(x)) { counts[g2.type] = (counts[g2.type] || 0) + 1; }
+        });
+      });
+      var best = null, bestN = -1;
+      Object.keys(counts).forEach(function (t) { if (counts[t] > bestN) { bestN = counts[t]; best = t; } });
+      return best;
+    }
+    var direct = mainType(function (x) { return String(x.parentId) === String(d.id); });
+    if (direct) { return direct; }
+    var fallback = mainType(function (x) {
+      if (!x.parentId) { return false; }
+      var pid = String(x.parentId);
+      return ((typeGroup(currentType) || {}).items || []).some(function (p) { return String(p.id) === pid; });
+    });
+    return fallback || currentType;
+  }
+
   function openForm(item, parentItem) {
     var items = (typeGroup(currentType) || {}).items || [];
     var nextSort = 1;
