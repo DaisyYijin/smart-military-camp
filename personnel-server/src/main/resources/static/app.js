@@ -8715,7 +8715,7 @@ function backupView(mode) {   // mode: 'all' 默认 | 'backup' 仅备份恢复 |
 
   function moduleLabel(key) {
     for (var i = 0; i < MODULES.length; i++) {
-      if (MODULES[i].key === key) return MODULES[i].label;
+      if (MODULES[i].key === key) return MODULES[i].title || MODULES[i].label || key;
     }
     return key;
   }
