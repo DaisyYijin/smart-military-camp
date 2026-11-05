@@ -3732,7 +3732,7 @@ var POSITION_SUB = {
     { key: 'start_date', label: '开始日期', type: 'date', required: true, w: 105 },
     { key: 'end_date', label: '结束日期', type: 'date', w: 105 },
     { key: 'place', label: '任职地点', required: true },
-    { key: 'post', label: '担任职务', required: true },
+    { key: 'post', label: '担任职务', type: 'select', required: true, options: function () { return dictLabels('personnel_post'); } },
     { key: 'remark', label: '备注', w: 130 }
   ]
 };
@@ -5276,7 +5276,7 @@ var personnelCfg = {
     { key: 'bloodType', label: '血型', type: 'select', options: function () { return dictLabels('blood_type'); } },
     { key: 'onlyChild', label: '独生子女', type: 'select', options: ['是', '否'] },
     { key: 'locationPoint', label: '所在点位', type: 'select', options: function () { return dictLabels('personnel_location'); } },
-    { key: 'post', label: '职务/岗位' },
+    { key: 'post', label: '职务/岗位', type: 'select', options: function () { return dictLabels('personnel_post'); } },
     { key: 'nativePlace', label: '籍贯所在地' },
     { key: 'entryDateStart', label: '入伍起', type: 'date' },
     { key: 'entryDateEnd', label: '入伍止', type: 'date' }
@@ -5359,7 +5359,7 @@ var personnelCfg = {
     { key: 'category', label: '人员类别', type: 'select', required: true, options: function () { return dictLabels('personnel_category'); } },
     { key: 'rank', label: '军衔/职级', type: 'select', required: true, placeholder: '先选类别',
       depends: { field: 'category', dict: 'rank', parentDict: 'personnel_category' } },
-    { key: 'post', label: '职务/岗位', required: true },
+    { key: 'post', label: '职务/岗位', type: 'select', required: true, options: function () { return dictLabels('personnel_post'); } },
     { key: 'postDate', label: '任岗位时间', type: 'date' },
     { key: 'entryDate', label: '入伍/入职日期', type: 'date', required: true },
     { key: 'equivEntryDate', label: '相当入伍时间', type: 'date', required: true },
