@@ -5961,8 +5961,35 @@ function openRankRuleManager() {
   }
   function renderRules() {
     rulesBox.innerHTML = '';
-    // 衔级选项直接来自军衔字典(rank):字典里改了衔名,这里与提醒引擎同步可选
-    var rankNames = (typeof dictItems === 'function' ? dictItems('rank') : []).map(function (d) { return String(d.dictLabel || '').trim(); }).filter(function (x) { return x; });
+    // 衔级选项直接来自军衔字典(rank):字典里改了衔名,这里与提醒引擎同步可选。
+    // 军衔子项按人员类别分组挂接(组内 sort 各自从1起),需按类别顺序分组拼接,避免全局 sort 导致跨组交错乱序。
+    var rankItems = typeof dictItems === 'function' ? dictItems('rank') : [];
+    var rankNames = [];
+    if (rankItems.length) {
+      var byParent = {};
+      rankItems.forEach(function (d) {
+        var p = Number(d.parentId) || 0;
+        (byParent[p] = byParent[p] || []).push(d);
+      });
+      Object.keys(byParent).forEach(function (p) {
+        byParent[p].sort(function (a, b) { return (Number(a.sort) || 0) - (Number(b.sort) || 0); });
+      });
+      var parentOrder = {};
+      (typeof dictItems === 'function' ? dictItems('personnel_category') : []).forEach(function (c, i) {
+        parentOrder[String(c.id)] = i;
+      });
+      var parents = Object.keys(byParent).map(Number).sort(function (a, b) {
+        var oa = parentOrder[String(a)] !== undefined ? parentOrder[String(a)] : (a === 0 ? -1 : 99999);
+        var ob = parentOrder[String(b)] !== undefined ? parentOrder[String(b)] : (b === 0 ? -1 : 99999);
+        return oa - ob;
+      });
+      parents.forEach(function (p) {
+        byParent[p].forEach(function (d) {
+          var label = String(d.dictLabel || '').trim();
+          if (label) { rankNames.push(label); }
+        });
+      });
+    }
     if (!rankNames.length) { rankNames = ['列兵', '上等兵', '下士', '中士', '二级上士']; }
     var opts = rankNames.map(function (x) { return { v: x, l: x }; });
     rules.forEach(function (r, i) {
