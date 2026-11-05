@@ -834,6 +834,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         dictSeed.migratePersonnelTerms();
         dictSeed.migrateBloodTypeRh();
         dictSeed.migrateEduForm();
+        dictSeed.migrateCategorySubToRank();
         // 私家车价格单位统一为元:历史以万元记录的值(0<price<1000)一次性换算;换算后不再命中条件,幂等
         try {
             jdbc.update("UPDATE private_vehicle SET price = CAST(CAST(price AS REAL) * 10000 AS INTEGER) " +

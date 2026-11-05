@@ -30,6 +30,21 @@ class SchemaMigrationSafetyTest {
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict", Integer.class));
     }
 
+    @Test void categorySubItemsMigrateToRankType() {
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(30,'personnel_category','军官',1,0)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(31,'personnel_category','文职人员',5,0)");
+        // 文职人员下误加的同类型子项(应为军衔/职级 rank 类型)
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(32,'personnel_category','专业技术文职',1,31)");
+        jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(33,'personnel_category','专业技能文职',2,31)");
+        Object dictSeed = ReflectionTestUtils.getField(initializer, "dictSeed");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateCategorySubToRank");
+        ReflectionTestUtils.invokeMethod(dictSeed, "migrateCategorySubToRank"); // 幂等
+        assertEquals("rank", jdbc.queryForObject("SELECT dict_type FROM sys_dict WHERE id=32", String.class));
+        assertEquals("rank", jdbc.queryForObject("SELECT dict_type FROM sys_dict WHERE id=33", String.class));
+        assertEquals("personnel_category", jdbc.queryForObject("SELECT dict_type FROM sys_dict WHERE id=31", String.class), "顶级类别项不受影响");
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sys_dict WHERE dict_type='personnel_category' AND COALESCE(parent_id,0)>0", Integer.class));
+    }
+
     @Test void eduFormUpgradesQuanRiZhiAndKeepsFallback() {
         jdbc.execute("CREATE TABLE personnel(id INTEGER PRIMARY KEY, name TEXT, edu_form TEXT DEFAULT '')");
         jdbc.update("INSERT INTO sys_dict(id,dict_type,dict_label,sort,parent_id) VALUES(20,'edu_form','全日制',1,0)");

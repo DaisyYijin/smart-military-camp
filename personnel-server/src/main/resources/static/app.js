@@ -6995,6 +6995,25 @@ function dictView() {
       return best;
     }
 
+    /** 添加下级时的目标类型:优先父项已有子项的主流类型(如类别项下的军衔),
+     *  无先例时回退"本类型全部子项的主流类型"(全新类别也归入既有子类型,如 rank),再无则当前类型。 */
+    function subTypeFor(d) {
+      var direct = childMainType(d);
+      if (direct) { return direct; }
+      var counts = {};
+      Ctx.dictTypes.forEach(function (g2) {
+        (g2.items || []).forEach(function (x) {
+          if (!x.parentId) { return; }
+          var pid = String(x.parentId);
+          var parentInCurrent = ((typeGroup(currentType) || {}).items || []).some(function (p) { return String(p.id) === pid; });
+          if (parentInCurrent) { counts[g2.type] = (counts[g2.type] || 0) + 1; }
+        });
+      });
+      var best = null, bestN = -1;
+      Object.keys(counts).forEach(function (t) { if (counts[t] > bestN) { bestN = counts[t]; best = t; } });
+      return best || currentType;
+    }
+
     var query = itemQuery.toLowerCase();
     if (query) ordered = ordered.filter(function (d) {
       return dictMatch(d, query) || String(d._parentLabel || '').toLowerCase().indexOf(query) >= 0;
@@ -7231,7 +7250,8 @@ function dictView() {
           onclick: function () {
             var data = form.get();
             if (!data) return;
-            data.dictType = currentType;
+            // 添加下级时按挂接惯例归入子类型(如人员类别下建的是军衔/职级项),而非当前浏览类型
+            data.dictType = (!item && parentItem) ? subTypeFor(parentItem) : currentType;
             data.enabled = data.enabled !== '0';
             if (data.sort === null) data.sort = item ? item.sort : nextSort;
             if (hasHierarchy) {

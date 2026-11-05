@@ -124,6 +124,15 @@ class DictSchemaSeed {
         });
     }
 
+    /** 人员类别下误加的同类型子项归位军衔/职级(rank):类别项的子级应为 rank 类型(跨类型挂接),沿用字典项 id。 */
+    void migrateCategorySubToRank() {
+        org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
+                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> {
+            jdbc.update("UPDATE sys_dict SET dict_type='rank' WHERE dict_type='personnel_category' AND COALESCE(parent_id,0)>0");
+        });
+    }
+
     /** 血型升级为 ABO+RH 完整表述:沿用旧字典项 ID(历史 A/B/AB/O 视为 RH 阳性),人员表历史值同步;重复执行无副作用。 */
     void migrateBloodTypeRh() {
         org.springframework.transaction.support.TransactionTemplate tx = new org.springframework.transaction.support.TransactionTemplate(
