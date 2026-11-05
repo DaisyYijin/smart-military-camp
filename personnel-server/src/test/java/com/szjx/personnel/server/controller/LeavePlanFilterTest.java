@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.dao.LeavePlanDao;
 import com.szjx.personnel.server.model.ApiResponse;
 import com.szjx.personnel.server.model.PageResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +30,7 @@ class LeavePlanFilterTest {
         jdbc.update("INSERT INTO leave_plan(personnel_id,year,leave_type,start_date,end_date,days) VALUES(1,'2026','年假','2026-06-10','2026-06-15',5)");
         jdbc.update("INSERT INTO leave_plan(personnel_id,year,leave_type,start_date,end_date,days) VALUES(2,'2026','事假','2026-06-20','2026-07-02',12)");
         jdbc.update("INSERT INTO leave_plan(personnel_id,year,leave_type,start_date,end_date,days) VALUES(1,'2025','年假','2025-06-10','2025-06-15',5)");
-        controller = new LeavePlanController(jdbc);
+        controller = new LeavePlanController(new LeavePlanDao(jdbc));
     }
 
     @Test

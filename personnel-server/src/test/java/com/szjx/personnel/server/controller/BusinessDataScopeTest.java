@@ -106,7 +106,7 @@ class BusinessDataScopeTest {
 
     private PersonnelController personnelController() { return new PersonnelController(personnel, new DepartmentDao(jdbc), jdbc, null, null); }
     private LeaveController leaveController() { return new LeaveController(new LeaveService(leave, people, mock(LeaveStatusSyncService.class), jdbc), jdbc); }
-    private MilitaryAssessmentController militaryController() { return new MilitaryAssessmentController(military, jdbc); }
+    private MilitaryAssessmentController militaryController() { return new MilitaryAssessmentController(military); }
 
     /** All query routes have trailing page/size, so use reflection only to omit unrelated optional filters. */
     private ApiResponse page(Object controller, int page, int size) throws Exception {
@@ -129,7 +129,7 @@ class BusinessDataScopeTest {
     }
 
     @Test void allPagedControllersFilterBeforeLimitAndCountAndEmptyScopeDeniesAll() throws Exception {
-        Object[] controllers = {personnelController(), new EquipmentController(equipmentService), new MaterialController(materialService), new VehicleController(vehicleService), new PhoneDeviceController(jdbc), leaveController(), new LeavePlanController(jdbc), new FitnessController(fitnessService), militaryController()};
+        Object[] controllers = {personnelController(), new EquipmentController(equipmentService), new MaterialController(materialService), new VehicleController(vehicleService), new PhoneDeviceController(new PhoneDeviceDao(jdbc)), leaveController(), new LeavePlanController(new LeavePlanDao(jdbc)), new FitnessController(fitnessService), militaryController()};
         for (Object c : controllers) {
             assertPage(page(c, 1, 1), 2, 1); assertPage(page(c, 2, 1), 2, 1); assertPage(page(c, 3, 1), 2, 0);
         }
@@ -229,8 +229,8 @@ class BusinessDataScopeTest {
 
     @Test void explicitOutOfScopeFiltersCannotWidenResults() {
         assertPage(leaveController().query(null, null, null, null, null, null, null, null, 3L, 1, 20), 0, 0);
-        assertPage(new LeavePlanController(jdbc).query(null, null, null, null, null, null, null, 3L, 1, 20), 0, 0);
-        assertPage(new PhoneDeviceController(jdbc).query(null, null, null, null, null, 3L, 1, 20), 0, 0);
+        assertPage(new LeavePlanController(new LeavePlanDao(jdbc)).query(null, null, null, null, null, null, null, 3L, 1, 20), 0, 0);
+        assertPage(new PhoneDeviceController(new PhoneDeviceDao(jdbc)).query(null, null, null, null, null, 3L, 1, 20), 0, 0);
         assertEquals(0, fitnessService.countFiltered2(null, null, null, null, null, null, 3L, null, null, 3L));
         assertTrue(fitnessService.queryFiltered2(null, null, null, null, null, null, 3L, null, null, 1, 20, 3L).isEmpty());
     }
@@ -243,7 +243,7 @@ class BusinessDataScopeTest {
             assertThrows(ForbiddenException.class, () -> personnelController().photo(id));
             assertThrows(ForbiddenException.class, () -> leaveController().checkTravel(id, "2026"));
             assertThrows(ForbiddenException.class, () -> leaveController().summary(id, "2026", null));
-            assertThrows(ForbiddenException.class, () -> new PhoneDeviceController(jdbc).byPerson(id));
+            assertThrows(ForbiddenException.class, () -> new PhoneDeviceController(new PhoneDeviceDao(jdbc)).byPerson(id));
         }
         verifyNoInteractions(photos);
     }
@@ -345,7 +345,7 @@ class BusinessDataScopeTest {
     }
 
     @Test void phoneAndLeavePlanGuardOldRecordAndNewPerson() {
-        PhoneDeviceController phone = new PhoneDeviceController(jdbc); LeavePlanController plan = new LeavePlanController(jdbc);
+        PhoneDeviceController phone = new PhoneDeviceController(new PhoneDeviceDao(jdbc)); LeavePlanController plan = new LeavePlanController(new LeavePlanDao(jdbc));
         Map<String,Object> body = new HashMap<String,Object>(); body.put("personnelId", 1L);
         assertThrows(ForbiddenException.class, () -> phone.update(3L, body)); assertThrows(ForbiddenException.class, () -> phone.delete(3L));
         assertThrows(ForbiddenException.class, () -> plan.update(3L, body)); assertThrows(ForbiddenException.class, () -> plan.delete(3L));
@@ -402,7 +402,7 @@ class BusinessDataScopeTest {
     }
 
     @Test void forbiddenRoutesReturn403WithoutExternalDetails() throws Exception {
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(personnelController(), new PhoneDeviceController(jdbc), leaveController()).setControllerAdvice(new GlobalExceptionHandler()).build();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(personnelController(), new PhoneDeviceController(new PhoneDeviceDao(jdbc)), leaveController()).setControllerAdvice(new GlobalExceptionHandler()).build();
         mvc.perform(get("/api/personnel/3/photo")).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value(403));
         mvc.perform(get("/api/personnel/3/age")).andExpect(status().isForbidden());
         mvc.perform(get("/api/phone/by-person").param("personnelId", "3")).andExpect(status().isForbidden());

@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.dao.LeavePlanDao;
 import com.szjx.personnel.server.model.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +26,7 @@ class LeavePlanControllerValidationTest {
         jdbc.execute("CREATE TABLE department(id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER DEFAULT 0, sort INTEGER DEFAULT 0)");
         jdbc.execute("CREATE TABLE leave_plan(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, year TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, days REAL, status TEXT, remark TEXT, updated_at TEXT)");
         jdbc.update("INSERT INTO personnel(id,name,id_card) VALUES(1,'张三','110105199001011234')");
-        controller = new LeavePlanController(jdbc);
+        controller = new LeavePlanController(new LeavePlanDao(jdbc));
     }
 
     private static Map<String, Object> payload(String year, String start, String end, String days) {

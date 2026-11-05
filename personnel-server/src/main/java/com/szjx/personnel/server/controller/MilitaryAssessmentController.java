@@ -28,12 +28,10 @@ import java.util.Map;
 public class MilitaryAssessmentController {
 
     private final MilitaryAssessmentDao dao;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    public MilitaryAssessmentController(MilitaryAssessmentDao dao, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+    public MilitaryAssessmentController(MilitaryAssessmentDao dao) {
         this.dao = dao;
-        this.jdbc = jdbc;
     }
 
     /* ================= 考核方案 ================= */
@@ -42,7 +40,7 @@ public class MilitaryAssessmentController {
     @GetMapping("/schemes")
     public ApiResponse schemes() {
         List<Map<String, Object>> out = new java.util.ArrayList<Map<String, Object>>();
-        for (Map<String, Object> s : jdbc.queryForList("SELECT * FROM mil_scheme ORDER BY id")) {
+        for (Map<String, Object> s : dao.allSchemes()) {
             Map<String, Object> node = new java.util.LinkedHashMap<String, Object>();
             long sid = ((Number) s.get("id")).longValue();
             node.put("id", sid);
@@ -55,14 +53,12 @@ public class MilitaryAssessmentController {
     }
 
     private List<Map<String, Object>> schemeItems(long sid) {
-        List<Map<String, Object>> tops = jdbc.queryForList(
-                "SELECT id, name, weight FROM mil_scheme_item WHERE scheme_id=? AND parent_id=0 ORDER BY sort, id", sid);
+        List<Map<String, Object>> tops = dao.schemeItems(sid, 0);
         List<Map<String, Object>> out = new java.util.ArrayList<Map<String, Object>>();
         for (Map<String, Object> t : tops) {
             Map<String, Object> node = new java.util.LinkedHashMap<String, Object>(t);
             long tid = ((Number) t.get("id")).longValue();
-            node.put("children", jdbc.queryForList(
-                    "SELECT id, name, weight FROM mil_scheme_item WHERE scheme_id=? AND parent_id=? ORDER BY sort, id", sid, tid));
+            node.put("children", dao.schemeItems(sid, tid));
             out.add(node);
         }
         return out;
@@ -105,26 +101,22 @@ public class MilitaryAssessmentController {
         }
         long id = num(body.get("id"), 0) > 0 ? (long) num(body.get("id"), 0) : 0;
         if (id > 0) {
-            if (jdbc.queryForList("SELECT id FROM mil_scheme WHERE id=?", id).isEmpty()) {
+            if (!dao.schemeExists(id)) {
                 return ApiResponse.error("方案不存在");
             }
-            jdbc.update("UPDATE mil_scheme SET name=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?",
-                    name, str(body.get("remark")), id);
-            jdbc.update("DELETE FROM mil_scheme_item WHERE scheme_id=?", id);
+            dao.updateScheme(id, name, str(body.get("remark")));
+            dao.deleteSchemeItems(id);
         } else {
-            id = jdbc.queryForObject("INSERT INTO mil_scheme(name, remark) VALUES(?,?) RETURNING id",
-                    Long.class, name, str(body.get("remark")));
+            id = dao.insertScheme(name, str(body.get("remark")));
         }
         int sort = 0;
         for (Map<String, Object> it : items) {
             sort++;
-            Long parentId = jdbc.queryForObject("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,?) RETURNING id",
-                    Long.class, id, str(it.get("name")), num(it.get("weight"), 0), sort);
+            long parentId = dao.insertSchemeItem(id, 0, str(it.get("name")), num(it.get("weight"), 0), sort);
             int csort = 0;
             for (Map<String, Object> c : castList(it.get("children"))) {
                 csort++;
-                jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?)",
-                        id, parentId, str(c.get("name")), num(c.get("weight"), 0), csort);
+                dao.insertChildSchemeItem(id, parentId, str(c.get("name")), num(c.get("weight"), 0), csort);
             }
         }
         return ApiResponse.ok(schemeOne(id));
@@ -133,14 +125,16 @@ public class MilitaryAssessmentController {
     @DeleteMapping("/schemes/{id:\\d+}")
     public ApiResponse deleteScheme(@PathVariable Long id) {
         DataScope.requireAdmin();
-        jdbc.update("DELETE FROM mil_scheme_item WHERE scheme_id=?", id);
-        jdbc.update("DELETE FROM mil_scheme WHERE id=?", id);
+        dao.deleteScheme(id);
         return ApiResponse.ok();
     }
 
     private Map<String, Object> schemeOne(long id) {
         Map<String, Object> node = new java.util.LinkedHashMap<String, Object>();
-        Map<String, Object> s = jdbc.queryForMap("SELECT * FROM mil_scheme WHERE id=?", id);
+        Map<String, Object> s = dao.schemeById(id);
+        if (s == null) {
+            return node;
+        }
         node.put("id", s.get("id"));
         node.put("name", s.get("name"));
         node.put("remark", s.get("remark"));
@@ -221,9 +215,9 @@ public class MilitaryAssessmentController {
         m.setGrade(total >= 90 ? "优秀" : total >= 80 ? "良好" : total >= 60 ? "及格" : "不及格");
         m.setScore(scoreText.toString());
         m.setCategory("综合考核");
-        List<Map<String, Object>> scheme = jdbc.queryForList("SELECT name FROM mil_scheme WHERE id=?", m.getSchemeId());
-        if (!scheme.isEmpty()) {
-            m.setItem(String.valueOf(scheme.get(0).get("name")));
+        String schemeName = dao.schemeName(m.getSchemeId());
+        if (schemeName != null) {
+            m.setItem(schemeName);
         }
     }
 

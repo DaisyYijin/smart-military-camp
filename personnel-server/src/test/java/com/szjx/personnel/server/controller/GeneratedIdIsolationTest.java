@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.dao.LeavePlanDao;
 import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.dao.MilitaryAssessmentDao;
 import com.szjx.personnel.server.dao.SubRecordDao;
@@ -48,7 +49,7 @@ class GeneratedIdIsolationTest {
     @Test void leavePlanCreateReturnsTheNewRecordNotNullOrAnotherId() {
         jdbc.execute("CREATE TABLE leave_plan(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, year TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, days REAL, remark TEXT)");
         jdbc.execute("CREATE TABLE department(id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER DEFAULT 0, sort INTEGER DEFAULT 0)");
-        LeavePlanController controller = new LeavePlanController(jdbc);
+        LeavePlanController controller = new LeavePlanController(new LeavePlanDao(jdbc));
         Map<String, Object> body = map("personnelId", 1, "year", "2026", "leaveType", "年假", "startDate", "2026-10-16", "endDate", "2026-10-17", "days", 2);
         ApiResponse first = controller.create(body);
         assertEquals(0, first.getCode());
@@ -65,7 +66,7 @@ class GeneratedIdIsolationTest {
         jdbc.execute("CREATE TABLE mil_scheme_item(id INTEGER PRIMARY KEY AUTOINCREMENT, scheme_id INTEGER, parent_id INTEGER, name TEXT, weight REAL, sort INTEGER)");
         jdbc.update("INSERT INTO mil_scheme(id,name) VALUES(40,'旧方案')");
         jdbc.update("INSERT INTO mil_scheme_item(id,scheme_id,parent_id,name,weight,sort) VALUES(90,40,0,'旧课目',100,1)");
-        MilitaryAssessmentController controller = new MilitaryAssessmentController(new MilitaryAssessmentDao(jdbc), jdbc);
+        MilitaryAssessmentController controller = new MilitaryAssessmentController(new MilitaryAssessmentDao(jdbc));
         Map<String, Object> topA = map("name", "课目甲", "weight", 60, "children", Arrays.asList(map("name", "甲一", "weight", 30), map("name", "甲二", "weight", 70)));
         Map<String, Object> topB = map("name", "课目乙", "weight", 40, "children", Collections.singletonList(map("name", "乙一", "weight", 100)));
         ApiResponse response = controller.saveScheme(map("name", "新方案", "items", Arrays.asList(topA, topB)));

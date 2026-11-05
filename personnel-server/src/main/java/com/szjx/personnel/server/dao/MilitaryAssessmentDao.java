@@ -149,6 +149,58 @@ public class MilitaryAssessmentDao {
         return n != null && n > 0;
     }
 
+    /* ===== 考核方案(军事考核方案化加权评分),SQL 自 controller 下沉 ===== */
+
+    public java.util.List<java.util.Map<String, Object>> allSchemes() {
+        return jdbc.queryForList("SELECT * FROM mil_scheme ORDER BY id");
+    }
+
+    public java.util.Map<String, Object> schemeById(long id) {
+        java.util.List<java.util.Map<String, Object>> rows = jdbc.queryForList("SELECT * FROM mil_scheme WHERE id=?", id);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    public boolean schemeExists(long id) {
+        return !jdbc.queryForList("SELECT id FROM mil_scheme WHERE id=?", id).isEmpty();
+    }
+
+    public String schemeName(long id) {
+        java.util.List<java.util.Map<String, Object>> rows = jdbc.queryForList("SELECT name FROM mil_scheme WHERE id=?", id);
+        return rows.isEmpty() ? null : String.valueOf(rows.get(0).get("name"));
+    }
+
+    public java.util.List<java.util.Map<String, Object>> schemeItems(long schemeId, long parentId) {
+        return jdbc.queryForList("SELECT id, name, weight FROM mil_scheme_item WHERE scheme_id=? AND parent_id=? ORDER BY sort, id",
+                schemeId, parentId);
+    }
+
+    public long insertScheme(String name, String remark) {
+        return jdbc.queryForObject("INSERT INTO mil_scheme(name, remark) VALUES(?,?) RETURNING id", Long.class, name, remark);
+    }
+
+    public void updateScheme(long id, String name, String remark) {
+        jdbc.update("UPDATE mil_scheme SET name=?, remark=?, updated_at=datetime('now','localtime') WHERE id=?", name, remark, id);
+    }
+
+    public void deleteSchemeItems(long schemeId) {
+        jdbc.update("DELETE FROM mil_scheme_item WHERE scheme_id=?", schemeId);
+    }
+
+    public void deleteScheme(long id) {
+        deleteSchemeItems(id);
+        jdbc.update("DELETE FROM mil_scheme WHERE id=?", id);
+    }
+
+    public long insertSchemeItem(long schemeId, long parentId, String name, double weight, int sort) {
+        return jdbc.queryForObject("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?) RETURNING id",
+                Long.class, schemeId, parentId, name, weight, sort);
+    }
+
+    public void insertChildSchemeItem(long schemeId, long parentId, String name, double weight, int sort) {
+        jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?)",
+                schemeId, parentId, name, weight, sort);
+    }
+
     private static String nvl(String s) {
         return s == null ? "" : s;
     }
