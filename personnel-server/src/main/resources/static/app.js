@@ -10400,7 +10400,267 @@ var leavePlanCfg = {
     { key: 'remark', label: '备注', type: 'textarea', span: 'full' }
   ]
 };
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg];
+/* ================= 组织建设视图(tab式组织管理) ================= */
+var organizationCfg = { key: 'organization', title: '组织建设', icon: 'users' };
+
+function organizationView() {
+  var root = h('div', { class: 'view-in' });
+  var orgs = [];
+  var currentOrg = null;
+  var detail = { members: [], columns: [] };
+  var tabBox = h('div', { class: 'org-tabs', style: 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center' });
+  var contentBox = h('div');
+
+  function loadOrgs(keepCurrent) {
+    GET('/api/organization').then(function (list) {
+      orgs = list || [];
+      if (!orgs.length) {
+        currentOrg = null;
+        renderTabs(); renderEmpty();
+        return;
+      }
+      var found = keepCurrent && orgs.some(function (o) { return o.id === (currentOrg && currentOrg.id); });
+      if (!found) { currentOrg = orgs[0]; }
+      renderTabs();
+      loadDetail();
+    }).catch(function (e) { toast(e.message || '加载组织失败', 'err'); });
+  }
+
+  function loadDetail() {
+    if (!currentOrg) { renderEmpty(); return; }
+    GET('/api/organization/' + currentOrg.id).then(function (d) {
+      detail = d || { members: [], columns: [] };
+      renderContent();
+    }).catch(function (e) { toast(e.message || '加载成员失败', 'err'); });
+  }
+
+  function renderTabs() {
+    tabBox.innerHTML = '';
+    orgs.forEach(function (o) {
+      tabBox.appendChild(h('button', {
+        type: 'button',
+        class: 'btn ' + (currentOrg && currentOrg.id === o.id ? 'btn-primary' : 'btn-ghost'),
+        text: o.name + '(' + (o.memberCount || 0) + ')',
+        style: 'border-radius:16px 16px 0 0',
+        onclick: function () { currentOrg = o; renderTabs(); loadDetail(); }
+      }));
+    });
+    tabBox.appendChild(h('button', {
+      type: 'button', class: 'btn btn-ghost', text: '＋ 新建组织',
+      style: 'border-radius:16px 16px 0 0;border-style:dashed',
+      onclick: openOrgForm
+    }));
+  }
+
+  function renderEmpty() {
+    contentBox.innerHTML = '';
+    contentBox.appendChild(h('div', { class: 'panel' },
+      h('div', { class: 'empty-row', text: '暂无组织。点击上方「新建组织」创建党支部、团支部、风气监督员等。' })));
+  }
+
+  function renderContent() {
+    contentBox.innerHTML = '';
+    if (!currentOrg) { renderEmpty(); return; }
+    var cols = detail.columns || [];
+    var members = detail.members || [];
+
+    // 工具栏
+    var toolbar = h('div', { class: 'toolbar' },
+      h('strong', { text: currentOrg.name, style: 'font-size:16px' }),
+      h('span', { style: 'color:var(--c-sub,#66788c);font-size:13px;margin-left:8px', text: members.length + ' 人' }),
+      h('div', { class: 'spacer' }),
+      h('button', { class: 'btn btn-primary', text: '新增成员', onclick: function () { openMemberForm(null); } }),
+      h('button', { class: 'btn btn-ghost', text: '管理表头', onclick: openColumnManager }),
+      h('button', { class: 'btn btn-ghost', text: '编辑组织', onclick: openOrgForm }),
+      h('button', { class: 'btn btn-ghost danger', text: '删除组织', onclick: function () {
+        confirmBox('确定删除组织「' + currentOrg.name + '」吗?其下全部成员将一并删除。', true).then(function (yes) {
+          if (!yes) return;
+          DEL('/api/organization/' + currentOrg.id).then(function () {
+            toast('已删除'); currentOrg = null; loadOrgs(false);
+          }).catch(function (e) { toast(e.message || '删除失败', 'err'); });
+        });
+      } }));
+
+    // 成员表
+    var table = h('table', { class: 'grid', style: 'width:100%' });
+    var headCells = [h('th', { text: '姓名' }), h('th', { text: '身份证号' }), h('th', { text: '职务' })];
+    cols.forEach(function (c) { headCells.push(h('th', { text: c.columnLabel || c.columnKey })); });
+    headCells.push(h('th', { text: '备注' }), h('th', { text: '操作', style: 'width:100px' }));
+    table.appendChild(h('thead', {}, h('tr', {}, headCells)));
+    var tb = h('tbody');
+    if (!members.length) {
+      tb.appendChild(h('tr', {}, h('td', { colspan: String(5 + cols.length), class: 'empty-row', text: '暂无成员' })));
+    }
+    members.forEach(function (m) {
+      var extra = {};
+      try { extra = JSON.parse(m.extra || '{}') || {}; } catch (e) { /* ignore */ }
+      var cells = [
+        h('td', {}, h('b', { text: m.personnelName || '—' })),
+        h('td', { text: m.idCard || '—' }),
+        h('td', { text: m.role || '—' })
+      ];
+      cols.forEach(function (c) { cells.push(h('td', { text: String(extra[c.columnKey] || '—') })); });
+      cells.push(h('td', { text: m.remark || '—' }));
+      cells.push(h('td', { style: 'white-space:nowrap' },
+        h('button', { class: 'btn-link', text: '编辑', onclick: function () { openMemberForm(m); } }),
+        ' ',
+        h('button', { class: 'btn-link danger', text: '删除', onclick: function () {
+          confirmBox('确定移除「' + (m.personnelName || '') + '」吗?', true).then(function (yes) {
+            if (!yes) return;
+            DEL('/api/organization/' + currentOrg.id + '/members/' + m.id).then(function () {
+              toast('已移除'); loadDetail(); loadOrgs(true);
+            }).catch(function (e) { toast(e.message || '删除失败', 'err'); });
+          });
+        } })));
+      tb.appendChild(h('tr', {}, cells));
+    });
+    table.appendChild(tb);
+    contentBox.appendChild(h('div', { class: 'panel', style: 'padding:0' },
+      toolbar,
+      h('div', { class: 'table-wrap' }, table)));
+  }
+
+  /* --- 新建/编辑组织 --- */
+  function openOrgForm() {
+    var isNew = !currentOrg;
+    var nameInput = h('input', { type: 'text', class: 'input', value: isNew ? '' : currentOrg.name, placeholder: '如:党支部、团支部、风气监督员', style: 'width:100%' });
+    var remarkInput = h('input', { type: 'text', class: 'input', value: isNew ? '' : (currentOrg.remark || ''), placeholder: '备注(选填)', style: 'width:100%' });
+    var m = openModal({
+      title: isNew ? '新建组织' : '编辑组织 · ' + currentOrg.name,
+      body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
+        h('div', {}, h('label', { text: '组织名称', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), nameInput),
+        h('div', {}, h('label', { text: '备注', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), remarkInput)),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: isNew ? '创建' : '保存', onclick: function () {
+          var name = nameInput.value.trim();
+          if (!name) { toast('请填写组织名称', 'err'); return; }
+          var req = isNew
+            ? POST('/api/organization', { name: name, remark: remarkInput.value.trim() })
+            : PUT('/api/organization/' + currentOrg.id, { name: name, remark: remarkInput.value.trim() });
+          req.then(function () { m.close(); toast(isNew ? '组织已创建' : '已保存'); loadOrgs(!isNew); })
+            .catch(function (e) { toast(e.message || '操作失败', 'err'); });
+        } })
+      ]
+    });
+    nameInput.focus();
+  }
+
+  /* --- 新增/编辑成员 --- */
+  function openMemberForm(existing) {
+    if (!currentOrg) { toast('请先选择或创建组织', 'err'); return; }
+    var cols = detail.columns || [];
+    var selectedPid = existing ? existing.personnelId : null;
+    var pidText = h('span', { text: existing ? (existing.personnelName || '') + ' / ' + (existing.idCard || '') : '未选择', style: 'font-size:13px;color:var(--pri,#2f6fd6)' });
+    var idCardInput = h('input', { type: 'text', class: 'input', placeholder: '输入身份证号带出人员', style: 'width:100%' });
+    var roleInput = h('input', { type: 'text', class: 'input', value: existing ? (existing.role || '') : '', placeholder: '如:书记、副书记、委员、监督员', style: 'width:100%' });
+    var extraInputs = {};
+    var extraBox = h('div', { style: 'display:flex;flex-wrap:wrap;gap:10px' });
+    var existingExtra = {};
+    if (existing) { try { existingExtra = JSON.parse(existing.extra || '{}') || {}; } catch (e) { /* ignore */ } }
+    cols.forEach(function (c) {
+      var inp = h('input', { type: 'text', class: 'input', value: String(existingExtra[c.columnKey] || ''), placeholder: c.columnLabel, style: 'flex:1;min-width:140px' });
+      extraInputs[c.columnKey] = inp;
+      extraBox.appendChild(h('div', { style: 'flex:1;min-width:150px' },
+        h('label', { text: c.columnLabel, style: 'display:block;margin-bottom:3px;font-size:12px;color:var(--c-sub,#66788c)' }), inp));
+    });
+
+    idCardInput.addEventListener('change', function () {
+      var v = idCardInput.value.trim();
+      if (!v) return;
+      GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+        selectedPid = p.id;
+        pidText.textContent = (p.name || '') + ' / ' + v;
+        idCardInput.value = '';
+      }).catch(function () {
+        pidText.textContent = '未找到该证件号对应人员';
+        pidText.style.color = 'var(--c-danger,#d9463e)';
+        selectedPid = null;
+      });
+    });
+
+    function collectExtra() {
+      var obj = {};
+      Object.keys(extraInputs).forEach(function (k) {
+        var v = extraInputs[k].value.trim();
+        if (v) { obj[k] = v; }
+      });
+      return obj;
+    }
+
+    var m = openModal({
+      title: (existing ? '编辑成员 · ' + (existing.personnelName || '') : '新增成员') + ' — ' + currentOrg.name,
+      wide: true,
+      body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
+        h('div', {},
+          h('label', { text: '人员', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }),
+          idCardInput, h('div', { style: 'margin-top:4px' }, pidText)),
+        h('div', {},
+          h('label', { text: '职务', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }),
+          roleInput),
+        cols.length ? h('div', {},
+          h('label', { text: '其他信息', style: 'display:block;margin-bottom:6px;font-size:13px;color:var(--c-sub,#66788c)' }),
+          extraBox) : null),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: existing ? '保存' : '添加', onclick: function () {
+          if (!selectedPid) { toast('请先输入身份证号选择人员', 'err'); return; }
+          var body = { personnelId: selectedPid, role: roleInput.value.trim(), extra: JSON.stringify(collectExtra()) };
+          var req = existing
+            ? PUT('/api/organization/' + currentOrg.id + '/members/' + existing.id, body)
+            : POST('/api/organization/' + currentOrg.id + '/members', body);
+          req.then(function () {
+            m.close(); toast(existing ? '已保存' : '已添加'); loadDetail(); loadOrgs(true);
+          }).catch(function (e) { toast(e.message || '操作失败', 'err'); });
+        } })
+      ]
+    });
+    idCardInput.focus();
+  }
+
+  /* --- 管理表头 --- */
+  function openColumnManager() {
+    if (!currentOrg) return;
+    var cols = (detail.columns || []).map(function (c) { return { key: c.columnKey, label: c.columnLabel }; });
+    var box = h('div');
+    function render() {
+      box.innerHTML = '';
+      cols.forEach(function (c, i) {
+        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '字段标识(英文)', style: 'width:120px' });
+        var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:160px' });
+        function sync() { c.key = keyI.value.trim(); c.label = lblI.value.trim(); }
+        keyI.addEventListener('change', sync); lblI.addEventListener('change', sync);
+        box.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px' },
+          keyI, lblI,
+          h('button', { class: 'btn-link danger', text: '删除', onclick: function () { cols.splice(i, 1); render(); } })));
+      });
+    }
+    render();
+    var m = openModal({
+      title: '管理表头 · ' + currentOrg.name,
+      body: h('div', {},
+        h('div', { text: '自定义列将出现在成员名单中;字段标识用英文(如 duty/phone),表头名称填中文(如"职责/联系电话")。', style: 'color:var(--c-sub,#66788c);font-size:13px;margin-bottom:10px;line-height:1.6' }),
+        box,
+        h('button', { class: 'btn btn-ghost', text: '添加列', onclick: function () { cols.push({ key: '', label: '' }); render(); } })),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: '保存表头', onclick: function () {
+          var valid = cols.filter(function (c) { return c.key && c.label; });
+          PUT('/api/organization/' + currentOrg.id + '/columns', { columns: valid }).then(function () {
+            m.close(); toast('表头已保存'); loadDetail();
+          }).catch(function (e) { toast(e.message || '保存失败', 'err'); });
+        } })
+      ]
+    });
+  }
+
+  root.appendChild(tabBox);
+  root.appendChild(contentBox);
+  loadOrgs(false);
+  return root;
+}
+
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg];
 var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
@@ -10423,6 +10683,9 @@ var NAV_GROUPS = [
   { key: 'leave-group', icon: 'calendar', label: '休假管理', children: [
     { key: 'leave', label: '休假登记' },
     { key: 'leave-plan', label: '休假计划' }
+  ] },
+  { key: 'org-group', icon: 'users', label: '组织建设', children: [
+    { key: 'organization', label: '组织管理' }
   ] }
 ];
 var NAV_VIEWS = MODULES.concat([equipmentGunCfg, equipmentLargeCfg, equipmentSmallCfg], PENDING_MODULES);

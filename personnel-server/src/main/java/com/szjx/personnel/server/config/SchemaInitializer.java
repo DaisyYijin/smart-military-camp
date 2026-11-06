@@ -630,6 +630,34 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
 
+        // 组织建设:组织定义/成员名单/自定义表头
+        jdbc.execute("CREATE TABLE IF NOT EXISTS organization (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "name TEXT NOT NULL," +
+                "sort INTEGER DEFAULT 0," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS organization_member (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "organization_id INTEGER NOT NULL," +
+                "personnel_id INTEGER NOT NULL," +
+                "role TEXT DEFAULT ''," +
+                "extra TEXT DEFAULT '{}'," +
+                "sort INTEGER DEFAULT 0," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+        jdbc.execute("CREATE TABLE IF NOT EXISTS organization_column (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "organization_id INTEGER NOT NULL," +
+                "column_key TEXT NOT NULL," +
+                "column_label TEXT NOT NULL," +
+                "sort INTEGER DEFAULT 0" +
+                ")");
+
         // 住房情况
         jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

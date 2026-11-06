@@ -60,6 +60,7 @@ public class BackupController {
         labels.put("double-excellence", "双争评比");
         labels.put("annual-appraisal", "年度考评");
         labels.put("absence", "在外登记");
+        labels.put("organization", "组织建设");
         for (String key : BackupService.allModuleKeys()) {
             Map<String, Object> m = new HashMap<String, Object>();
             m.put("key", key);
