@@ -138,6 +138,23 @@ public class OrganizationController {
         return ApiResponse.ok(dao.listColumns(orgId));
     }
 
+    /** 成员拖拽排序:body.ids 为该组织下完整顺序 */
+    @PutMapping("/{orgId:\\d+}/members/reorder")
+    public ApiResponse reorderMembers(@PathVariable Long orgId, @RequestBody Map<String, Object> body) {
+        if (dao.findOrganization(orgId) == null) { return ApiResponse.error("组织不存在"); }
+        List<Long> ids = new ArrayList<Long>();
+        Object raw = body.get("ids");
+        if (raw instanceof List) {
+            for (Object o : (List<?>) raw) {
+                try { ids.add(Long.parseLong(String.valueOf(o).trim())); }
+                catch (NumberFormatException ignore) { /* skip */ }
+            }
+        }
+        if (ids.size() < 2) { return ApiResponse.error("排序信息不能为空"); }
+        dao.reorderMembers(orgId, ids);
+        return ApiResponse.ok();
+    }
+
     /* ===== 工具 ===== */
 
     private static String str(Object v) {

@@ -655,8 +655,10 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "organization_id INTEGER NOT NULL," +
                 "column_key TEXT NOT NULL," +
                 "column_label TEXT NOT NULL," +
+                "personnel_field TEXT DEFAULT ''," +
                 "sort INTEGER DEFAULT 0" +
                 ")");
+        ensureColumn("organization_column", "personnel_field", "personnel_field TEXT DEFAULT ''");
 
         // 住房情况
         jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +

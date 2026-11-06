@@ -56,7 +56,9 @@ public class OrganizationDao {
         return jdbc.queryForList(
                 "SELECT m.id, m.personnel_id AS personnelId, m.role, m.extra, m.sort, m.remark, " +
                 "m.created_at AS createdAt, p.name AS personnelName, p.id_card AS idCard, " +
-                "p.department_id AS pDepartmentId " +
+                "p.rank, p.phone, p.category, p.post, p.status, p.gender, p.blood_type, " +
+                "p.political_status AS politicalStatus, p.education, p.native_place AS nativePlace, " +
+                "p.entry_date AS entryDate, p.birthday, p.department_id AS pDepartmentId " +
                 "FROM organization_member m " +
                 "LEFT JOIN personnel p ON m.personnel_id = p.id " +
                 "WHERE m.organization_id = ? ORDER BY m.sort, m.id", organizationId);
@@ -89,7 +91,8 @@ public class OrganizationDao {
 
     public List<Map<String, Object>> listColumns(Long organizationId) {
         return jdbc.queryForList(
-                "SELECT id, column_key AS columnKey, column_label AS columnLabel, sort " +
+                "SELECT id, column_key AS columnKey, column_label AS columnLabel, " +
+                "personnel_field AS personnelField, sort " +
                 "FROM organization_column WHERE organization_id=? ORDER BY sort, id", organizationId);
     }
 
@@ -99,9 +102,18 @@ public class OrganizationDao {
         for (Map<String, Object> col : columns) {
             String key = String.valueOf(col.get("key")).trim();
             String label = String.valueOf(col.get("label")).trim();
+            String field = String.valueOf(col.get("personnelField") == null ? "" : col.get("personnelField")).trim();
             if (key.isEmpty() || label.isEmpty()) { continue; }
-            jdbc.update("INSERT INTO organization_column(organization_id, column_key, column_label, sort) VALUES(?,?,?,?)",
-                    organizationId, key, label, sort++);
+            jdbc.update("INSERT INTO organization_column(organization_id, column_key, column_label, personnel_field, sort) VALUES(?,?,?,?,?)",
+                    organizationId, key, label, field, sort++);
+        }
+    }
+
+    public void reorderMembers(Long organizationId, List<Long> ids) {
+        int sort = 1;
+        for (Long id : ids) {
+            jdbc.update("UPDATE organization_member SET sort=?, updated_at=datetime('now','localtime') " +
+                    "WHERE id=? AND organization_id=?", sort++, id, organizationId);
         }
     }
 

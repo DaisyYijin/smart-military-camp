@@ -10458,19 +10458,29 @@ function organizationView() {
       h('div', { class: 'empty-row', text: '暂无组织。点击上方「新建组织」创建党支部、团支部、风气监督员等。' })));
   }
 
+  /* 人员档案字段映射(自定义列可关联) */
+  var PERSONNEL_FIELDS = {
+    '': '— 手动填写 —',
+    'rank': '军衔/职级', 'phone': '手机号', 'category': '人员类别',
+    'post': '职务/岗位', 'status': '状态', 'gender': '性别',
+    'bloodType': '血型', 'politicalStatus': '政治面貌', 'education': '学历',
+    'nativePlace': '籍贯', 'entryDate': '入伍日期', 'birthday': '出生日期',
+    'idCard': '身份证号'
+  };
+
   function renderContent() {
     contentBox.innerHTML = '';
     if (!currentOrg) { renderEmpty(); return; }
     var cols = detail.columns || [];
     var members = detail.members || [];
 
-    // 工具栏
     var toolbar = h('div', { class: 'toolbar' },
       h('strong', { text: currentOrg.name, style: 'font-size:16px' }),
       h('span', { style: 'color:var(--c-sub,#66788c);font-size:13px;margin-left:8px', text: members.length + ' 人' }),
       h('div', { class: 'spacer' }),
       h('button', { class: 'btn btn-primary', text: '新增成员', onclick: function () { openMemberForm(null); } }),
       h('button', { class: 'btn btn-ghost', text: '管理表头', onclick: openColumnManager }),
+      h('button', { class: 'btn btn-ghost', text: '打印名册', onclick: printRoster }),
       h('button', { class: 'btn btn-ghost', text: '编辑组织', onclick: openOrgForm }),
       h('button', { class: 'btn btn-ghost danger', text: '删除组织', onclick: function () {
         confirmBox('确定删除组织「' + currentOrg.name + '」吗?其下全部成员将一并删除。', true).then(function (yes) {
@@ -10481,25 +10491,61 @@ function organizationView() {
         });
       } }));
 
-    // 成员表
     var table = h('table', { class: 'grid', style: 'width:100%' });
-    var headCells = [h('th', { text: '姓名' }), h('th', { text: '身份证号' }), h('th', { text: '职务' })];
+    var headCells = [
+      h('th', { style: 'width:32px', title: '按住拖动排序' }),
+      h('th', { text: '序号', style: 'width:40px' }),
+      h('th', { text: '姓名' }),
+      h('th', { text: '职务' })
+    ];
     cols.forEach(function (c) { headCells.push(h('th', { text: c.columnLabel || c.columnKey })); });
-    headCells.push(h('th', { text: '备注' }), h('th', { text: '操作', style: 'width:100px' }));
+    headCells.push(h('th', { text: '备注' }), h('th', { text: '操作', style: 'width:80px' }));
     table.appendChild(h('thead', {}, h('tr', {}, headCells)));
     var tb = h('tbody');
-    if (!members.length) {
-      tb.appendChild(h('tr', {}, h('td', { colspan: String(5 + cols.length), class: 'empty-row', text: '暂无成员' })));
+
+    // 拖拽排序状态
+    var dragRow = null, dropRow = null, dropAfter = false, dragMoved = false, ordering = false;
+    function clearMarks() {
+      $all('tr.dict-drop-before, tr.dict-drop-after', tb).forEach(function (r) {
+        r.classList.remove('dict-drop-before', 'dict-drop-after');
+      });
     }
-    members.forEach(function (m) {
+    function commitOrder() {
+      var moved = dragRow;
+      clearMarks();
+      dragRow = null; dropRow = null;
+      if (!moved || !dragMoved) { dragMoved = false; return; }
+      dragMoved = false;
+      var ids = [];
+      $all('tr[data-mid]', tb).forEach(function (r) { ids.push(Number(r.getAttribute('data-mid'))); });
+      if (ids.length < 2 || ordering) return;
+      ordering = true;
+      PUT('/api/organization/' + currentOrg.id + '/members/reorder', { ids: ids })
+        .then(function () { toast('排序已保存'); ordering = false; })
+        .catch(function (e) { toast(e.message || '排序保存失败', 'err'); ordering = false; loadDetail(); });
+    }
+
+    if (!members.length) {
+      tb.appendChild(h('tr', {}, h('td', { colspan: String(6 + cols.length), class: 'empty-row', text: '暂无成员' })));
+    }
+    members.forEach(function (m, idx) {
       var extra = {};
       try { extra = JSON.parse(m.extra || '{}') || {}; } catch (e) { /* ignore */ }
       var cells = [
+        h('td', { style: 'cursor:grab;user-select:none;color:#b0bccb;width:32px;text-align:center' }, h('span', { text: '⠿', title: '按住拖动排序' })),
+        h('td', { text: String(idx + 1), style: 'text-align:center;color:var(--c-muted,#8a97a8)' }),
         h('td', {}, h('b', { text: m.personnelName || '—' })),
-        h('td', { text: m.idCard || '—' }),
         h('td', { text: m.role || '—' })
       ];
-      cols.forEach(function (c) { cells.push(h('td', { text: String(extra[c.columnKey] || '—') })); });
+      cols.forEach(function (c) {
+        var val;
+        if (c.personnelField) {
+          val = m[c.personnelField] || '—';
+        } else {
+          val = extra[c.columnKey] || '—';
+        }
+        cells.push(h('td', { text: String(val) }));
+      });
       cells.push(h('td', { text: m.remark || '—' }));
       cells.push(h('td', { style: 'white-space:nowrap' },
         h('button', { class: 'btn-link', text: '编辑', onclick: function () { openMemberForm(m); } }),
@@ -10512,7 +10558,39 @@ function organizationView() {
             }).catch(function (e) { toast(e.message || '删除失败', 'err'); });
           });
         } })));
-      tb.appendChild(h('tr', {}, cells));
+      var tr = h('tr', {}, cells);
+      tr.setAttribute('data-mid', String(m.id));
+      tr.setAttribute('draggable', 'true');
+      tr.addEventListener('dragstart', function (e) {
+        if (ordering) { if (e.preventDefault) e.preventDefault(); return; }
+        dragRow = tr; dragMoved = false; dropRow = null;
+        tr.classList.add('dict-dragging');
+        if (e.dataTransfer) { try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(m.id)); } catch (err) {} }
+      });
+      tr.addEventListener('dragover', function (e) {
+        if (!dragRow || dragRow === tr) return;
+        if (e.preventDefault) e.preventDefault();
+        var rect = tr.getBoundingClientRect();
+        dropAfter = e.clientY > rect.top + (rect.bottom - rect.top) / 2;
+        clearMarks();
+        tr.classList.add(dropAfter ? 'dict-drop-after' : 'dict-drop-before');
+        dropRow = tr;
+      });
+      tr.addEventListener('drop', function (e) {
+        if (!dragRow || !dropRow || dragRow === dropRow) return;
+        if (e.preventDefault) e.preventDefault();
+        var ref = dropAfter ? dropRow.nextSibling : dropRow;
+        while (ref && ref.nodeType !== 1) ref = ref.nextSibling;
+        dropRow.parentNode.insertBefore(dragRow, ref);
+        dragMoved = true;
+        commitOrder();
+      });
+      tr.addEventListener('dragend', function () {
+        tr.classList.remove('dict-dragging');
+        clearMarks();
+        dragRow = null; dropRow = null;
+      });
+      tb.appendChild(tr);
     });
     table.appendChild(tb);
     contentBox.appendChild(h('div', { class: 'panel', style: 'padding:0' },
@@ -10602,27 +10680,35 @@ function organizationView() {
   /* --- 管理表头 --- */
   function openColumnManager() {
     if (!currentOrg) return;
-    var cols = (detail.columns || []).map(function (c) { return { key: c.columnKey, label: c.columnLabel }; });
+    var cols = (detail.columns || []).map(function (c) {
+      return { key: c.columnKey, label: c.columnLabel, field: c.personnelField || '' };
+    });
     var box = h('div');
+    var fieldKeys = Object.keys(PERSONNEL_FIELDS);
     function render() {
       box.innerHTML = '';
       cols.forEach(function (c, i) {
-        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '字段标识(英文)', style: 'width:120px' });
-        var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:160px' });
-        function sync() { c.key = keyI.value.trim(); c.label = lblI.value.trim(); }
-        keyI.addEventListener('change', sync); lblI.addEventListener('change', sync);
-        box.appendChild(h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:8px' },
-          keyI, lblI,
+        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '字段标识', style: 'width:90px' });
+        var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:100px' });
+        var fieldSel = makeDropdown(fieldKeys.map(function (k) {
+          return { v: k, l: PERSONNEL_FIELDS[k] };
+        }), '数据来源');
+        fieldSel.value = c.field || '';
+        function sync() { c.key = keyI.value.trim(); c.label = lblI.value.trim(); c.field = fieldSel.value || ''; }
+        keyI.addEventListener('change', sync); lblI.addEventListener('change', sync); fieldSel.addEventListener('change', sync);
+        box.appendChild(h('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:8px' },
+          lblI, fieldSel, keyI,
           h('button', { class: 'btn-link danger', text: '删除', onclick: function () { cols.splice(i, 1); render(); } })));
       });
     }
     render();
     var m = openModal({
       title: '管理表头 · ' + currentOrg.name,
+      wide: true,
       body: h('div', {},
-        h('div', { text: '自定义列将出现在成员名单中;字段标识用英文(如 duty/phone),表头名称填中文(如"职责/联系电话")。', style: 'color:var(--c-sub,#66788c);font-size:13px;margin-bottom:10px;line-height:1.6' }),
+        h('div', { text: '表头名称填中文;数据来源选"人员档案字段"则自动从人员信息读取(如军衔/手机号),选"手动填写"则由用户录入。', style: 'color:var(--c-sub,#66788c);font-size:13px;margin-bottom:10px;line-height:1.6' }),
         box,
-        h('button', { class: 'btn btn-ghost', text: '添加列', onclick: function () { cols.push({ key: '', label: '' }); render(); } })),
+        h('button', { class: 'btn btn-ghost', text: '添加列', onclick: function () { cols.push({ key: '', label: '', field: '' }); render(); } })),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', { class: 'btn btn-primary', text: '保存表头', onclick: function () {
@@ -10633,6 +10719,54 @@ function organizationView() {
         } })
       ]
     });
+  }
+
+  /* --- 名册打印 --- */
+  function printRoster() {
+    if (!currentOrg) return;
+    var cols = detail.columns || [];
+    var members = detail.members || [];
+    var now = new Date();
+    function p2(n) { return n < 10 ? '0' + n : '' + n; }
+    var dateStr = now.getFullYear() + '-' + p2(now.getMonth() + 1) + '-' + p2(now.getDate());
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(currentOrg.name) + '名册</title>' +
+      '<style>' +
+      '@page{size:A4 portrait;margin:15mm}' +
+      'body{font-family:"Microsoft YaHei","SimSun",sans-serif;font-size:12px;color:#000;margin:0;padding:0}' +
+      'h1{text-align:center;font-size:20px;margin:0 0 4px}' +
+      '.meta{text-align:center;font-size:11px;color:#555;margin-bottom:14px}' +
+      'table{width:100%;border-collapse:collapse}' +
+      'th,td{border:1px solid #333;padding:5px 6px;text-align:center;vertical-align:middle}' +
+      'th{background:#f0f0f0;font-weight:600;font-size:12px}' +
+      'td{text-align:left}' +
+      'td.c{text-align:center}' +
+      '.ft{margin-top:14px;display:flex;justify-content:space-between;font-size:11px;color:#555}' +
+      '</style></head><body>';
+    html += '<h1>' + esc(currentOrg.name) + '名册</h1>';
+    html += '<div class="meta">共 ' + members.length + ' 人 · 打印日期:' + dateStr + '</div>';
+    html += '<table><thead><tr><th style="width:36px">序号</th><th>姓名</th><th>职务</th>';
+    cols.forEach(function (c) {
+      html += '<th>' + esc(c.columnLabel || c.columnKey) + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+    members.forEach(function (m, i) {
+      var extra = {};
+      try { extra = JSON.parse(m.extra || '{}') || {}; } catch (e) {}
+      html += '<tr><td class="c">' + (i + 1) + '</td><td><b>' + esc(m.personnelName || '') + '</b></td><td>' + esc(m.role || '') + '</td>';
+      cols.forEach(function (c) {
+        var val = c.personnelField ? (m[c.personnelField] || '') : (extra[c.columnKey] || '');
+        html += '<td>' + esc(String(val)) + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div class="ft"><span>制表:' + esc(USER && USER.username || '') + '</span><span>第 1 页</span></div>';
+    html += '</body></html>';
+    var w = window.open('', '_blank');
+    if (!w) { toast('弹窗被浏览器拦截,请允许弹窗后重试', 'err'); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(function () { w.print(); }, 300);
   }
 
   root.appendChild(tabBox);
