@@ -10688,7 +10688,7 @@ function organizationView() {
     function render() {
       box.innerHTML = '';
       cols.forEach(function (c, i) {
-        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '字段标识', style: 'width:90px' });
+        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '自动', title: '内部标识,留空自动生成;已有数据勿改', style: 'width:52px;font-size:12px;color:var(--c-muted,#8a97a8)' });
         var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:100px' });
         var fieldSel = makeDropdown(fieldKeys.map(function (k) {
           return { v: k, l: PERSONNEL_FIELDS[k] };
@@ -10712,7 +10712,17 @@ function organizationView() {
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', { class: 'btn btn-primary', text: '保存表头', onclick: function () {
-          var valid = cols.filter(function (c) { return c.key && c.label; });
+          var valid = cols.filter(function (c) { return c.label; });
+          // 字段标识留空时自动生成,避开已有标识防冲突
+          var used = {};
+          valid.forEach(function (c) { if (c.key) used[c.key] = true; });
+          valid.forEach(function (c) {
+            if (c.key) return;
+            var n = 1;
+            while (used['col' + n]) n++;
+            c.key = 'col' + n;
+            used[c.key] = true;
+          });
           PUT('/api/organization/' + currentOrg.id + '/columns', { columns: valid }).then(function () {
             m.close(); toast('表头已保存'); loadDetail();
           }).catch(function (e) { toast(e.message || '保存失败', 'err'); });
