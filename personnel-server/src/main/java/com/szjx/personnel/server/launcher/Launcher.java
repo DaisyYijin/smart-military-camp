@@ -54,8 +54,10 @@ public class Launcher {
             // 隐藏的 owner frame:给 JOptionPane 等弹窗提供任务栏图标
             javax.swing.JFrame ownerFrame = new javax.swing.JFrame();
             ownerFrame.setUndecorated(true);
-            ownerFrame.setSize(0, 0);
+            ownerFrame.setSize(1, 1);
+            ownerFrame.setLocation(-100, -100); // 移到屏幕外,不可见但保持可见态(任务栏需要)
             ownerFrame.setIconImage(AppIcons.appIcon());
+            ownerFrame.setVisible(true);
             OWNER_FRAME = ownerFrame;
             try {
                 // 现代扁平外观(FlatLaf),失败时回退系统外观
