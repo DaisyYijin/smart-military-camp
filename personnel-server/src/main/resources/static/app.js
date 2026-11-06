@@ -10722,7 +10722,9 @@ function organizationView() {
             c.key = 'col' + n;
             used[c.key] = true;
           });
-          PUT('/api/organization/' + currentOrg.id + '/columns', { columns: valid }).then(function () {
+          PUT('/api/organization/' + currentOrg.id + '/columns', {
+            columns: valid.map(function (c) { return { key: c.key, label: c.label, personnelField: c.field || '' }; })
+          }).then(function () {
             m.close(); toast('表头已保存'); loadDetail();
           }).catch(function (e) { toast(e.message || '保存失败', 'err'); });
         } })
