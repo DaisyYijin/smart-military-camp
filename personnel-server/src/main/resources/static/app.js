@@ -10744,7 +10744,7 @@ function renderShell() {
       NAV_VIEWS.forEach(function (m) { if (m.key === view) cfg = m; });
       if (!cfg) { cfg = personnelCfg; view = 'personnel'; }
       titleEl.textContent = cfg.title;
-      comp = cfg.pending ? pendingModuleView(cfg) : cfg.key === 'double-excellence' ? doubleExcellenceView() : cfg.key === 'annual-appraisal' ? annualAppraisalView() : crudView(cfg);
+      comp = cfg.pending ? pendingModuleView(cfg) : cfg.key === 'double-excellence' ? doubleExcellenceView() : cfg.key === 'annual-appraisal' ? annualAppraisalView() : cfg.key === 'organization' ? organizationView() : crudView(cfg);
     }
     comp.render(content);
   }
