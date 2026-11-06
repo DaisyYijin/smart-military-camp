@@ -54,8 +54,8 @@ public class SetupWizard extends javax.swing.JDialog {
     private JLabel banner;
 
     private SetupWizard(boolean firstRun, int initialPort, String occupier, String initialUsername) {
-        super(createOwner(), firstRun ? "数智军营人员管理系统 - 首次运行设置"
-                : "数智军营人员管理系统 - 启动设置", true);
+        super((java.awt.Frame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
+                : "数智军营人员管理系统 - 启动设置", true); // 无 owner:Windows 给独立任务栏按钮
         this.firstRun = firstRun;
         setIconImage(AppIcons.appIcon());
         buildUi(initialPort, occupier, initialUsername);
@@ -366,14 +366,7 @@ public class SetupWizard extends javax.swing.JDialog {
      * 放大 Swing 全局字体(所有界面元素按 1.35 倍放大,最小 15 号),
      * 须在创建任何界面组件之前调用。
      */
-    /** 创建带图标的隐藏 owner frame,让 JDialog 在任务栏显示正确图标 */
-    private static JFrame createOwner() {
-        JFrame f = new JFrame();
-        f.setUndecorated(true);
-        f.setSize(0, 0);
-        f.setIconImage(AppIcons.appIcon());
-        return f;
-    }
+
 
     public static void applyGlobalFontSize() {
         float scale = 1.7f;
