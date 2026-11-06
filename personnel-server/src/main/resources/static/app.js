@@ -10550,62 +10550,44 @@ function organizationView() {
   function openMemberForm(existing) {
     if (!currentOrg) { toast('请先选择或创建组织', 'err'); return; }
     var cols = detail.columns || [];
-    var selectedPid = existing ? existing.personnelId : null;
-    var pidText = h('span', { text: existing ? (existing.personnelName || '') + ' / ' + (existing.idCard || '') : '未选择', style: 'font-size:13px;color:var(--pri,#2f6fd6)' });
-    var idCardInput = h('input', { type: 'text', class: 'input', placeholder: '输入身份证号带出人员', style: 'width:100%' });
-    var roleInput = h('input', { type: 'text', class: 'input', value: existing ? (existing.role || '') : '', placeholder: '如:书记、副书记、委员、监督员', style: 'width:100%' });
-    var extraInputs = {};
-    var extraBox = h('div', { style: 'display:flex;flex-wrap:wrap;gap:10px' });
     var existingExtra = {};
     if (existing) { try { existingExtra = JSON.parse(existing.extra || '{}') || {}; } catch (e) { /* ignore */ } }
+
+    var fields = [
+      { key: 'personnelId', label: '人员', type: 'personnel', required: true },
+      { key: 'role', label: '职务', placeholder: '如:书记、副书记、委员、监督员' }
+    ];
     cols.forEach(function (c) {
-      var inp = h('input', { type: 'text', class: 'input', value: String(existingExtra[c.columnKey] || ''), placeholder: c.columnLabel, style: 'flex:1;min-width:140px' });
-      extraInputs[c.columnKey] = inp;
-      extraBox.appendChild(h('div', { style: 'flex:1;min-width:150px' },
-        h('label', { text: c.columnLabel, style: 'display:block;margin-bottom:3px;font-size:12px;color:var(--c-sub,#66788c)' }), inp));
+      fields.push({ key: '_extra_' + c.columnKey, label: c.columnLabel, placeholder: '' });
     });
+    fields.push({ key: 'remark', label: '备注', placeholder: '' });
 
-    idCardInput.addEventListener('change', function () {
-      var v = idCardInput.value.trim();
-      if (!v) return;
-      GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
-        selectedPid = p.id;
-        pidText.textContent = (p.name || '') + ' / ' + v;
-        idCardInput.value = '';
-      }).catch(function () {
-        pidText.textContent = '未找到该证件号对应人员';
-        pidText.style.color = 'var(--c-danger,#d9463e)';
-        selectedPid = null;
-      });
-    });
+    var preset = existing
+      ? (function () {
+          var v = { personnelId: String(existing.personnelId || ''), role: existing.role || '', remark: existing.remark || '' };
+          cols.forEach(function (c) { v['_extra_' + c.columnKey] = String(existingExtra[c.columnKey] || ''); });
+          return v;
+        })()
+      : {};
 
-    function collectExtra() {
-      var obj = {};
-      Object.keys(extraInputs).forEach(function (k) {
-        var v = extraInputs[k].value.trim();
-        if (v) { obj[k] = v; }
-      });
-      return obj;
-    }
-
+    var form = buildForm(fields, preset);
     var m = openModal({
-      title: (existing ? '编辑成员 · ' + (existing.personnelName || '') : '新增成员') + ' — ' + currentOrg.name,
+      title: (existing ? '编辑成员' : '新增成员') + ' — ' + currentOrg.name,
       wide: true,
-      body: h('div', { style: 'display:flex;flex-direction:column;gap:12px' },
-        h('div', {},
-          h('label', { text: '人员', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }),
-          idCardInput, h('div', { style: 'margin-top:4px' }, pidText)),
-        h('div', {},
-          h('label', { text: '职务', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }),
-          roleInput),
-        cols.length ? h('div', {},
-          h('label', { text: '其他信息', style: 'display:block;margin-bottom:6px;font-size:13px;color:var(--c-sub,#66788c)' }),
-          extraBox) : null),
+      body: form.el,
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', { class: 'btn btn-primary', text: existing ? '保存' : '添加', onclick: function () {
-          if (!selectedPid) { toast('请先输入身份证号选择人员', 'err'); return; }
-          var body = { personnelId: selectedPid, role: roleInput.value.trim(), extra: JSON.stringify(collectExtra()) };
+          var data = form.get();
+          if (!data) return;
+          var personnelId = Number(data.personnelId);
+          if (!personnelId) { toast('请选择人员', 'err'); return; }
+          var extra = {};
+          cols.forEach(function (c) {
+            var v = data['_extra_' + c.columnKey];
+            if (v && String(v).trim()) { extra[c.columnKey] = String(v).trim(); }
+          });
+          var body = { personnelId: personnelId, role: (data.role || '').trim(), extra: JSON.stringify(extra), remark: (data.remark || '').trim() };
           var req = existing
             ? PUT('/api/organization/' + currentOrg.id + '/members/' + existing.id, body)
             : POST('/api/organization/' + currentOrg.id + '/members', body);
@@ -10615,7 +10597,6 @@ function organizationView() {
         } })
       ]
     });
-    idCardInput.focus();
   }
 
   /* --- 管理表头 --- */
