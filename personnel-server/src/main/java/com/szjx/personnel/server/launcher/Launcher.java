@@ -43,10 +43,22 @@ public class Launcher {
 
     static javax.swing.JFrame OWNER_FRAME;
 
-    /** 弹窗期间临时显示 owner frame(任务栏可见),关闭后立即隐藏——平时不占任务栏位。 */
+    /** 弹窗期间临时显示 owner frame(任务栏可见),关闭后立即隐藏——平时不占任务栏位。
+     *  invokeAndWait 确保窗口在 EDT 真正 peer 化,再加 200ms 等任务栏按钮注册完成。 */
     static void showDialog(String message, String title, int messageType) {
-        if (OWNER_FRAME != null) OWNER_FRAME.setVisible(true);
-        showDialog( message, title, messageType);
+        if (OWNER_FRAME != null) {
+            try {
+                if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+                    OWNER_FRAME.setVisible(true);
+                } else {
+                    javax.swing.SwingUtilities.invokeAndWait(new Runnable() {
+                        public void run() { OWNER_FRAME.setVisible(true); }
+                    });
+                }
+                Thread.sleep(200);
+            } catch (Exception ignore) { /* 显示失败不影响弹窗 */ }
+        }
+        JOptionPane.showMessageDialog(OWNER_FRAME, message, title, messageType);
         if (OWNER_FRAME != null) OWNER_FRAME.setVisible(false);
     }
 
