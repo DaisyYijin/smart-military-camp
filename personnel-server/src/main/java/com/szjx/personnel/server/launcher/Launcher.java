@@ -43,6 +43,13 @@ public class Launcher {
 
     static javax.swing.JFrame OWNER_FRAME;
 
+    /** 弹窗期间临时显示 owner frame(任务栏可见),关闭后立即隐藏——平时不占任务栏位。 */
+    static void showDialog(String message, String title, int messageType) {
+        if (OWNER_FRAME != null) OWNER_FRAME.setVisible(true);
+        showDialog( message, title, messageType);
+        if (OWNER_FRAME != null) OWNER_FRAME.setVisible(false);
+    }
+
     public static void main(String[] args) throws Exception {
         boolean forceNoUi = hasFlag(args, "--no-ui");
         boolean ui = !forceNoUi && !GraphicsEnvironment.isHeadless();
@@ -55,9 +62,8 @@ public class Launcher {
             javax.swing.JFrame ownerFrame = new javax.swing.JFrame();
             ownerFrame.setUndecorated(true);
             ownerFrame.setSize(1, 1);
-            ownerFrame.setLocation(-100, -100); // 移到屏幕外,不可见但保持可见态(任务栏需要)
+            ownerFrame.setLocation(-100, -100); // 屏幕外,仅在弹窗期间临时可见(见 showDialog)
             ownerFrame.setIconImage(AppIcons.appIcon());
-            ownerFrame.setVisible(true);
             OWNER_FRAME = ownerFrame;
             try {
                 // 现代扁平外观(FlatLaf),失败时回退系统外观
@@ -89,7 +95,7 @@ public class Launcher {
             // 已有实例在跑:不重复启动,直接带用户进系统
             String url = "http://127.0.0.1:" + port;
             if (ui) {
-                JOptionPane.showMessageDialog(OWNER_FRAME,
+                showDialog(
                         "程序已经在运行(端口 " + port + "),即将在浏览器中打开系统。",
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
                 TrayManager.openBrowser(url);
@@ -158,7 +164,7 @@ public class Launcher {
             bootstrap.clear();
             String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             System.err.println("[启动失败] " + reason);
-            if (ui) JOptionPane.showMessageDialog(OWNER_FRAME, reason, "启动失败", JOptionPane.ERROR_MESSAGE);
+            if (ui) showDialog( reason, "启动失败", JOptionPane.ERROR_MESSAGE);
             System.exit(1);
             return;
         } finally {
@@ -183,7 +189,7 @@ public class Launcher {
         } catch (Exception e) {
             ctx.close();
             System.err.println("[启动失败] 管理员账号设置未完成，服务已关闭；请检查本机配置和日志。");
-            if (ui) JOptionPane.showMessageDialog(OWNER_FRAME, "管理员账号设置未完成，服务已关闭。请检查本机配置。", "启动失败", JOptionPane.ERROR_MESSAGE);
+            if (ui) showDialog( "管理员账号设置未完成，服务已关闭。请检查本机配置。", "启动失败", JOptionPane.ERROR_MESSAGE);
             throw new IllegalStateException("管理员账号设置未完成", e);
         }
 
@@ -198,7 +204,7 @@ public class Launcher {
 
         if (ui) {
             if (firstRun) {
-                JOptionPane.showMessageDialog(OWNER_FRAME,
+                showDialog(
                         "初始设置完成,系统已启动!\n\n本机浏览器即将自动打开,请使用账号 " + adminUser
                                 + " 和你设置的密码登录。\n局域网其他电脑访问地址:" + lanUrl,
                         "数智军营人员管理系统", JOptionPane.INFORMATION_MESSAGE);
