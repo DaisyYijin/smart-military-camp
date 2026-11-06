@@ -10646,10 +10646,30 @@ function organizationView() {
       : {};
 
     var form = buildForm(fields, preset);
+    /* 身份证快捷输入:输入证件号自动带出人员并选中下方下拉;也可直接用下拉搜索选择 */
+    var pidInput = h('input', { type: 'text', class: 'input', placeholder: '输入身份证号自动带出人员(或从下方下拉选择)', style: 'width:100%' });
+    var pidHint = h('div', { style: 'font-size:12px;color:var(--c-sub,#66788c);margin-top:3px;min-height:16px', text: '' });
+    pidInput.addEventListener('change', function () {
+      var v = pidInput.value.trim();
+      if (!v) return;
+      GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+        form.inputs.personnelId.value = String(p.id);
+        pidHint.textContent = '已带出:' + (p.name || '') + ' / ' + v;
+        pidHint.style.color = 'var(--pri,#2f6fd6)';
+        pidInput.value = '';
+      }).catch(function () {
+        pidHint.textContent = '未找到该证件号对应人员,请检查后重试';
+        pidHint.style.color = 'var(--c-danger,#d9463e)';
+      });
+    });
     var m = openModal({
       title: (existing ? '编辑成员' : '新增成员') + ' — ' + currentOrg.name,
       wide: true,
-      body: form.el,
+      body: h('div', {},
+        h('div', { style: 'margin-bottom:12px' },
+          h('label', { text: '身份证快捷输入', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }),
+          pidInput, pidHint),
+        form.el),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
         h('button', { class: 'btn btn-primary', text: existing ? '保存' : '添加', onclick: function () {
