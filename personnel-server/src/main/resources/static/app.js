@@ -10496,10 +10496,10 @@ function organizationView() {
       h('th', { style: 'width:32px', title: '按住拖动排序' }),
       h('th', { text: '序号', style: 'width:40px' }),
       h('th', { text: '姓名' }),
-      h('th', { text: '职务' })
+      h('th', { text: '身份证号' })
     ];
     cols.forEach(function (c) { headCells.push(h('th', { text: c.columnLabel || c.columnKey })); });
-    headCells.push(h('th', { text: '备注' }), h('th', { text: '操作', style: 'width:80px' }));
+    headCells.push(h('th', { text: '操作', style: 'width:80px' }));
     table.appendChild(h('thead', {}, h('tr', {}, headCells)));
     var tb = h('tbody');
 
@@ -10526,7 +10526,7 @@ function organizationView() {
     }
 
     if (!members.length) {
-      tb.appendChild(h('tr', {}, h('td', { colspan: String(6 + cols.length), class: 'empty-row', text: '暂无成员' })));
+      tb.appendChild(h('tr', {}, h('td', { colspan: String(5 + cols.length), class: 'empty-row', text: '暂无成员' })));
     }
     members.forEach(function (m, idx) {
       var extra = {};
@@ -10535,7 +10535,7 @@ function organizationView() {
         h('td', { style: 'cursor:grab;user-select:none;color:#b0bccb;width:32px;text-align:center' }, h('span', { text: '⠿', title: '按住拖动排序' })),
         h('td', { text: String(idx + 1), style: 'text-align:center;color:var(--c-muted,#8a97a8)' }),
         h('td', {}, h('b', { text: m.personnelName || '—' })),
-        h('td', { text: m.role || '—' })
+        h('td', { text: m.idCard || '—' })
       ];
       cols.forEach(function (c) {
         var val;
@@ -10546,7 +10546,6 @@ function organizationView() {
         }
         cells.push(h('td', { text: String(val) }));
       });
-      cells.push(h('td', { text: m.remark || '—' }));
       cells.push(h('td', { style: 'white-space:nowrap' },
         h('button', { class: 'btn-link', text: '编辑', onclick: function () { openMemberForm(m); } }),
         ' ',
@@ -10632,17 +10631,15 @@ function organizationView() {
     if (existing) { try { existingExtra = JSON.parse(existing.extra || '{}') || {}; } catch (e) { /* ignore */ } }
 
     var fields = [
-      { key: 'personnelId', label: '人员', type: 'personnel', required: true },
-      { key: 'role', label: '职务', placeholder: '如:书记、副书记、委员、监督员' }
+      { key: 'personnelId', label: '人员', type: 'personnel', required: true }
     ];
     cols.forEach(function (c) {
       fields.push({ key: '_extra_' + c.columnKey, label: c.columnLabel, placeholder: '' });
     });
-    fields.push({ key: 'remark', label: '备注', placeholder: '' });
 
     var preset = existing
       ? (function () {
-          var v = { personnelId: String(existing.personnelId || ''), role: existing.role || '', remark: existing.remark || '' };
+          var v = { personnelId: String(existing.personnelId || '') };
           cols.forEach(function (c) { v['_extra_' + c.columnKey] = String(existingExtra[c.columnKey] || ''); });
           return v;
         })()
@@ -10665,7 +10662,7 @@ function organizationView() {
             var v = data['_extra_' + c.columnKey];
             if (v && String(v).trim()) { extra[c.columnKey] = String(v).trim(); }
           });
-          var body = { personnelId: personnelId, role: (data.role || '').trim(), extra: JSON.stringify(extra), remark: (data.remark || '').trim() };
+          var body = { personnelId: personnelId, extra: JSON.stringify(extra) };
           var req = existing
             ? PUT('/api/organization/' + currentOrg.id + '/members/' + existing.id, body)
             : POST('/api/organization/' + currentOrg.id + '/members', body);
@@ -10755,7 +10752,7 @@ function organizationView() {
       '</style></head><body>';
     html += '<h1>' + esc(currentOrg.name) + '名册</h1>';
     html += '<div class="meta">共 ' + members.length + ' 人 · 打印日期:' + dateStr + '</div>';
-    html += '<table><thead><tr><th style="width:36px">序号</th><th>姓名</th><th>职务</th>';
+    html += '<table><thead><tr><th style="width:36px">序号</th><th>姓名</th><th>身份证号</th>';
     cols.forEach(function (c) {
       html += '<th>' + esc(c.columnLabel || c.columnKey) + '</th>';
     });
@@ -10763,7 +10760,7 @@ function organizationView() {
     members.forEach(function (m, i) {
       var extra = {};
       try { extra = JSON.parse(m.extra || '{}') || {}; } catch (e) {}
-      html += '<tr><td class="c">' + (i + 1) + '</td><td><b>' + esc(m.personnelName || '') + '</b></td><td>' + esc(m.role || '') + '</td>';
+      html += '<tr><td class="c">' + (i + 1) + '</td><td><b>' + esc(m.personnelName || '') + '</b></td><td>' + esc(m.idCard || '') + '</td>';
       cols.forEach(function (c) {
         var val = c.personnelField ? (m[c.personnelField] || '') : (extra[c.columnKey] || '');
         html += '<td>' + esc(String(val)) + '</td>';
