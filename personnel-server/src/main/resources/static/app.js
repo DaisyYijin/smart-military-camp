@@ -10656,8 +10656,12 @@ function organizationView() {
 
   root.appendChild(tabBox);
   root.appendChild(contentBox);
+  function render(content) {
+    content.innerHTML = '';
+    content.appendChild(root);
+  }
   loadOrgs(false);
-  return root;
+  return { render: render };
 }
 
 var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg];
