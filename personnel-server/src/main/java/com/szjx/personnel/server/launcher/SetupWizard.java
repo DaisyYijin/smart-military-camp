@@ -54,8 +54,9 @@ public class SetupWizard extends javax.swing.JDialog {
     private JLabel banner;
 
     private SetupWizard(boolean firstRun, int initialPort, String occupier, String initialUsername) {
-        super((java.awt.Frame) null, firstRun ? "数智军营人员管理系统 - 首次运行设置"
-                : "数智军营人员管理系统 - 启动设置", true); // 无 owner:Windows 给独立任务栏按钮
+        super(Launcher.OWNER_FRAME != null ? Launcher.OWNER_FRAME : (java.awt.Frame) null,
+                firstRun ? "数智军营人员管理系统 - 首次运行设置"
+                : "数智军营人员管理系统 - 启动设置", true); // 挂全局 owner:向导期间 owner 可见,任务栏有按钮
         this.firstRun = firstRun;
         setIconImage(AppIcons.appIcon());
         buildUi(initialPort, occupier, initialUsername);
@@ -354,11 +355,30 @@ public class SetupWizard extends javax.swing.JDialog {
             return r;
         }
         final Result[] holder = new Result[1];
+        // 向导显示期间让 owner 可见(任务栏出现应用图标),关闭后隐藏——与 Launcher.showDialog 同机制。
+        // 注: JDialog((Frame)null) 传 null 时 Swing 内部仍会挂一个隐藏共享 Frame,任务栏不会有按钮,
+        // 因此必须挂"可见的" owner 才能在任务栏出现图标。
+        final javax.swing.JFrame owner = Launcher.OWNER_FRAME;
+        if (owner != null) {
+            try {
+                SwingUtilities.invokeAndWait(new Runnable() {
+                    public void run() { owner.setVisible(true); }
+                });
+                Thread.sleep(200); // 等任务栏按钮注册完成
+            } catch (Exception ignore) { /* 不影响向导 */ }
+        }
         SwingUtilities.invokeAndWait(new Runnable() {
             public void run() {
                 holder[0] = new SetupWizard(firstRun, initialPort, occupier, initialUsername).showDialog();
             }
         });
+        if (owner != null) {
+            try {
+                SwingUtilities.invokeLater(new Runnable() {
+                    public void run() { owner.setVisible(false); }
+                });
+            } catch (Exception ignore) { /* 忽略 */ }
+        }
         return holder[0];
     }
 
