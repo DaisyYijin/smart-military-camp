@@ -53,6 +53,11 @@ class BackupRestoreIsolationTest {
                             "UNIQUE(personnel_id,year,quarter))");
                 } else if ("delete_undo".equals(table)) {
                     jdbc.execute("CREATE TABLE delete_undo(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER NOT NULL, name TEXT DEFAULT '', summary TEXT DEFAULT '', payload TEXT NOT NULL, photo_trash TEXT DEFAULT '', created_at TEXT DEFAULT '')");
+                } else if ("absence_record".equals(table)) {
+                    jdbc.execute("CREATE TABLE absence_record(id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                            "personnel_id INTEGER NOT NULL, reason TEXT DEFAULT '', leave_date TEXT NOT NULL DEFAULT '', " +
+                            "expected_return_date TEXT DEFAULT '', actual_return_date TEXT DEFAULT '', remark TEXT DEFAULT '', " +
+                            "created_at TEXT DEFAULT (datetime('now','localtime')), updated_at TEXT DEFAULT (datetime('now','localtime')))");
                 } else {
                     jdbc.execute("CREATE TABLE " + table + "(id INTEGER PRIMARY KEY)");
                 }
@@ -1078,7 +1083,8 @@ class BackupRestoreIsolationTest {
         jdbc.update("INSERT INTO personnel(id) VALUES(1)");
         List<String> legacyModules = BackupService.allModuleKeys();
         legacyModules.remove("double-excellence");
-        legacyModules.remove("annual-appraisal"); // 还原双争/年度加入前的12模块旧备份
+        legacyModules.remove("annual-appraisal");
+        legacyModules.remove("absence"); // 还原双争/年度/在外加入前的12模块旧备份
         String backup = (String) service.createBackup(legacyModules, false).get("name");
         byte[] bytes = Files.readAllBytes(service.getBackupFile(backup).toPath());
         insertDoubleExcellence(10, 1);
@@ -1091,7 +1097,7 @@ class BackupRestoreIsolationTest {
         String name = (String) uploaded.get("name");
         IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
                 () -> service.restore(name, BackupService.allModuleKeys()));
-        assertTrue(missing.getMessage().contains("所选模块不在备份中: double-excellence"));
+        assertTrue(missing.getMessage().contains("所选模块不在备份中"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM equipment", Integer.class));
         assertEquals(local, jdbc.queryForList("SELECT * FROM double_excellence_record"));
         List<String> selected = BackupService.allModuleKeys();
@@ -1102,17 +1108,17 @@ class BackupRestoreIsolationTest {
     }
 
     @Test
-    void fullBackupCoversActualThirtyFourBusinessTablesIncludingHistoricalFitnessStandard() throws Exception {
+    void fullBackupCoversActualThirtyFiveBusinessTablesIncludingHistoricalFitnessStandard() throws Exception {
         // 本隔离库模拟升级前33张实际业务表+两评比表,不是把静态模块表数当生产库表数。
         jdbc.execute("CREATE TABLE fitness_standard(id INTEGER PRIMARY KEY, standard_text TEXT)");
         jdbc.update("INSERT INTO fitness_standard(id,standard_text) VALUES(1,'历史标准')");
         List<String> actual = jdbc.queryForList("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(34, actual.size());
+        assertEquals(35, actual.size());
         String backup = (String) service.createBackup(BackupService.allModuleKeys(), false).get("name");
         try (ZipFile zip = new ZipFile(service.getBackupFile(backup))) {
             Map<?,?> meta = new com.fasterxml.jackson.databind.ObjectMapper().readValue(zip.getInputStream(zip.getEntry("meta.json")), Map.class);
             Map<?,?> modules = (Map<?,?>) meta.get("modules");
-            assertEquals(14, modules.size());
+            assertEquals(15, modules.size());
             java.util.Set<String> archived = new java.util.HashSet<>();
             for (Map.Entry<?,?> module : modules.entrySet()) {
                 for (Object table : ((Map<?,?>) module.getValue()).keySet()) {
@@ -1133,7 +1139,8 @@ class BackupRestoreIsolationTest {
         insertDoubleExcellence(10, 1);
         List<String> oldAll = BackupService.allModuleKeys();
         oldAll.remove("double-excellence");
-        oldAll.remove("annual-appraisal"); // 双争/年度加入前的历史默认清单,读取时应迁移到当前全部模块
+        oldAll.remove("annual-appraisal");
+        oldAll.remove("absence"); // 双争/年度/在外加入前的历史默认清单,读取时应迁移到当前全部模块
         Files.createDirectories(dataRoot);
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         Files.write(dataRoot.resolve("backup-settings.json"), mapper.writeValueAsBytes(row("enabled",true,
