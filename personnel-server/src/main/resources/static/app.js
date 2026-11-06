@@ -10688,16 +10688,15 @@ function organizationView() {
     function render() {
       box.innerHTML = '';
       cols.forEach(function (c, i) {
-        var keyI = h('input', { type: 'text', class: 'input', value: c.key, placeholder: '自动', title: '内部标识,留空自动生成;已有数据勿改', style: 'width:52px;font-size:12px;color:var(--c-muted,#8a97a8)' });
-        var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:100px' });
+        var lblI = h('input', { type: 'text', class: 'input', value: c.label, placeholder: '表头名称', style: 'width:120px' });
         var fieldSel = makeDropdown(fieldKeys.map(function (k) {
           return { v: k, l: PERSONNEL_FIELDS[k] };
         }), '数据来源');
         fieldSel.value = c.field || '';
-        function sync() { c.key = keyI.value.trim(); c.label = lblI.value.trim(); c.field = fieldSel.value || ''; }
-        keyI.addEventListener('change', sync); lblI.addEventListener('change', sync); fieldSel.addEventListener('change', sync);
+        function sync() { c.label = lblI.value.trim(); c.field = fieldSel.value || ''; }
+        lblI.addEventListener('change', sync); fieldSel.addEventListener('change', sync);
         box.appendChild(h('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:8px' },
-          lblI, fieldSel, keyI,
+          lblI, fieldSel,
           h('button', { class: 'btn-link danger', text: '删除', onclick: function () { cols.splice(i, 1); render(); } })));
       });
     }
