@@ -10459,6 +10459,7 @@ function organizationView() {
   }
 
   /* 人员档案字段映射(自定义列可关联) */
+  var pendingFlashCols = null; // 表头换位后待高亮闪烁的列(渲染完即清)
   var PERSONNEL_FIELDS = {
     '': '— 手动填写 —',
     'rank': '军衔/职级', 'phone': '手机号', 'category': '人员类别',
@@ -10528,6 +10529,7 @@ function organizationView() {
     cols.forEach(function (c, ci) {
       var th = h('th', { text: c.columnLabel || c.columnKey, title: '按住拖到其他列上可交换位置', style: 'cursor:move' });
       th.setAttribute('draggable', 'true');
+      if (pendingFlashCols && pendingFlashCols.indexOf(c.columnKey) >= 0) { th.classList.add('col-flash'); }
       th.addEventListener('dragstart', function (e) {
         colDragIdx = ci;
         if (e.dataTransfer) { try { e.dataTransfer.effectAllowed = 'move'; } catch (err) {} }
@@ -10547,10 +10549,11 @@ function organizationView() {
         var tmp = newCols[colDragIdx];
         newCols[colDragIdx] = newCols[ci];
         newCols[ci] = tmp;
+        var flashKeys = [c.columnKey, newCols[ci].columnKey];
         colDragIdx = null;
         PUT('/api/organization/' + currentOrg.id + '/columns', {
           columns: newCols.map(function (c2) { return { key: c2.columnKey, label: c2.columnLabel, personnelField: c2.personnelField || '' }; })
-        }).then(function () { toast('列顺序已保存'); loadDetail(); })
+        }).then(function () { toast('列顺序已保存'); pendingFlashCols = flashKeys; loadDetail(); })
           .catch(function (e2) { toast(e2.message || '列顺序保存失败', 'err'); });
       });
       headCells.push(th);
@@ -10608,7 +10611,7 @@ function organizationView() {
         } else {
           val = extra[c.columnKey] || '—';
         }
-        cells.push(h('td', { text: String(val) }));
+        cells.push(h('td', { text: String(val), class: (pendingFlashCols && pendingFlashCols.indexOf(c.columnKey) >= 0) ? 'col-flash' : '' }));
       });
       cells.push(h('td', { style: 'white-space:nowrap' },
         h('button', { class: 'btn-link', text: '编辑', onclick: function () { openMemberForm(m); } }),
@@ -10644,8 +10647,38 @@ function organizationView() {
         if (e.preventDefault) e.preventDefault();
         var ref = dropAfter ? dropRow.nextSibling : dropRow;
         while (ref && ref.nodeType !== 1) ref = ref.nextSibling;
+        // FLIP 落位动画:记录每行原位置,移动 DOM 后反向位移,下一帧过渡到终态(行平滑滑入新位置)
+        var firstTops = {};
+        var flipRows = [];
+        if (!prefersReducedMotion()) {
+          $all('tr[data-mid]', tb).forEach(function (r) {
+            firstTops[r.getAttribute('data-mid')] = r.getBoundingClientRect().top;
+          });
+        }
         dropRow.parentNode.insertBefore(dragRow, ref);
         dragMoved = true;
+        if (!prefersReducedMotion()) {
+          $all('tr[data-mid]', tb).forEach(function (r) {
+            var prev = firstTops[r.getAttribute('data-mid')];
+            if (prev === undefined) return;
+            var delta = prev - r.getBoundingClientRect().top;
+            if (Math.abs(delta) < 1) return;
+            r.style.transition = 'none';
+            r.style.transform = 'translateY(' + delta + 'px)';
+            flipRows.push(r);
+          });
+          if (flipRows.length) {
+            requestAnimationFrame(function () {
+              flipRows.forEach(function (r) {
+                r.style.transition = 'transform var(--dur-mid, .3s) var(--ease-glide, cubic-bezier(.4,0,.2,1))';
+                r.style.transform = '';
+              });
+              setTimeout(function () {
+                flipRows.forEach(function (r) { r.style.transition = ''; r.style.transform = ''; });
+              }, 380);
+            });
+          }
+        }
         commitOrder();
       });
       tr.addEventListener('dragend', function () {
