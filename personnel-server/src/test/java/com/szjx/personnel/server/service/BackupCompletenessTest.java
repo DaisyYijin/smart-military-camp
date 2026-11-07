@@ -21,7 +21,8 @@ public class BackupCompletenessTest {
             "military_assessment", "mil_scheme", "mil_scheme_item", "phone_device",
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo",
-            "double_excellence_record", "annual_appraisal_record"
+            "double_excellence_record", "annual_appraisal_record", "absence_record",
+            "organization", "organization_member", "organization_column"
     };
 
     private Set<String> coveredTables() {
@@ -50,10 +51,10 @@ public class BackupCompletenessTest {
 
     @Test
     public void testModuleCount() {
-        assertEquals(14, BackupService.MODULE_TABLES.size(), "双争评比与年度考评模块加入后应为14个");
-        assertEquals(14, BackupService.allModuleKeys().size());
-        assertEquals("double-excellence", BackupService.allModuleKeys().get(12));
-        assertEquals("annual-appraisal", BackupService.allModuleKeys().get(13));
+        assertEquals(16, BackupService.MODULE_TABLES.size(), "双争/年度/在外/组织建设模块加入后应为16个");
+        assertEquals(16, BackupService.allModuleKeys().size());
+        assertEquals("double-excellence", BackupService.allModuleKeys().get(14));
+        assertEquals("annual-appraisal", BackupService.allModuleKeys().get(15));
     }
 
     @Test

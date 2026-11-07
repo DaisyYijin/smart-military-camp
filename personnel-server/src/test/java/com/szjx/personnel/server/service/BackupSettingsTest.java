@@ -105,7 +105,7 @@ class BackupSettingsTest {
         write(original);
         service.runAutoIfDue();
         JsonNode after = mapper.readTree(settingsFile.toFile());
-        assertEquals(14, after.get("modules").size());
+        assertEquals(16, after.get("modules").size());
         assertEquals(original.get("autoLastRun"), after.get("autoLastRun"));
         assertFalse(Files.exists(temporary.resolve("backup")));
     }
@@ -135,7 +135,7 @@ class BackupSettingsTest {
     }
 
     @Test void freshMissingAndNullModulesDefaultToAllFourteenWithoutCreatingOrRewritingSettings() throws Exception {
-        assertEquals(14, new BackupService.Settings().modules.size());
+        assertEquals(16, new BackupService.Settings().modules.size());
         assertEquals(BackupService.allModuleKeys(), service.loadSettings().modules);
         assertFalse(Files.exists(settingsFile));
         for (String json : Arrays.asList("{}", "{\"modules\":null}")) {

@@ -257,7 +257,7 @@ class ExcelImportDateCompatibilityTest {
             assertEquals(0, result.get("subFailed"), result.toString());
             assertPersonnelDates();
             assertEquals("军证测试-20160901", jdbc.queryForObject("SELECT military_id_no FROM personnel WHERE id_card=?", String.class, CARD));
-            assertEquals(NUMBER, jdbc.queryForObject("SELECT edu_cert_no FROM personnel WHERE id_card=?", String.class, CARD));
+            // 学历证书编号列已从导入移除,不再断言 edu_cert_no
             assertEquals(NUMBER, jdbc.queryForObject("SELECT license_no FROM driver_license", String.class));
             assertEquals(NUMBER, jdbc.queryForObject("SELECT card_no FROM personal_card", String.class));
             // Reimport matches personnel and normalized child values instead of duplicating children.
@@ -413,7 +413,7 @@ class ExcelImportDateCompatibilityTest {
                 "编制单位", "机关", "所在点位", "机关", "人员类别", "军官", "军衔/职级", "上尉", "职务/岗位", "参谋",
                 "状态", "在职", "民族", "汉族", "籍贯所在地", "浙江省/杭州市", "入伍所在地", "浙江省/杭州市",
                 "血型", "A", "政治面貌", "党员", "婚姻状况", "未婚", "学历", "本科", "是否独生子女", "否",
-                "详细地址", "杭州", "学历证书编号", NUMBER);
+                "详细地址", "杭州");
         for (String label : MAIN_DATES.keySet()) row.put(label, ISO);
         return row;
     }
