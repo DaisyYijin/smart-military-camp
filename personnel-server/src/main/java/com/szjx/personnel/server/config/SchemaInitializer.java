@@ -674,6 +674,32 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
 
+        // 站内信/消息通知(局域网多用户):用户互发+系统通知(审批流联动)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS message (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "sender_id INTEGER NOT NULL," +
+                "receiver_id INTEGER NOT NULL," +
+                "title TEXT DEFAULT ''," +
+                "content TEXT NOT NULL," +
+                "type TEXT DEFAULT 'user'," +
+                "read_flag INTEGER DEFAULT 0," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
+        // 审批工作流:休假/在外申请→管理员审批,通过自动登记并双向站内信通知
+        jdbc.execute("CREATE TABLE IF NOT EXISTS approval_request (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "type TEXT NOT NULL," +
+                "applicant_id INTEGER NOT NULL," +
+                "created_by INTEGER NOT NULL," +
+                "payload TEXT NOT NULL," +
+                "status TEXT DEFAULT 'pending'," +
+                "approver_id INTEGER," +
+                "approve_comment TEXT DEFAULT ''," +
+                "decided_at TEXT," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
         // 住房情况
         jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

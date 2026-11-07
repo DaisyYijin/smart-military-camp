@@ -14,7 +14,7 @@ function definition(name) {
   return match[0];
 }
 const names = ['$', '$all', 'h', 'esc', 'openModal', 'parseCalendarDay', 'formatCalendarDay',
-  'makeDateField', 'buildForm', 'attachPersonnelAvatar', 'attachColumnResize', 'setupPersonLookup', 'setupLeaveAutoCalc', 'saveSubRecordBatch',
+  'makeDateField', 'buildForm', 'attachPersonnelAvatar', 'attachColumnResize', 'openMessageCenter', 'openMessageCompose', 'setupPersonLookup', 'setupLeaveAutoCalc', 'saveSubRecordBatch',
   'crudView', 'buildTrendChart', 'preferenceKey', 'importRuleText', 'importFileErrorMessage', 'importResultSummary', 'openImportResultModal', 'dashMigrate', 'markDashDriverLayout', 'dashDriverLayout', 'dashboardView', 'openChangePassword', 'subRecordsPanel',
   'makeDropdown', 'itemLoanStatus', 'setupItemLoanForm', 'openItemLoanDetail', 'openItemLoanReturn', 'fmtSize', 'backupView',
   'dictItems', 'dictView', 'settingsView', 'readPersonnelRouteFilters', 'kindsForDim', 'dashCardLabel',

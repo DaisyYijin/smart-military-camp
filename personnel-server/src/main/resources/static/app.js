@@ -1382,6 +1382,80 @@ function attachColumnResize(table, viewKey) {
   });
 }
 
+/* ================= 消息中心(站内信):铃铛弹窗+写消息 ================= */
+function openMessageCenter() {
+  var listBox = h('div', { style: 'max-height:52vh;overflow:auto' });
+  function load() {
+    listBox.innerHTML = '<div class="empty-row">加载中…</div>';
+    GET('/api/message?page=1&size=50').then(function (r) {
+      var rows = (r && r.list) || [];
+      listBox.innerHTML = '';
+      if (!rows.length) { listBox.appendChild(h('div', { class: 'empty-row', text: '暂无消息' })); return; }
+      rows.forEach(function (m) {
+        var row = h('div', {
+          style: 'padding:8px 10px;border-bottom:1px solid var(--c-border,#e2e8f0)' + (m.readFlag ? '' : ';background:var(--c-pribg,#e8f0fd);cursor:pointer'),
+          title: m.readFlag ? '' : '点击标记已读'
+        },
+          h('div', { style: 'display:flex;justify-content:space-between;font-size:12px;color:var(--c-sub,#66788c)' },
+            h('span', { text: (m.senderName || '') + (m.type === 'system' ? ' · 系统通知' : '') }),
+            h('span', { text: String(m.createdAt || '').replace('T', ' ').slice(5, 16) })),
+          h('div', { style: 'font-size:13px;margin:2px 0;font-weight:' + (m.readFlag ? 'normal' : 'bold'), text: m.title || '(无标题)' }),
+          h('div', { style: 'font-size:13px;color:var(--c-body,#34435c);white-space:pre-wrap', text: m.content }));
+        if (!m.readFlag) {
+          row.addEventListener('click', function () {
+            PUT('/api/message/' + m.id + '/read', {}).then(function () {
+              row.style.background = '';
+              row.style.cursor = '';
+              m.readFlag = 1;
+            }).catch(function () { /* 静默 */ });
+          });
+        }
+        listBox.appendChild(row);
+      });
+    }).catch(function (e) {
+      listBox.innerHTML = '';
+      listBox.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败' }));
+    });
+  }
+  var m = openModal({
+    title: '消息中心', wide: true,
+    body: listBox,
+    footer: [
+      h('button', { class: 'btn btn-ghost', text: '写消息', onclick: function () { m.close(); openMessageCompose(); } }),
+      h('button', { class: 'btn btn-ghost', text: '全部已读', onclick: function () {
+        PUT('/api/message/read-all', {}).then(function () { load(); }).catch(function (e) { toast(e.message || '操作失败', 'err'); });
+      } }),
+      h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })
+    ]
+  });
+  load();
+}
+
+function openMessageCompose() {
+  GET('/api/message/users').then(function (list) {
+    var sel = makeDropdown((list || []).map(function (u) { return { v: String(u.id), l: u.username }; }), '请选择收件人');
+    var titleInput = h('input', { type: 'text', class: 'input', placeholder: '标题(选填)', style: 'width:100%' });
+    var contentArea = h('textarea', { class: 'input', placeholder: '消息内容', style: 'width:100%;min-height:100px;resize:vertical' });
+    var m = openModal({
+      title: '写消息',
+      body: h('div', { style: 'display:flex;flex-direction:column;gap:10px' },
+        h('div', {}, h('label', { text: '收件人', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), sel),
+        h('div', {}, h('label', { text: '标题', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), titleInput),
+        h('div', {}, h('label', { text: '内容', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), contentArea)),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: '发送', onclick: function () {
+          if (!sel.value) { toast('请选择收件人', 'err'); return; }
+          if (!contentArea.value.trim()) { toast('请填写内容', 'err'); return; }
+          POST('/api/message', { receiverId: Number(sel.value), title: titleInput.value.trim(), content: contentArea.value.trim() })
+            .then(function () { m.close(); toast('消息已发送'); openMessageCenter(); })
+            .catch(function (e) { toast(e.message || '发送失败', 'err'); });
+        } })
+      ]
+    });
+  }).catch(function (e) { toast(e.message || '获取账号列表失败', 'err'); });
+}
+
 function buildForm(fields, values, extraPanels) {
   values = values || {};
   extraPanels = extraPanels || {};
@@ -11047,7 +11121,191 @@ function organizationView() {
   return { render: render };
 }
 
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg];
+/* ================= 审批中心(休假/在外申请:提交→审批→自动登记) ================= */
+var approvalCfg = { key: 'approval', title: '审批中心', icon: 'fileText' };
+
+function approvalView() {
+  var root = h('div', { class: 'view-in' });
+  var isAdmin = !!(USER && USER.isAdmin === true);
+  var tab = isAdmin ? 'pending' : 'mine'; // 管理员默认看待审批
+  var listBox = h('div');
+
+  function statusBadge(s) {
+    var m = { pending: ['待审批', 'var(--c-warn,#f0a93c)'], approved: ['已通过', 'var(--c-ok,#4fc06f)'], rejected: ['已驳回', 'var(--c-danger,#d9463e)'] }[s] || [s || '—', '#888'];
+    return h('span', { style: 'color:#fff;background:' + m[1] + ';font-size:12px;padding:1px 8px;border-radius:10px;white-space:nowrap', text: m[0] });
+  }
+  function payloadSummary(type, payloadStr) {
+    try {
+      var p = JSON.parse(payloadStr || '{}');
+      if (type === 'leave') { return (p.leaveType || '') + ' ' + (p.startDate || '') + ' ~ ' + (p.endDate || '') + (p.days ? ' (' + p.days + '天)' : ''); }
+      return (p.reason || '') + ' ' + (p.leaveDate || '') + (p.expectedReturnDate ? ' ~ ' + p.expectedReturnDate : '');
+    } catch (e) { return ''; }
+  }
+
+  function load() {
+    listBox.innerHTML = '<div class="empty-row">加载中…</div>';
+    var qs = tab === 'pending' ? '?status=pending' : '';
+    GET('/api/approval' + qs).then(function (rows) {
+      rows = rows || [];
+      listBox.innerHTML = '';
+      if (!rows.length) {
+        listBox.appendChild(h('div', { class: 'panel' },
+          h('div', { class: 'empty-row', text: tab === 'pending' ? '暂无待审批申请' : '暂无申请记录,点上方「新建申请」提交' })));
+        return;
+      }
+      var table = h('table', { class: 'grid', style: 'width:100%' });
+      table.innerHTML = '<thead><tr><th>类型</th><th>申请人</th><th>申请内容</th><th>状态</th><th>提交时间</th><th>审批意见</th><th style="width:120px">操作</th></tr></thead><tbody></tbody>';
+      var tb = table.tBodies[0];
+      rows.forEach(function (r) {
+        var ops = [];
+        if (tab === 'pending' && isAdmin) {
+          ops.push(h('button', { class: 'btn-link', text: '通过', onclick: function () { decide(r.id, true); } }));
+          ops.push(' ');
+          ops.push(h('button', { class: 'btn-link danger', text: '驳回', onclick: function () { decide(r.id, false); } }));
+        } else if (tab === 'mine' && r.status === 'pending') {
+          ops.push(h('button', { class: 'btn-link danger', text: '撤回', onclick: function () {
+            confirmBox('确定撤回这条申请吗?', true).then(function (yes) {
+              if (!yes) return;
+              DEL('/api/approval/' + r.id).then(function () { toast('已撤回'); load(); }).catch(function (e) { toast(e.message || '撤回失败', 'err'); });
+            });
+          } }));
+        }
+        tb.appendChild(h('tr', {},
+          h('td', { text: r.type === 'leave' ? '休假' : '在外' }),
+          h('td', {}, h('b', { text: r.applicantName || '—' })),
+          h('td', { text: payloadSummary(r.type, r.payload) }),
+          h('td', {}, statusBadge(r.status)),
+          h('td', { text: String(r.createdAt || '').replace('T', ' ').slice(5, 16) }),
+          h('td', { text: r.approveComment || '—' }),
+          h('td', { style: 'white-space:nowrap' }, ops.length ? h('span', {}, ops) : h('span', { text: '—', style: 'color:var(--c-muted,#8a97a8)' }))));
+      });
+      listBox.appendChild(h('div', { class: 'panel', style: 'padding:0' }, h('div', { class: 'table-wrap' }, table)));
+    }).catch(function (e) {
+      listBox.innerHTML = '';
+      listBox.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败' }));
+    });
+  }
+
+  /* 审批操作:通过/驳回 + 意见 */
+  function decide(id, ok) {
+    var commentInput = h('input', { type: 'text', class: 'input', placeholder: ok ? '审批意见(选填)' : '驳回原因(建议填写)', style: 'width:100%' });
+    var m = openModal({
+      title: ok ? '通过申请' : '驳回申请',
+      body: h('div', {},
+        h('label', { text: '意见', style: 'display:block;margin-bottom:4px;font-size:13px;color:var(--c-sub,#66788c)' }), commentInput,
+        ok ? h('div', { style: 'font-size:12px;color:var(--c-sub,#66788c);margin-top:6px', text: '通过后将自动创建对应登记(休假/在外),人员状态随之联动。' }) : null),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: ok ? '确认通过' : '确认驳回', onclick: function () {
+          PUT('/api/approval/' + id + '/' + (ok ? 'approve' : 'reject'), { comment: commentInput.value.trim() })
+            .then(function () { m.close(); toast(ok ? '已通过并自动登记' : '已驳回'); load(); })
+            .catch(function (e) { toast(e.message || '操作失败', 'err'); });
+        } })
+      ]
+    });
+    commentInput.focus();
+  }
+
+  /* 新建申请:先选类型再填表单 */
+  function openApprovalType() {
+    var m = openModal({
+      title: '新建申请 - 选择类型',
+      body: h('div', { style: 'display:flex;gap:12px;justify-content:center;padding:14px 0' },
+        h('button', { class: 'btn btn-primary', text: '休 假 申 请', style: 'padding:10px 22px', onclick: function () { m.close(); openApprovalForm('leave'); } }),
+        h('button', { class: 'btn btn-primary', text: '在 外 申 请', style: 'padding:10px 22px', onclick: function () { m.close(); openApprovalForm('out'); } })),
+      footer: [h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } })]
+    });
+  }
+
+  function openApprovalForm(type) {
+    var fields = [
+      { key: '_pidQuick', label: '身份证号', placeholder: '输入证件号自动带出人员' },
+      { key: 'applicantId', label: '申请人员', type: 'personnel', required: true }
+    ];
+    if (type === 'leave') {
+      fields.push({ key: 'leaveType', label: '休假类型', type: 'select', required: true, options: function () { return dictLabels('leave_type'); } });
+      fields.push({ key: 'startDate', label: '开始日期', type: 'date', required: true });
+      fields.push({ key: 'endDate', label: '结束日期', type: 'date', required: true });
+      fields.push({ key: 'days', label: '天数', type: 'number' });
+    } else {
+      fields.push({ key: 'reason', label: '在外事由', type: 'select', required: true, options: function () { var l = dictLabels('absence_reason'); return l.length ? l : ['出差', '学习', '其他']; } });
+      fields.push({ key: 'leaveDate', label: '离开日期', type: 'date', required: true });
+      fields.push({ key: 'expectedReturnDate', label: '预计返回', type: 'date' });
+    }
+    fields.push({ key: 'remark', label: '备注', type: 'textarea', span: 'full', placeholder: '申请说明(选填)' });
+    var form = buildForm(fields, {});
+    var pidInput = form.inputs._pidQuick;
+    if (pidInput) {
+      var pidHint = h('div', { style: 'font-size:12px;margin-top:3px;min-height:16px;color:var(--c-sub,#66788c)', text: '' });
+      pidInput.closest('.form-item').appendChild(pidHint);
+      pidInput.addEventListener('change', function () {
+        var v = pidInput.value.trim();
+        if (!v) return;
+        GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
+          form.inputs.applicantId.value = String(p.id);
+          var ev = document.createEvent('HTMLEvents');
+          ev.initEvent('change', false, true);
+          form.inputs.applicantId.dispatchEvent(ev);
+          pidHint.textContent = '已带出:' + (p.name || '') + ' / ' + v;
+          pidHint.style.color = 'var(--pri,#2f6fd6)';
+          pidInput.value = '';
+        }).catch(function () {
+          pidHint.textContent = '未找到该证件号对应人员';
+          pidHint.style.color = 'var(--c-danger,#d9463e)';
+        });
+      });
+    }
+    var m = openModal({
+      title: (type === 'leave' ? '休假' : '在外') + '申请',
+      wide: true,
+      body: form.el,
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '取消', onclick: function () { m.close(); } }),
+        h('button', { class: 'btn btn-primary', text: '提交申请', onclick: function () {
+          var data = form.get();
+          if (!data) return;
+          if (!data.applicantId) { toast('请选择申请人员', 'err'); return; }
+          var payload = type === 'leave'
+            ? { leaveType: data.leaveType, startDate: data.startDate, endDate: data.endDate, days: data.days, remark: data.remark }
+            : { reason: data.reason, leaveDate: data.leaveDate, expectedReturnDate: data.expectedReturnDate, remark: data.remark };
+          POST('/api/approval', { type: type, applicantId: Number(data.applicantId), payload: payload })
+            .then(function () { m.close(); toast('申请已提交,等待审批'); tab = 'mine'; renderTabs(); load(); })
+            .catch(function (e) { toast(e.message || '提交失败', 'err'); });
+        } })
+      ]
+    });
+  }
+
+  var tabBar = h('div', { style: 'display:flex;gap:6px;align-items:center;margin-bottom:14px' });
+  function renderTabs() {
+    tabBar.innerHTML = '';
+    var tabs = [['mine', '我的申请']];
+    if (isAdmin) { tabs.push(['pending', '待审批']); }
+    tabs.forEach(function (t) {
+      tabBar.appendChild(h('button', {
+        type: 'button', class: 'btn ' + (tab === t[0] ? 'btn-primary' : 'btn-ghost'),
+        text: t[1], style: 'border-radius:16px 16px 0 0',
+        onclick: function () { tab = t[0]; renderTabs(); load(); }
+      }));
+    });
+    tabBar.appendChild(h('button', {
+      type: 'button', class: 'btn btn-ghost', text: '＋ 新建申请',
+      style: 'border-radius:16px 16px 0 0;border-style:dashed', onclick: openApprovalType
+    }));
+  }
+
+  renderTabs();
+  root.appendChild(tabBar);
+  root.appendChild(listBox);
+  load();
+  function render(content) {
+    content.innerHTML = '';
+    content.appendChild(root);
+  }
+  return { render: render };
+}
+
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg, approvalCfg];
 var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
@@ -11055,7 +11313,8 @@ var NAV_GROUPS = [
   { key: 'personnel-group', icon: 'users', label: '人员管理', children: [
     { key: 'personnel', label: '人员档案' },
     { key: 'absence', label: '在外登记' },
-    { key: 'organization', label: '组织建设' }
+    { key: 'organization', label: '组织建设' },
+    { key: 'approval', label: '审批中心' }
   ] },
   { key: 'military', icon: 'flag', label: '军事管理', children: [
     { key: 'military', label: '军事考核' },
@@ -11129,7 +11388,7 @@ function renderShell() {
       NAV_VIEWS.forEach(function (m) { if (m.key === view) cfg = m; });
       if (!cfg) { cfg = personnelCfg; view = 'personnel'; }
       titleEl.textContent = cfg.title;
-      comp = cfg.pending ? pendingModuleView(cfg) : cfg.key === 'double-excellence' ? doubleExcellenceView() : cfg.key === 'annual-appraisal' ? annualAppraisalView() : cfg.key === 'organization' ? organizationView() : crudView(cfg);
+      comp = cfg.pending ? pendingModuleView(cfg) : cfg.key === 'double-excellence' ? doubleExcellenceView() : cfg.key === 'annual-appraisal' ? annualAppraisalView() : cfg.key === 'organization' ? organizationView() : cfg.key === 'approval' ? approvalView() : crudView(cfg);
     }
     comp.render(content);
   }
@@ -11197,6 +11456,31 @@ function renderShell() {
     titleEl,
     h('div', { class: 'topbar-user' },
       h('span', { class: 'who', text: who }),
+      (function () { // 消息铃铛:未读数轮询(30秒)+点击打开消息中心
+        var bell = h('button', { type: 'button', 'aria-label': '消息通知', title: '消息通知', text: '🔔',
+          style: 'background:none;border:none;cursor:pointer;font-size:17px;position:relative;padding:4px 8px;color:var(--c-body,#34435c)' });
+        var badge = h('span', { style: 'display:none;position:absolute;top:0;right:0;background:var(--c-danger,#d9463e);color:#fff;font-size:10px;line-height:1;padding:2px 5px;border-radius:8px;min-width:8px;text-align:center' });
+        bell.appendChild(badge);
+        var timer = (typeof setInterval === 'function') ? setInterval(function () {
+          if (!currentShell()) { clearInterval(timer); return; }
+          GET('/api/message/unread-count').then(function (r) {
+            if (!currentShell()) { clearInterval(timer); return; }
+            var n = r && r.count ? +r.count : 0;
+            badge.style.display = n ? '' : 'none';
+            badge.textContent = n > 99 ? '99+' : String(n);
+          }).catch(function () { /* 静默 */ });
+        }, 30000) : null;
+        if (typeof setTimeout === 'function') { setTimeout(function () { // 首次拉取
+          if (!currentShell()) return;
+          GET('/api/message/unread-count').then(function (r) {
+            var n = r && r.count ? +r.count : 0;
+            badge.style.display = n ? '' : 'none';
+            badge.textContent = n > 99 ? '99+' : String(n);
+          }).catch(function () { /* 静默 */ });
+        }, 500); }
+        bell.addEventListener('click', function () { openMessageCenter(); });
+        return bell;
+      })(),
       h('div', { class: 'topbar-avatar-wrap' },
         h('button', {
           class: 'topbar-avatar', type: 'button', 'aria-label': '账号菜单', 'aria-haspopup': 'true', 'aria-expanded': 'false',
