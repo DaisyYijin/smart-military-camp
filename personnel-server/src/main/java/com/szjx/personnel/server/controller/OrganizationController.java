@@ -271,6 +271,13 @@ public class OrganizationController {
             sheet.setColumnWidth(3 + ci, w * 256);
         }
 
+        // 打印设置:A4 横向,缩放至一页宽(列多时完整铺开)
+        sheet.getPrintSetup().setLandscape(true);
+        sheet.getPrintSetup().setPaperSize(PrintSetup.A4_PAPERSIZE);
+        sheet.setFitToPage(true);
+        sheet.getPrintSetup().setFitWidth((short) 1);
+        sheet.getPrintSetup().setFitHeight((short) 0);
+
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         wb.write(out);
         wb.close();

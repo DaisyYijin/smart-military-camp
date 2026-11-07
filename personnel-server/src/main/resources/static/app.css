@@ -1149,7 +1149,8 @@ tr.row-flash td { animation: rowflash 2.2s ease; }
 .dict-sort-cell { width: 32px; cursor: move; user-select: none; white-space: nowrap; }
 .dict-drag-handle { color: #b0bccb; margin-right: 4px; }
 .dept-drag-handle { color: #b0bccb; margin-right: 4px; cursor: grab; user-select: none; }
-.dept-row.dict-dragging, tr.dict-dragging { opacity: .5; transform: scale(1.012) rotate(.3deg); box-shadow: 0 10px 26px rgba(23, 43, 77, .22); }
+.dept-row.dict-dragging, tr.dict-dragging { opacity: .5; box-shadow: 0 10px 26px rgba(23, 43, 77, .22); }
+/* 注:拖动态不加 scale/rotate——transform 会让拖拽跟随图与命中判定错位,导致"拖不动/换不了" */
 .dept-row.dict-dragging td, tr.dict-dragging td { background: var(--c-hover, #eef4fd); }
 /* 落点指示线脉动:吸引用户注意插入位置 */
 @keyframes dropLinePulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }

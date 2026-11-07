@@ -1300,6 +1300,46 @@ function loadRowPhotos(root) {
 
 /* ================= 表单构建 ================= */
 
+/* 人员选择字段附件:选中后在下拉下方显示头像(有照片显示照片,无照片显示姓名首字),帮助确认是否选对了人 */
+function attachPersonnelAvatar(dd, ddOpts, wrap) {
+  if (!wrap) return;
+  var box = h('div', { style: 'display:none;margin-top:4px' });
+  var img = h('div', { style: 'width:36px;height:44px;background-size:cover;background-position:center;border-radius:4px;border:1px solid var(--c-border,#c5cdd8);display:none' });
+  var fallback = h('div', { style: 'width:36px;height:44px;border-radius:4px;border:1px dashed var(--c-border,#c5cdd8);display:none;align-items:center;justify-content:center;font-size:18px;color:var(--c-muted,#8a97a8);background:var(--c-card,#f6f8fb)' });
+  box.appendChild(img); box.appendChild(fallback);
+  wrap.appendChild(box);
+  function show(pid) {
+    if (!pid) { box.style.display = 'none'; return; }
+    var name = '';
+    for (var i = 0; i < ddOpts.length; i++) {
+      if (ddOpts[i].v === String(pid)) { name = String(ddOpts[i].l || '').split(' ')[0]; break; }
+    }
+    fallback.textContent = name ? name.charAt(0) : '?';
+    // 环境不完整(如无照片接口)时直接显示姓名首字兜底
+    if (typeof apiBlob !== 'function' || typeof URL === 'undefined' || !URL.createObjectURL || !Ctx || !Ctx.photoUrls) {
+      img.style.display = 'none'; fallback.style.display = 'flex'; box.style.display = '';
+      return;
+    }
+    var key = 'p' + pid;
+    if (Ctx.photoUrls[key]) {
+      img.style.display = ''; fallback.style.display = 'none';
+      img.style.backgroundImage = 'url("' + Ctx.photoUrls[key] + '")'; box.style.display = '';
+      return;
+    }
+    apiBlob('/api/personnel/' + pid + '/photo').then(function (r) {
+      var url = URL.createObjectURL(r.blob);
+      Ctx.photoUrls[key] = url;
+      img.style.display = ''; fallback.style.display = 'none';
+      img.style.backgroundImage = 'url("' + url + '")'; box.style.display = '';
+    }).catch(function () {
+      img.style.display = 'none'; fallback.style.display = 'flex';
+      box.style.display = '';
+    });
+  }
+  dd.addEventListener('change', function () { show(dd.value); });
+  if (dd.value) { setTimeout(function () { show(dd.value); }, 0); }
+}
+
 function buildForm(fields, values, extraPanels) {
   values = values || {};
   extraPanels = extraPanels || {};
@@ -1362,6 +1402,7 @@ function buildForm(fields, values, extraPanels) {
       }
       el = makeDropdown(ddOpts, f.placeholder || (f.type === 'dept' && !f.required ? '(不指定)' : '请选择'));
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
+      if (f.type === 'personnel') { attachPersonnelAvatar(el, ddOpts, wrap); }
     } else if (f.type === 'date') {
       el = makeDateField();
       if (val !== undefined && val !== null && String(val) !== '') el.value = String(val);
@@ -10562,8 +10603,8 @@ function organizationView() {
     table.appendChild(h('thead', {}, h('tr', {}, headCells)));
     var tb = h('tbody');
 
-    // 拖拽排序状态
-    var dragRow = null, dropRow = null, dropAfter = false, dragMoved = false, ordering = false;
+    // 拖拽排序状态(ordering 已移除:允许连续拖拽,排序按最后一次提交的完整顺序覆盖生效)
+    var dragRow = null, dropRow = null, dropAfter = false, dragMoved = false;
     function clearMarks() {
       $all('tr.dict-drop-before, tr.dict-drop-after', tb).forEach(function (r) {
         r.classList.remove('dict-drop-before', 'dict-drop-after');
@@ -10577,16 +10618,15 @@ function organizationView() {
       dragMoved = false;
       var ids = [];
       $all('tr[data-mid]', tb).forEach(function (r) { ids.push(Number(r.getAttribute('data-mid'))); });
-      if (ids.length < 2 || ordering) return;
+      if (ids.length < 2) return;
       // 拖拽落定后立即按新顺序重排序号(不等服务器响应)
       $all('tr[data-mid]', tb).forEach(function (r, i) {
         var idxTd = r.querySelector('.idx-td');
         if (idxTd) { idxTd.textContent = String(i + 1); }
       });
-      ordering = true;
       PUT('/api/organization/' + currentOrg.id + '/members/reorder', { ids: ids })
-        .then(function () { toast('排序已保存'); ordering = false; })
-        .catch(function (e) { toast(e.message || '排序保存失败', 'err'); ordering = false; loadDetail(); });
+        .then(function () { toast('排序已保存'); })
+        .catch(function (e) { toast(e.message || '排序保存失败', 'err'); loadDetail(); });
     }
 
     if (!members.length) {
@@ -10628,7 +10668,6 @@ function organizationView() {
       tr.setAttribute('data-mid', String(m.id));
       tr.setAttribute('draggable', 'true');
       tr.addEventListener('dragstart', function (e) {
-        if (ordering) { if (e.preventDefault) e.preventDefault(); return; }
         dragRow = tr; dragMoved = false; dropRow = null;
         tr.classList.add('dict-dragging');
         if (e.dataTransfer) { try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(m.id)); } catch (err) {} }
@@ -10637,10 +10676,11 @@ function organizationView() {
         if (!dragRow || dragRow === tr) return;
         if (e.preventDefault) e.preventDefault();
         var rect = tr.getBoundingClientRect();
-        dropAfter = e.clientY > rect.top + (rect.bottom - rect.top) / 2;
+        var after = e.clientY > rect.top + (rect.bottom - rect.top) / 2;
+        if (dropRow === tr && dropAfter === after) return; // 目标行/侧未变不重绘指示线(高频节流)
+        dropAfter = after; dropRow = tr;
         clearMarks();
         tr.classList.add(dropAfter ? 'dict-drop-after' : 'dict-drop-before');
-        dropRow = tr;
       });
       tr.addEventListener('drop', function (e) {
         if (!dragRow || !dropRow || dragRow === dropRow) return;
@@ -10753,6 +10793,9 @@ function organizationView() {
       if (!v) return;
       GET('/api/personnel/by-idcard?idCard=' + encodeURIComponent(v)).then(function (p) {
         form.inputs.personnelId.value = String(p.id);
+        var ev = document.createEvent('HTMLEvents');
+        ev.initEvent('change', false, true);
+        form.inputs.personnelId.dispatchEvent(ev);
         pidHint.textContent = '已带出:' + (p.name || '') + ' / ' + v;
         pidHint.style.color = 'var(--pri,#2f6fd6)';
         pidInput.value = '';
