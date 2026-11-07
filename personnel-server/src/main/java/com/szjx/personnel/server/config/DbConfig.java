@@ -1,22 +1,47 @@
 package com.szjx.personnel.server.config;
 
 import com.szjx.personnel.server.util.Db;
+import com.szjx.personnel.server.util.DbProfile;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 
 /**
- * JdbcTemplate 装配:统一走 DialectJdbcTemplate,所有 String SQL 在执行前经 Db.rewrite()
- * 按当前方言转换(SQLite 直通零开销)。替代 Spring Boot 默认的 JdbcTemplate Bean。
+ * 数据源与 JdbcTemplate 装配:
+ *  - DataSource:默认 SQLite(application.yml 原行为);data/db-config.json 配置了外部库
+ *    (mysql|postgresql|kingbase|dm)时改连外部库(驱动从运行目录 lib/ 动态加载)。
+ *  - JdbcTemplate:统一走 DialectJdbcTemplate,所有 String SQL 执行前经 Db.rewrite()
+ *    按当前方言转换(SQLite 直通零开销)。
  */
 @Configuration
 public class DbConfig {
+
+    @Bean
+    @Primary
+    public DataSource dataSource(Environment env) {
+        DbProfile profile = DbProfile.load();
+        if (profile.external()) {
+            Db.setDialect(profile.dialect);
+            DbProfile.loadExternalDrivers();
+            DriverManagerDataSource ds = new DriverManagerDataSource(profile.url(), profile.user, profile.password);
+            return ds;
+        }
+        Db.setDialect("sqlite");
+        // 未配置外部库:沿用 application.yml 的 SQLite 连接(保持原相对路径与 WAL 参数)
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setUrl(env.getProperty("spring.datasource.url"));
+        ds.setDriverClassName(env.getProperty("spring.datasource.driver-class-name"));
+        return ds;
+    }
 
     @Bean
     public JdbcTemplate jdbcTemplate(DataSource dataSource) {

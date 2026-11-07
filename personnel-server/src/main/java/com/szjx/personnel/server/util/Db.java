@@ -185,16 +185,9 @@ public final class Db {
     /** 建表方言改写:自增主键/TEXT 类型与时间默认值映射;达梦剥 IF NOT EXISTS(配合 createTable 先探存在)。 */
     public static String rewriteDdl(String ddl) {
         if (sqlite()) { return ddl; }
-        String s = rewrite(ddl);
-        // 自增主键
-        if (P_PK_AUTOINC.matcher(s).find()) {
-            String pk;
-            if ("mysql".equals(dialect)) { pk = "BIGINT AUTO_INCREMENT PRIMARY KEY"; }
-            else if ("dm".equals(dialect)) { pk = "BIGINT IDENTITY(1,1) PRIMARY KEY"; }
-            else { pk = "BIGSERIAL PRIMARY KEY"; } // pg / kingbase
-            s = P_PK_AUTOINC.matcher(s).replaceAll(Matcher.quoteReplacement(pk));
-        }
-        // TEXT DEFAULT (datetime(...)) → 各库字符串时间默认
+        String s = ddl;
+        // 0) TEXT DEFAULT (datetime('now','localtime')) → 必须先于通用时间改写(否则 rewrite 会先把
+        //    datetime 换成 NOW(),导致本条 DDL 专属映射落空、时间列类型不对)
         if (P_TEXT_NOW_DEFAULT.matcher(s).find()) {
             String rep;
             if ("mysql".equals(dialect)) { rep = "VARCHAR(32) DEFAULT (NOW())"; }
@@ -202,15 +195,24 @@ public final class Db {
             else { rep = "TEXT DEFAULT to_char(LOCALTIMESTAMP,'YYYY-MM-DD HH24:MI:SS')"; }
             s = P_TEXT_NOW_DEFAULT.matcher(s).replaceAll(Matcher.quoteReplacement(rep));
         }
-        // TEXT DEFAULT '...' / TEXT NOT NULL DEFAULT ... → MySQL/达梦 VARCHAR(255)(TEXT 列不能带常量默认)
+        // 1) 自增主键
+        if (P_PK_AUTOINC.matcher(s).find()) {
+            String pk;
+            if ("mysql".equals(dialect)) { pk = "BIGINT AUTO_INCREMENT PRIMARY KEY"; }
+            else if ("dm".equals(dialect)) { pk = "BIGINT IDENTITY(1,1) PRIMARY KEY"; }
+            else { pk = "BIGSERIAL PRIMARY KEY"; } // pg / kingbase
+            s = P_PK_AUTOINC.matcher(s).replaceAll(Matcher.quoteReplacement(pk));
+        }
+        // 2) TEXT DEFAULT 常量 → MySQL/达梦 VARCHAR(255)(TEXT 列不能带常量默认)
         if (mysqlLike()) {
             s = P_TEXT_DEFAULT.matcher(s).replaceAll("VARCHAR(255)$1$2");
         }
-        // 达梦不支持 IF NOT EXISTS(建表前由 createTable 探存在)
+        // 3) 达梦不支持 IF NOT EXISTS(建表前由 createTable 探存在)
         if ("dm".equals(dialect)) {
             s = s.replaceFirst("(?i)CREATE TABLE IF NOT EXISTS", "CREATE TABLE");
         }
-        return s;
+        // 4) 兜底:余下如有通用时间函数(理论已无)再走 DML 改写
+        return rewrite(s);
     }
 
     /** 建表入口:统一走 rewriteDdl;达梦先探存在再建(其不支持 IF NOT EXISTS)。 */
