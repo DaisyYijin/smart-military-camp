@@ -42,11 +42,6 @@ STAGE="$(mktemp -d "$PKG/.stage.XXXXXX")"
 trap 'if [ -n "$STAGE" ] && [ -d "$STAGE" ]; then rm -rf -- "$STAGE"; fi' EXIT
 printf '本次发行目录: %s\n仅本目录中的文件属于本次构建；旧目录不删除、不混入。\n' "$DIST"
 
-copy_security_docs() {
-  cp "$PKG/templates/tls.example.yml" "$1/"
-  cp "$ROOT/docs/部署安全与恢复说明.md" "$1/"
-}
-
 zip_one() { # $1=待打包目录 $2=zip 输出
   if command -v zip >/dev/null 2>&1; then
     (cd "$(dirname "$1")" && zip -qr "$2" "$(basename "$1")")
@@ -79,7 +74,6 @@ if [ -d "$ZULU8/jre" ]; then
   W="$STAGE/数智军营-win64"
   mkdir -p "$W"
   cp "$JAR" "$W/"
-  copy_security_docs "$W"
   cp "$PKG/templates/win/启动系统.bat" "$W/"
   # 说明文本转 GBK:中文 Windows 记事本的默认编码,Win7/Win10 均正常显示
   iconv -f UTF-8 -t GBK "$PKG/templates/win/使用说明.txt" > "$W/使用说明.txt" 2>/dev/null || cp "$PKG/templates/win/使用说明.txt" "$W/"
@@ -97,12 +91,8 @@ for arch in x64 arm64; do
     L="$STAGE/数智军营-linux-$arch"
     mkdir -p "$L"
     cp "$JAR" "$L/"
-    copy_security_docs "$L"
     cp "$PKG/templates/linux/start.sh" "$L/"
     cp "$PKG/templates/linux/README.txt" "$L/"
-    cp "$PKG/templates/linux/创建桌面图标.sh" "$L/"
-    cp "$PKG/templates/linux/数智军营人员管理系统.desktop" "$L/"
-    chmod +x "$L/start.sh" "$L/创建桌面图标.sh"
     cp -r "$JR" "$L/jre"
     fix_exec_bits "$L/jre"
     targz_one "$L" "$DIST/数智军营-linux-$arch.tar.gz"
@@ -116,12 +106,8 @@ echo "==> [4/4] Linux 通用包(不含 JRE)"
 L="$STAGE/数智军营-linux"
 mkdir -p "$L"
 cp "$JAR" "$L/"
-copy_security_docs "$L"
 cp "$PKG/templates/linux/start.sh" "$L/"
 cp "$PKG/templates/linux/README.txt" "$L/"
-cp "$PKG/templates/linux/创建桌面图标.sh" "$L/"
-cp "$PKG/templates/linux/数智军营人员管理系统.desktop" "$L/"
-chmod +x "$L/start.sh" "$L/创建桌面图标.sh"
 targz_one "$L" "$DIST/数智军营-linux.tar.gz"
 echo "    -> $DIST/数智军营-linux.tar.gz"
 
