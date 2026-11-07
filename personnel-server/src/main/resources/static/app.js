@@ -8030,10 +8030,10 @@ function lateNightCare() {
   try {
     var hr = new Date().getHours();
     if (hr < 23 && hr >= 5) { return; }
-    var key = 'egg-night-' + new Date().toDateString();
+    var key = 'egg-night-' + (hr >= 23 ? new Date(Date.now() - 864e5).toDateString() : new Date().toDateString());
     if (localStorage.getItem(key)) { return; }
     localStorage.setItem(key, '1');
-    setTimeout(function () { toast('夜深了,注意休息 🌙', ''); }, 2000);
+    setTimeout(function () { toast('夜深了,注意休息 🌙'); }, 2000);
   } catch (e) { /* 彩蛋失败静默 */ }
 }
 
