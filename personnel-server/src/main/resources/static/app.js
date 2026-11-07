@@ -11428,7 +11428,8 @@ function renderShell() {
         onclick: function (e) { e.stopPropagation(); navigate(c.key); }
       },
         h('span', { class: 'dot' }),
-        h('span', { class: 'txt', text: c.label }));
+        h('span', { class: 'txt', text: c.label }),
+        c.key === 'approval' ? h('span', { class: 'approval-pending-badge', style: 'display:none;margin-left:auto;background:var(--c-danger,#d9463e);color:#fff;font-size:11px;line-height:1;padding:2px 7px;border-radius:9px;min-width:10px;text-align:center;flex:none' }) : null);
       children.appendChild(sub);
       menuItems[c.key] = sub;
     });
@@ -11480,6 +11481,25 @@ function renderShell() {
         }, 500); }
         bell.addEventListener('click', function () { openMessageCenter(); });
         return bell;
+      })(),
+      (function () { // 审批待办徽标:管理员定期刷新(60秒),侧栏「审批中心」旁显示待审批数
+        if (!USER || USER.isAdmin !== true) { return null; }
+        function refreshApprovalBadge() {
+          GET('/api/approval/pending-count').then(function (r) {
+            if (!currentShell()) { return; }
+            var n = r && r.count ? +r.count : 0;
+            $all('.approval-pending-badge', document).forEach(function (b) {
+              b.style.display = n ? '' : 'none';
+              b.textContent = n > 99 ? '99+' : String(n);
+            });
+          }).catch(function () { /* 静默:非管理员或网络异常 */ });
+        }
+        var apTimer = (typeof setInterval === 'function') ? setInterval(function () {
+          if (!currentShell()) { clearInterval(apTimer); return; }
+          refreshApprovalBadge();
+        }, 60000) : null;
+        if (typeof setTimeout === 'function') { setTimeout(refreshApprovalBadge, 800); }
+        return null;
       })(),
       h('div', { class: 'topbar-avatar-wrap' },
         h('button', {

@@ -33,6 +33,16 @@ public class ApprovalController {
         this.absenceService = absenceService;
     }
 
+    /** 待审批数量(侧栏徽标轮询,仅管理员可查)。 */
+    @GetMapping("/pending-count")
+    public ApiResponse pendingCount() {
+        DataScope.requireAdmin();
+        Long n = jdbc.queryForObject("SELECT COUNT(*) FROM approval_request WHERE status='pending'", Long.class);
+        Map<String, Object> m = new LinkedHashMap<String, Object>();
+        m.put("count", n == null ? 0 : n);
+        return ApiResponse.ok(m);
+    }
+
     /** 列表:管理员看全部,子账号只看自己提交的 */
     @GetMapping
     public ApiResponse list(@RequestParam(required = false) String status) {
@@ -74,8 +84,9 @@ public class ApprovalController {
         jdbc.update("INSERT INTO approval_request(type, applicant_id, created_by, payload, status) VALUES(?,?,?,?,'pending')",
                 type, applicantId, me.userId, payload);
         String label = "leave".equals(type) ? "休假" : "在外";
-        // 通知管理员有待审批申请
-        for (Map<String, Object> admin : jdbc.queryForList("SELECT id FROM admin_user WHERE username='admin'")) {
+        // 通知全部管理员账号(顶级账号 parent_id=0 且启用),而非仅 admin 用户名
+        for (Map<String, Object> admin : jdbc.queryForList(
+                "SELECT id FROM admin_user WHERE parent_id=0 AND enabled=1")) {
             MessageController.sendSystem(jdbc, ((Number) admin.get("id")).longValue(),
                     "新" + label + "申请",
                     String.valueOf(person.get(0).get("name")) + " 的" + label + "申请待审批,请到「审批中心」处理。");
