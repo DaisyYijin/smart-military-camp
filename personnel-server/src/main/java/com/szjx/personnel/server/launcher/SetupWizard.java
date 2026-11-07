@@ -2,7 +2,7 @@ package com.szjx.personnel.server.launcher;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JFrame;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -46,13 +46,7 @@ public class SetupWizard extends javax.swing.JDialog {
     private final Result result = new Result();
 
     private JTextField portField;
-    private javax.swing.JComboBox<String> dbTypeBox;
-    private JTextField dbHostField;
-    private JTextField dbPortField;
-    private JTextField dbNameField;
-    private JTextField dbUserField;
-    private javax.swing.JPasswordField dbPwField;
-    private JLabel dbTestLabel;
+    private JLabel dbSummaryLabel;
     private JTextField userField;
     private JLabel statusLabel;
     private JPanel suggestionPanel;
@@ -181,111 +175,27 @@ public class SetupWizard extends javax.swing.JDialog {
         gc.gridx = 1;
         root.add(pw2Field, gc);
 
-        // ---- 数据库(可选):单机默认内置 SQLite,局域网/服务器可选外部库 ----
+        // ---- 数据库(可选):默认内置 SQLite,点「数据库设置…」弹窗配置 ----
         root.add(new javax.swing.JSeparator(), gbcRow(gc, row++));
-        JLabel dbTitle = new JLabel("数据库(单机默认内置,可不修改)");
-        dbTitle.setFont(dbTitle.getFont().deriveFont(Font.BOLD, 21f));
-        gc.gridx = 0;
-        gc.gridwidth = 3;
-        gc.gridy = row++;
-        root.add(dbTitle, gc);
-        gc.gridwidth = 1;
-
-        final com.szjx.personnel.server.util.DbProfile profile = com.szjx.personnel.server.util.DbProfile.load();
         gc.gridy = row++;
         gc.gridx = 0;
-        root.add(lbl("数据库类型:"), gc);
-        dbTypeBox = new javax.swing.JComboBox<String>(new String[]{
-                "内置 SQLite(单机推荐)", "MySQL / MariaDB", "PostgreSQL", "人大金仓 KingbaseES", "达梦 DM8"});
-        dbTypeBox.setFont(dbTypeBox.getFont().deriveFont(Font.PLAIN, 18f));
-        dbTypeBox.setPreferredSize(new Dimension(280, 40));
-        dbTypeBox.setSelectedIndex(
-                "mysql".equals(profile.dialect) ? 1 : "postgresql".equals(profile.dialect) ? 2
-                : "kingbase".equals(profile.dialect) ? 3 : "dm".equals(profile.dialect) ? 4 : 0);
-        gc.gridx = 1;
-        root.add(dbTypeBox, gc);
-
-        dbHostField = new JTextField(profile.host, 16);
-        dbPortField = new JTextField(profile.port, 8);
-        dbNameField = new JTextField(profile.database, 16);
-        dbUserField = new JTextField(profile.user, 14);
-        dbPwField = new javax.swing.JPasswordField(profile.password == null ? "" : profile.password, 14);
-        final JTextField[] dbFields = {dbHostField, dbPortField, dbNameField, dbUserField, dbPwField};
-        final String[][] dbDefaults = {{"127.0.0.1", "3306"}, {"127.0.0.1", "5432"}, {"127.0.0.1", "54321"}, {"127.0.0.1", "5236"}};
-        for (JTextField f : dbFields) {
-            f.setFont(f.getFont().deriveFont(Font.PLAIN, 19f));
-            f.setPreferredSize(new Dimension(200, 38));
-        }
-        final Runnable syncDbFields = new Runnable() {
-            @Override public void run() {
-                int i = dbTypeBox.getSelectedIndex() - 1;
-                for (JTextField f : dbFields) { f.setEnabled(i >= 0); }
-                if (i >= 0) {
-                    if (dbHostField.getText().trim().isEmpty()) { dbHostField.setText(dbDefaults[i][0]); }
-                    if (dbPortField.getText().trim().isEmpty()) { dbPortField.setText(dbDefaults[i][1]); }
-                }
-            }
-        };
-        dbTypeBox.addActionListener(new ActionListener() {
-            @Override public void actionPerformed(ActionEvent e) { syncDbFields.run(); }
+        root.add(lbl("数据库:"), gc);
+        JPanel dbLine = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        dbSummaryLabel = new JLabel(" ");
+        dbSummaryLabel.setFont(dbSummaryLabel.getFont().deriveFont(Font.PLAIN, 17f));
+        dbLine.add(dbSummaryLabel);
+        JButton dbBtn = new JButton("数据库设置…");
+        dbBtn.setFont(dbBtn.getFont().deriveFont(Font.PLAIN, 16f));
+        dbBtn.setPreferredSize(new Dimension(150, 36));
+        dbBtn.putClientProperty("JButton.buttonType", "roundRect");
+        dbBtn.setFocusPainted(false);
+        dbBtn.addActionListener(new ActionListener() {
+            @Override public void actionPerformed(ActionEvent e) { openDbDialog(); }
         });
-
-        gc.gridy = row++;
-        gc.gridx = 0;
-        root.add(lbl("服务器地址:"), gc);
+        dbLine.add(dbBtn);
         gc.gridx = 1;
-        root.add(dbHostField, gc);
-        gc.gridy = row++;
-        gc.gridx = 0;
-        root.add(lbl("端口 / 库名:"), gc);
-        JPanel dbLine1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        dbLine1.add(dbPortField);
-        dbLine1.add(dbNameField);
-        gc.gridx = 1;
-        root.add(dbLine1, gc);
-        gc.gridy = row++;
-        gc.gridx = 0;
-        root.add(lbl("用户 / 密码:"), gc);
-        JPanel dbLine2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        dbLine2.add(dbUserField);
-        dbLine2.add(dbPwField);
-        gc.gridx = 1;
-        root.add(dbLine2, gc);
-        gc.gridy = row++;
-        gc.gridx = 0;
-        JButton dbTestBtn = new JButton("测试连接");
-        dbTestBtn.setFont(dbTestBtn.getFont().deriveFont(Font.PLAIN, 17f));
-        dbTestBtn.setPreferredSize(new Dimension(130, 38));
-        dbTestBtn.putClientProperty("JButton.buttonType", "roundRect");
-        dbTestBtn.setFocusPainted(false);
-        dbTestBtn.addActionListener(new ActionListener() {
-            @Override public void actionPerformed(ActionEvent e) {
-                if (dbTypeBox.getSelectedIndex() == 0) {
-                    dbTestLabel.setText("内置数据库无需测试。");
-                    return;
-                }
-                dbTestLabel.setText("正在连接…");
-                com.szjx.personnel.server.util.DbProfile p = com.szjx.personnel.server.util.DbProfile.load();
-                int i = dbTypeBox.getSelectedIndex();
-                p.dialect = i == 1 ? "mysql" : i == 2 ? "postgresql" : i == 3 ? "kingbase" : "dm";
-                p.host = dbHostField.getText().trim();
-                p.port = dbPortField.getText().trim();
-                p.database = dbNameField.getText().trim();
-                p.user = dbUserField.getText().trim();
-                p.password = new String(dbPwField.getPassword());
-                String err = p.testConnection();
-                dbTestLabel.setForeground(err == null ? new Color(30, 130, 70) : new Color(200, 40, 40));
-                dbTestLabel.setText(err == null ? "连接成功" : "失败: " + err);
-            }
-        });
-        root.add(dbTestBtn, gc);
-        dbTestLabel = new JLabel("选外部库时,请把驱动 jar 放入程序目录 lib/ 文件夹");
-        dbTestLabel.setFont(dbTestLabel.getFont().deriveFont(Font.PLAIN, 14f));
-        dbTestLabel.setForeground(new Color(120, 130, 145));
-        gc.gridx = 1;
-        gc.gridy = row++;
-        root.add(dbTestLabel, gc);
-        syncDbFields.run();
+        root.add(dbLine, gc);
+        refreshDbSummary();
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         JButton ok = new JButton(firstRun ? "保存并启动" : "启动系统");
@@ -441,33 +351,172 @@ public class SetupWizard extends javax.swing.JDialog {
             }
         }
 
-        // 数据库选择:写/清外部库配置(随后启动 Spring 时生效)
-        try {
-            com.szjx.personnel.server.util.DbProfile p = com.szjx.personnel.server.util.DbProfile.load();
-            int di = dbTypeBox.getSelectedIndex();
-            p.dialect = di == 1 ? "mysql" : di == 2 ? "postgresql" : di == 3 ? "kingbase" : di == 4 ? "dm" : "sqlite";
-            p.host = dbHostField.getText().trim();
-            p.port = dbPortField.getText().trim();
-            p.database = dbNameField.getText().trim();
-            p.user = dbUserField.getText().trim();
-            p.password = new String(dbPwField.getPassword());
-            if (di > 0 && (p.host.isEmpty() || p.database.isEmpty())) {
-                JOptionPane.showMessageDialog(this, "请填写外部数据库的服务器地址与库名。", "数据库配置不完整",
-                        JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            p.save();
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "数据库配置保存失败: " + ex.getMessage(), "保存失败",
-                    JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
         result.port = port;
         result.username = username;
         result.newPassword = pw.length() == 0 ? null : pw.toCharArray();
         result.confirmed = true;
         dispose();
+    }
+
+    /** 向导页摘要:内置或 外部库·地址:端口/库名。 */
+    private void refreshDbSummary() {
+        com.szjx.personnel.server.util.DbProfile p = com.szjx.personnel.server.util.DbProfile.load();
+        if (!p.external()) {
+            dbSummaryLabel.setText("内置 SQLite(单机推荐)");
+            return;
+        }
+        String n = "mysql".equals(p.dialect) ? "MySQL" : "postgresql".equals(p.dialect) ? "PostgreSQL"
+                : "kingbase".equals(p.dialect) ? "人大金仓" : "达梦";
+        dbSummaryLabel.setText(n + " · " + p.host + ":" + p.port + "/" + p.database);
+    }
+
+    /** 数据库设置弹窗:标签右对齐+字段等宽两列对齐;「确定」即保存并刷新摘要(随后的 Spring 启动读取生效)。 */
+    private void openDbDialog() {
+        final com.szjx.personnel.server.util.DbProfile profile = com.szjx.personnel.server.util.DbProfile.load();
+        final JDialog dlg = new JDialog(this, "数据库设置", true);
+        JPanel root = new JPanel(new GridBagLayout());
+        root.setBorder(BorderFactory.createEmptyBorder(18, 24, 14, 24));
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.insets = new Insets(7, 10, 7, 4);
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        final int[] rowRef = {0};
+
+        final javax.swing.JComboBox<String> typeBox = new javax.swing.JComboBox<String>(new String[]{
+                "内置 SQLite(单机推荐)", "MySQL / MariaDB", "PostgreSQL", "人大金仓 KingbaseES", "达梦 DM8"});
+        typeBox.setFont(typeBox.getFont().deriveFont(Font.PLAIN, 18f));
+        typeBox.setSelectedIndex(
+                "mysql".equals(profile.dialect) ? 1 : "postgresql".equals(profile.dialect) ? 2
+                : "kingbase".equals(profile.dialect) ? 3 : "dm".equals(profile.dialect) ? 4 : 0);
+
+        final JTextField hostF = new JTextField(profile.host, 18);
+        final JTextField portF = new JTextField(profile.port, 8);
+        final JTextField nameF = new JTextField(profile.database, 18);
+        final JTextField userF = new JTextField(profile.user, 16);
+        final JPasswordField pwF = new JPasswordField(profile.password == null ? "" : profile.password, 16);
+        final JTextField[] fields = {hostF, portF, nameF, userF, pwF};
+        for (JTextField f : fields) {
+            f.setFont(f.getFont().deriveFont(Font.PLAIN, 18f));
+            f.setPreferredSize(new Dimension(240, 38));
+        }
+        final String[][] defaults = {{"127.0.0.1", "3306"}, {"127.0.0.1", "5432"}, {"127.0.0.1", "54321"}, {"127.0.0.1", "5236"}};
+        final JLabel testLabel = new JLabel("选外部库时,请把驱动 jar 放入程序目录 lib/ 文件夹");
+        testLabel.setFont(testLabel.getFont().deriveFont(Font.PLAIN, 14f));
+        testLabel.setForeground(new Color(120, 130, 145));
+
+        final Runnable sync = new Runnable() {
+            @Override public void run() {
+                int i = typeBox.getSelectedIndex() - 1;
+                for (JTextField f : fields) { f.setEnabled(i >= 0); }
+                if (i >= 0) {
+                    if (hostF.getText().trim().isEmpty()) { hostF.setText(defaults[i][0]); }
+                    if (portF.getText().trim().isEmpty()) { portF.setText(defaults[i][1]); }
+                }
+            }
+        };
+        typeBox.addActionListener(new ActionListener() {
+            @Override public void actionPerformed(ActionEvent e) { sync.run(); }
+        });
+
+        // 两列对齐:标签列右对齐等宽,字段列同宽补满
+        final class Row {
+            void add(String label, java.awt.Component field) {
+                JLabel l = new JLabel(label, JLabel.RIGHT);
+                l.setFont(l.getFont().deriveFont(Font.PLAIN, 18f));
+                l.setPreferredSize(new Dimension(110, 38));
+                gc.gridx = 0; gc.gridy = rowRef[0]; gc.weightx = 0;
+                root.add(l, gc);
+                gc.gridx = 1; gc.weightx = 1;
+                root.add(field, gc);
+                rowRef[0]++;
+            }
+        }
+        Row r = new Row();
+        r.add("数据库类型:", typeBox);
+        r.add("服务器地址:", hostF);
+        r.add("端口:", portF);
+        r.add("数据库名:", nameF);
+        r.add("用户名:", userF);
+        r.add("密码:", pwF);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        JButton testBtn = new JButton("测试连接");
+        testBtn.setFont(testBtn.getFont().deriveFont(Font.PLAIN, 16f));
+        testBtn.setPreferredSize(new Dimension(120, 36));
+        testBtn.setFocusPainted(false);
+        testBtn.addActionListener(new ActionListener() {
+            @Override public void actionPerformed(ActionEvent e) {
+                if (typeBox.getSelectedIndex() == 0) {
+                    testLabel.setText("内置数据库无需测试。");
+                    testLabel.setForeground(new Color(120, 130, 145));
+                    return;
+                }
+                testLabel.setText("正在连接…");
+                com.szjx.personnel.server.util.DbProfile p = com.szjx.personnel.server.util.DbProfile.load();
+                int i = typeBox.getSelectedIndex();
+                p.dialect = i == 1 ? "mysql" : i == 2 ? "postgresql" : i == 3 ? "kingbase" : "dm";
+                p.host = hostF.getText().trim();
+                p.port = portF.getText().trim();
+                p.database = nameF.getText().trim();
+                p.user = userF.getText().trim();
+                p.password = new String(pwF.getPassword());
+                String err = p.testConnection();
+                testLabel.setForeground(err == null ? new Color(30, 130, 70) : new Color(200, 40, 40));
+                testLabel.setText(err == null ? "连接成功" : "失败: " + err);
+            }
+        });
+        actions.add(testBtn);
+        actions.add(testLabel);
+        gc.gridx = 0; gc.gridwidth = 2; gc.gridy = rowRef[0]++;
+        root.add(actions, gc);
+        gc.gridwidth = 1;
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JButton cancelBtn = new JButton("取消");
+        cancelBtn.setFont(cancelBtn.getFont().deriveFont(Font.PLAIN, 16f));
+        cancelBtn.setPreferredSize(new Dimension(100, 38));
+        cancelBtn.addActionListener(new ActionListener() {
+            @Override public void actionPerformed(ActionEvent e) { dlg.dispose(); }
+        });
+        JButton okBtn = new JButton("确定");
+        okBtn.setFont(okBtn.getFont().deriveFont(Font.PLAIN, 16f));
+        okBtn.setPreferredSize(new Dimension(100, 38));
+        okBtn.addActionListener(new ActionListener() {
+            @Override public void actionPerformed(ActionEvent e) {
+                try {
+                    com.szjx.personnel.server.util.DbProfile p = com.szjx.personnel.server.util.DbProfile.load();
+                    int i = typeBox.getSelectedIndex();
+                    p.dialect = i == 1 ? "mysql" : i == 2 ? "postgresql" : i == 3 ? "kingbase" : i == 4 ? "dm" : "sqlite";
+                    p.host = hostF.getText().trim();
+                    p.port = portF.getText().trim();
+                    p.database = nameF.getText().trim();
+                    p.user = userF.getText().trim();
+                    p.password = new String(pwF.getPassword());
+                    if (i > 0 && (p.host.isEmpty() || p.database.isEmpty())) {
+                        JOptionPane.showMessageDialog(dlg, "请填写服务器地址与数据库名。", "配置不完整",
+                                JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    p.save();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(dlg, "保存失败: " + ex.getMessage(), "保存失败",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                refreshDbSummary();
+                dlg.dispose();
+            }
+        });
+        btns.add(cancelBtn);
+        btns.add(okBtn);
+        gc.gridx = 0; gc.gridwidth = 2; gc.gridy = rowRef[0]++;
+        root.add(btns, gc);
+
+        sync.run();
+        dlg.setContentPane(root);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setResizable(false);
+        dlg.setVisible(true);
     }
 
     private void cancel() {
