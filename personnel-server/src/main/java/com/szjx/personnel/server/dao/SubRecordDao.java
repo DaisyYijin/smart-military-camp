@@ -16,6 +16,10 @@ import java.util.Map;
  * 两表结构一致(id, personnel_id, 业务字段若干, 备注, 时间戳),按表名参数化。
  */
 @Repository
+/**
+ * 子表记录 DAO:[受白名单保护] 动态拼接的表名/列名均经 checkTable()/cols 白名单校验,
+ * 表名仅限 SchemaInitializer 声明的固定子表集合,不存在注入风险。
+ */
 public class SubRecordDao {
 
     private final JdbcTemplate jdbc;

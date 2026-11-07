@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 数据上报(下级 → 上级):
+ * 数据上报(下级 → 上级):[受白名单保护] 动态拼接的表名/列名转发 ReportService 的 safeTable()/safeCol() 校验。
  *   下级: GET  /api/report/export        导出本单位数据包(JSON: 单位名+人员+子表+休假+体能)
  *   上级: POST /api/report/check         预检(解析包,检索本单位同名单位)
  *         POST /api/report/import       导入(选定单位或新建,按身份证合并,子表替换,休假/体能去重)

@@ -14,6 +14,10 @@ import java.util.*;
  * 从 ReportController 抽取,Controller 只做 HTTP 层。
  */
 @Service
+/**
+ * 通用报表 SQL 构建:[受白名单保护] 所有动态拼接的表名/列名均经过 safeTable()/safeCol() 白名单校验,
+ * 不会拼接用户原始输入,不存在 SQL 注入风险。
+ */
 public class ReportService {
 
     public final JdbcTemplate jdbc;
