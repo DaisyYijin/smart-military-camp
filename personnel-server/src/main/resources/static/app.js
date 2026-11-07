@@ -11457,8 +11457,11 @@ function renderShell() {
     h('div', { class: 'topbar-user' },
       h('span', { class: 'who', text: who }),
       (function () { // 消息铃铛:未读数轮询(30秒)+点击打开消息中心
-        var bell = h('button', { type: 'button', 'aria-label': '消息通知', title: '消息通知', html: iconSvg('bell'),
+        var bell = h('button', { type: 'button', 'aria-label': '消息通知', title: '消息通知',
           style: 'background:none;border:none;cursor:pointer;position:relative;padding:4px 6px;color:var(--c-body,#445262);display:inline-flex;align-items:center' });
+        bell.innerHTML = iconSvg('bell');
+        var bellSvg = bell.querySelector('svg');
+        if (bellSvg) { bellSvg.style.width = '18px'; bellSvg.style.height = '18px'; bellSvg.style.display = 'block'; }
         var badge = h('span', { style: 'display:none;position:absolute;top:0;right:0;background:var(--c-danger,#d9463e);color:#fff;font-size:10px;line-height:1;padding:2px 5px;border-radius:8px;min-width:8px;text-align:center' });
         bell.appendChild(badge);
         var timer = (typeof setInterval === 'function') ? setInterval(function () {
