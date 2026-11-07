@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,9 +50,8 @@ public class SubRecordDao {
             marks.append(",?");
             args.add(fields.get(c) == null ? "" : fields.get(c));
         }
-        Long id = jdbc.queryForObject("INSERT INTO " + table + "(" + colsSql + ") VALUES(" + marks + ") RETURNING id",
-                Long.class, args.toArray());
-        return id == null ? 0 : id;
+        return Db.id(jdbc, "INSERT INTO " + table + "(" + colsSql + ") VALUES(" + marks + ") RETURNING id",
+                args.toArray());
     }
 
     public void update(String table, long id, Map<String, String> fields, List<String> cols) {

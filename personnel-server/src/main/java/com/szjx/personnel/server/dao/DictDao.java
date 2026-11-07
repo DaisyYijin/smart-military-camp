@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.model.DictItem;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -78,10 +79,7 @@ public class DictDao {
     }
 
     public long insert(DictItem d) {
-        return jdbc.queryForObject(
-                "INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,?,?,?) RETURNING id",
-                Long.class,
-                d.getDictType(),
+        return Db.id(jdbc, "INSERT INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,?,?,?) RETURNING id", d.getDictType(),
                 d.getDictLabel(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getEnabled() != null && d.getEnabled() ? 1 : 0,

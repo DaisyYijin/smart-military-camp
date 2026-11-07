@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.model.AbsenceRecord;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,7 +42,7 @@ public class AbsenceDao {
     };
 
     private static final String BASE =
-            "SELECT a.*, IFNULL(p.name,'') AS personnel_name FROM absence_record a " +
+            "SELECT a.*, COALESCE(p.name,'') AS personnel_name FROM absence_record a " +
             "LEFT JOIN personnel p ON a.personnel_id = p.id ";
 
     public AbsenceRecord findById(Long id) {
@@ -52,10 +53,8 @@ public class AbsenceDao {
 
     public long insert(AbsenceRecord r) {
         DataScope.requirePerson(jdbc, r.getPersonnelId());
-        return jdbc.queryForObject(
-                "INSERT INTO absence_record(personnel_id, reason, leave_date, expected_return_date, actual_return_date, remark) " +
+        return Db.id(jdbc, "INSERT INTO absence_record(personnel_id, reason, leave_date, expected_return_date, actual_return_date, remark) " +
                 "VALUES(?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 r.getPersonnelId(), nvl(r.getReason()), nvl(r.getLeaveDate()),
                 nvl(r.getExpectedReturnDate()), nvl(r.getActualReturnDate()), nvl(r.getRemark()));
     }

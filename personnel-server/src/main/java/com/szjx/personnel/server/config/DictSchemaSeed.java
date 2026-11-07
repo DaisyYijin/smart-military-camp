@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.config;
 
+import com.szjx.personnel.server.util.Db;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -176,10 +177,10 @@ class DictSchemaSeed {
     /** 将装备台账中已有的存放位置与非空品牌迁入字典,保留历史自定义值且可重复执行 */
     void migrateEquipmentLedgerValues() {
         // 将装备台账中已有的存放位置迁入字典,避免历史值在下拉框中无法选择
-        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
                 "SELECT 'equipment_location', location, 90, 1, '', 0 FROM equipment WHERE location IS NOT NULL AND TRIM(location) <> ''");
         // 将装备台账中已有的非空品牌迁入字典,保留历史自定义值且可重复执行
-        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
                 "SELECT DISTINCT 'equipment_brand', brand, 90, 1, '', 0 FROM equipment WHERE brand IS NOT NULL AND TRIM(brand) <> ''");
     }
 
@@ -208,7 +209,7 @@ class DictSchemaSeed {
             return;
         }
         for (int i = 0; i < labels.length; i++) {
-            jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+            Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
                             "VALUES(?,?,?,1,'',?)",
                     type, labels[i], i, pid);
         }
@@ -258,7 +259,7 @@ class DictSchemaSeed {
             jdbc.update("UPDATE sys_dict SET sort=? WHERE id=?", position, row.get("id"));
             position++;
         }
-        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('dict_sort_compact_v1','1')");
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('dict_sort_compact_v1','1')");
         log.info("迁移:已压缩字典排序为连续序号");
     }
 
@@ -280,7 +281,7 @@ class DictSchemaSeed {
             jdbc.update("UPDATE sys_dict SET sort=? WHERE dict_type='education' AND dict_label=?",
                     i + 1, labels[i]);
         }
-        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('education_options_v1','1')");
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_setting(skey,svalue) VALUES('education_options_v1','1')");
         log.info("迁移:学历选项已更新");
     }
 
@@ -294,6 +295,7 @@ class DictSchemaSeed {
                 new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
         try {
             tx.executeWithoutResult(status -> {
+            if (!Db.sqlite()) { return; } // PRAGMA 索引检查仅 SQLite;其他库按新唯一约束建表,无需迁移
             boolean oldStyle = false;
             List<Map<String, Object>> idx = jdbc.queryForList("PRAGMA index_list(sys_dict)");
             for (Map<String, Object> ix : idx) {
@@ -309,7 +311,7 @@ class DictSchemaSeed {
             }
             if (!oldStyle) { return; }
             log.info("迁移:sys_dict 唯一约束升级为 (dict_type, dict_label, parent_id)");
-            jdbc.execute("CREATE TABLE sys_dict_mig (" +
+            Db.createTable(jdbc, "CREATE TABLE sys_dict_mig (" +
                     "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                     "dict_type TEXT NOT NULL," +
                     "dict_label TEXT NOT NULL," +

@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -72,8 +73,7 @@ public class LeavePlanDao {
     }
 
     public long insert(Map<String, Object> m) {
-        return jdbc.queryForObject("INSERT INTO leave_plan(personnel_id, year, leave_type, start_date, end_date, days, remark) VALUES(?,?,?,?,?,?,?) RETURNING id",
-                Long.class, lng(m.get("personnelId")), str(m.get("year")), str(m.get("leaveType")),
+        return Db.id(jdbc, "INSERT INTO leave_plan(personnel_id, year, leave_type, start_date, end_date, days, remark) VALUES(?,?,?,?,?,?,?) RETURNING id", lng(m.get("personnelId")), str(m.get("year")), str(m.get("leaveType")),
                 str(m.get("startDate")), str(m.get("endDate")), num(m.get("days")), str(m.get("remark")));
     }
 

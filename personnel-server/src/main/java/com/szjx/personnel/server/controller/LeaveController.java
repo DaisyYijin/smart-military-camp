@@ -117,7 +117,7 @@ public class LeaveController {
     public ApiResponse findPerson(@RequestParam String idCard) {
         return ApiResponse.ok(jdbc.queryForList(
             "SELECT p.id, p.name, p.id_card AS idCard, d.name AS departmentName FROM personnel p " +
-            "LEFT JOIN department d ON p.department_id = d.id WHERE p.id_card = ? COLLATE NOCASE AND " + DataScope.departmentSql("p.department_id"),
+            "LEFT JOIN department d ON p.department_id = d.id WHERE p.id_card = ? AND " + DataScope.departmentSql("p.department_id"),
             idCard == null ? "" : idCard.trim()));
     }
 
@@ -127,7 +127,7 @@ public class LeaveController {
                                @RequestParam(required = false) Long excludeId) {
         DataScope.requirePerson(jdbc, personnelId);
         StringBuilder sql = new StringBuilder(
-            "SELECT COUNT(*) AS cnt, IFNULL(SUM(IFNULL(CAST(days AS REAL),0) + IFNULL(CAST(travel_days AS REAL),0) + IFNULL(CAST(holiday_days AS REAL),0)), 0) AS totalDays " +
+            "SELECT COUNT(*) AS cnt, COALESCE(SUM(COALESCE(CAST(days AS REAL),0) + COALESCE(CAST(travel_days AS REAL),0) + COALESCE(CAST(holiday_days AS REAL),0)), 0) AS totalDays " +
             "FROM leave_record WHERE personnel_id=? AND CAST(year AS TEXT)=?");
         java.util.List<Object> args = new java.util.ArrayList<Object>();
         args.add(personnelId);

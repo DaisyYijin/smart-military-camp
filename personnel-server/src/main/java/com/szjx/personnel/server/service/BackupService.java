@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.util.Db;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -797,7 +798,7 @@ public class BackupService {
             final boolean clearUndoOnRestore = clearPersonnelUndo;
             try {
                 tx.executeWithoutResult(status -> {
-                    jdbc.execute("PRAGMA defer_foreign_keys=ON");
+                    if (Db.sqlite()) { jdbc.execute("PRAGMA defer_foreign_keys=ON"); } // 延迟外键仅 SQLite;其他库靠事务回滚保一致
                     // Reserve SQLite's writer before rechecking unselected/local dependency rows.
                     jdbc.update("UPDATE sys_setting SET svalue=svalue WHERE 1=0");
                     // Reconvert the original legacy rows against the transaction's effective post-restore sets.
@@ -814,7 +815,7 @@ public class BackupService {
                         String table = "fitness_settings".equals(e.getKey()) ? "sys_setting" : e.getKey();
                         for (Map<String, Object> row : e.getValue()) { insertRow(table, row); }
                     }
-                    if (!jdbc.queryForList("PRAGMA foreign_key_check").isEmpty()) { throw new IllegalArgumentException("恢复外键冲突"); }
+                    if (Db.sqlite() && !jdbc.queryForList("PRAGMA foreign_key_check").isEmpty()) { throw new IllegalArgumentException("恢复外键冲突"); }
                     for (PhotoSwap swap : photoSwaps) { swap.install(); }
                 });
                 committed = true;
@@ -1017,7 +1018,7 @@ public class BackupService {
     }
 
     private void validateRows(String table, List<Map<String, Object>> rows) {
-        List<Map<String, Object>> info = jdbc.queryForList("PRAGMA table_info(" + table + ")");
+        List<Map<String, Object>> info = Db.columns(jdbc, table);
         if (info.isEmpty()) { throw new IllegalArgumentException("接收库缺少表: " + table); }
         java.util.Set<String> cols = new java.util.HashSet<String>();
         for (Map<String, Object> col : info) { cols.add(String.valueOf(col.get("name"))); }

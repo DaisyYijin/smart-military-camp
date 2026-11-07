@@ -94,7 +94,7 @@ public class PhoneDeviceDao {
     /** 人员手机号镜像:取最新一个有号码的设备,无则清空 */
     public void syncPersonnelPhone(long pid) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT phone_number FROM phone_device WHERE personnel_id=? AND TRIM(IFNULL(phone_number,''))<>'' ORDER BY id DESC LIMIT 1", pid);
+                "SELECT phone_number FROM phone_device WHERE personnel_id=? AND TRIM(COALESCE(phone_number,''))<>'' ORDER BY id DESC LIMIT 1", pid);
         String pn = rows.isEmpty() ? "" : String.valueOf(rows.get(0).get("phone_number")).trim();
         jdbc.update("UPDATE personnel SET phone=? WHERE id=?", pn, pid);
     }

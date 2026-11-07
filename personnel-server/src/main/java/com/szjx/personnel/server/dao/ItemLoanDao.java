@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.auth.ForbiddenException;
 import com.szjx.personnel.server.model.ItemLoan;
@@ -152,14 +153,13 @@ public class ItemLoanDao {
     public long insert(ItemLoan loan) {
         long owner = ownerForInsert();
         // Legacy personnel_id and department_id remain stored for migration/backup compatibility only.
-        List<Long> ids = jdbc.queryForList("INSERT INTO item_loan(item_name,specification,quantity,unit,personnel_id," +
+        return Db.id(jdbc, "INSERT INTO item_loan(item_name,specification,quantity,unit,personnel_id," +
                         "borrower_name,borrower_id_card,borrower_phone,borrower_unit,registration_department,department_id,borrower_migrated," +
-                        "borrow_date,remark,owner_user_id,handler_id,handler_name,handler_id_card) VALUES(?,?,?,?,0,?,?,?,?,?,0,1,?,?,?,?,?,?) RETURNING id", Long.class,
+                        "borrow_date,remark,owner_user_id,handler_id,handler_name,handler_id_card) VALUES(?,?,?,?,0,?,?,?,?,?,0,1,?,?,?,?,?,?) RETURNING id",
                 loan.getItemName(), loan.getSpecification(), loan.getQuantity().toPlainString(), loan.getUnit(),
                 loan.getBorrowerName(), loan.getBorrowerIdCard(), loan.getBorrowerPhone(), loan.getBorrowerUnit(),
                 loan.getRegistrationDepartment(), loan.getBorrowDate(), loan.getRemark(), owner,
                 loan.getHandlerId(), loan.getHandlerName(), loan.getHandlerIdCard());
-        return ids.get(0);
     }
 
     public int update(Long id, Long originalOwner, ItemLoan loan) {

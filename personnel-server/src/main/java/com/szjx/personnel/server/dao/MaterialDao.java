@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.Material;
@@ -49,7 +50,7 @@ public class MaterialDao {
     };
 
     private static final String BASE =
-            "SELECT m.*, IFNULL(p.name,'') AS keeper_name FROM material m " +
+            "SELECT m.*, COALESCE(p.name,'') AS keeper_name FROM material m " +
             "LEFT JOIN personnel p ON m.keeper_id = p.id ";
 
     /** 列表查询(驼峰别名列,与前端字段一一对应);SQL 统一住址在 dao,controller 只做参数绑定 */
@@ -106,10 +107,8 @@ public class MaterialDao {
 
     public long insert(Material m) {
         requireOwner(m.getKeeperId());
-        return jdbc.queryForObject(
-                "INSERT INTO material(name, category, spec, unit, quantity, min_quantity, keeper_id, location, detail_location, remark, photo) " +
+        return Db.id(jdbc, "INSERT INTO material(name, category, spec, unit, quantity, min_quantity, keeper_id, location, detail_location, remark, photo) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 nvl(m.getName()), nvl(m.getCategory()), nvl(m.getSpec()), nvl(m.getUnit()),
                 m.getQuantity() == null ? 0 : m.getQuantity(),
                 m.getMinQuantity() == null ? 0 : m.getMinQuantity(),

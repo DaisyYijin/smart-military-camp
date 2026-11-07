@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.config;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.dao.AdminUserDao;
 import com.szjx.personnel.server.service.PasswordUtil;
 import com.szjx.personnel.server.util.ItemLoanSnapshots;
@@ -45,7 +46,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
     /** 旧库迁移:若表缺少某列则补充，返回本次是否新增。 */
     private boolean ensureColumn(String table, String column, String ddl) {
         try {
-            List<Map<String, Object>> cols = jdbc.queryForList("PRAGMA table_info(" + table + ")");
+            List<Map<String, Object>> cols = Db.columns(jdbc, table);
             for (Map<String, Object> col : cols) {
                 if (column.equals(String.valueOf(col.get("name")))) {
                     return false;
@@ -61,7 +62,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     /** 软人员引用：备份部分恢复不得触发数据库级联删除。评定合法值由数据字典 de_rating 驱动,不设硬 CHECK。 */
     private void initializeDoubleExcellence() {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS double_excellence_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS double_excellence_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
@@ -94,7 +95,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         try {
             tx.executeWithoutResult(status -> {
                 log.info("迁移:double_excellence_record 移除固定评级 CHECK,评定改由数据字典 de_rating 驱动");
-                jdbc.execute("CREATE TABLE double_excellence_mig (" +
+                Db.createTable(jdbc, "CREATE TABLE double_excellence_mig (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "personnel_id INTEGER NOT NULL," +
                         "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
@@ -117,7 +118,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     /** 软人员引用：备份部分恢复不得触发数据库级联删除。评定合法值由数据字典 annual_rating 驱动,不设硬 CHECK。 */
     private void initializeAnnualAppraisal() {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS annual_appraisal_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS annual_appraisal_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "year INTEGER NOT NULL CHECK(year BETWEEN 1900 AND 9999)," +
@@ -130,7 +131,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
     }
 
     private void initializeVehicleFaultHistory() {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS vehicle_fault_history (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS vehicle_fault_history (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "vehicle_id INTEGER NOT NULL," +
                 "fault_date TEXT NOT NULL DEFAULT ''," +
@@ -143,7 +144,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     /** 人员外出登记(临时出差/学习等);personnel.auto_absence 标记本服务置过的状态,手工改状态即放弃自动管理。 */
     private void initializeAbsence() {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS absence_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS absence_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "reason TEXT NOT NULL," +
@@ -159,7 +160,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     /** 借还独立建表；旧库仅补列/索引，不重建、不清理已有记录。 */
     private void initializeItemLoans() {
-        jdbc.execute("CREATE TABLE IF NOT EXISTS item_loan (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS item_loan (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "item_name TEXT NOT NULL," +
                 "specification TEXT NOT NULL DEFAULT ''," +
@@ -210,7 +211,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 jdbc.update("UPDATE item_loan SET returned=1 WHERE actual_return_date IS NOT NULL AND actual_return_date<>''");
             }
         });
-        boolean registrationAdded = jdbc.queryForList("PRAGMA table_info(item_loan)").stream()
+        boolean registrationAdded = Db.columns(jdbc, "item_loan").stream()
                 .noneMatch(column -> "registration_department".equals(column.get("name")));
         ensureColumn("item_loan", "registration_department", "registration_department TEXT NOT NULL DEFAULT ''");
         ItemLoanSnapshots.migrateExisting(jdbc);
@@ -229,14 +230,14 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
     public void run(String... args) {
         // 所有字典种子/清理之前建表;旧库先升级 parent_id 和唯一约束。
-        jdbc.execute("CREATE TABLE IF NOT EXISTS sys_dict (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS sys_dict (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT,dict_type TEXT NOT NULL,dict_label TEXT NOT NULL," +
                 "sort INTEGER DEFAULT 0,enabled INTEGER DEFAULT 1,remark TEXT DEFAULT ''," +
                 "parent_id INTEGER DEFAULT 0,created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime')),UNIQUE(dict_type,dict_label,parent_id))");
         ensureColumn("sys_dict", "parent_id", "parent_id INTEGER DEFAULT 0");
         dictSeed.migrateDictUnique();
-        jdbc.execute("CREATE TABLE IF NOT EXISTS department (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS department (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "parent_id INTEGER DEFAULT 0," +
@@ -245,7 +246,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
         ensureColumn("department", "leader_id", "leader_id INTEGER DEFAULT 0");
         // 手机设备管理(手机/手表/手环)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS phone_device (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS phone_device (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL DEFAULT 0," +
                 "device_type TEXT DEFAULT ''," +
@@ -266,7 +267,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         dictSeed.addDict("phone_brand", new String[]{"华为", "小米", "OPPO", "vivo", "荣耀", "苹果", "三星"});
         dictSeed.addDict("device_status", new String[]{"在用", "停用", "维修", "报废"});
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS personnel (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS personnel (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "gender TEXT DEFAULT ''," +
@@ -338,7 +339,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_name ON personnel(name)");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_personnel_idcard ON personnel(id_card)");
         // 人员删除撤回:删除前打包人员及全部级联数据的快照
-        jdbc.execute("CREATE TABLE IF NOT EXISTS delete_undo (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS delete_undo (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "name TEXT DEFAULT ''," +
@@ -348,7 +349,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS leave_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS leave_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER DEFAULT 0," +
                 "leave_type TEXT DEFAULT ''," +
@@ -364,7 +365,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_leave_personnel ON leave_record(personnel_id)");
 
         // 休假计划(年度安排,与实际休假记录互补);保留已有数据并迁移旧表结构
-        jdbc.execute("CREATE TABLE IF NOT EXISTS leave_plan (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS leave_plan (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "year TEXT DEFAULT ''," +
@@ -391,7 +392,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
 
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS fitness_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER DEFAULT 0," +
                 "item TEXT DEFAULT ''," +
@@ -406,7 +407,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_fitness_personnel ON fitness_record(personnel_id)");
 
         // 军事考核(理论/射击/战术等,按分数评定)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS military_assessment (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS military_assessment (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER DEFAULT 0," +
                 "category TEXT DEFAULT ''," +
@@ -424,14 +425,14 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_military_personnel ON military_assessment(personnel_id)");
 
         // 军事考核方案:两级课目+占比(顶级课目占总分百分比;子项占该课目百分比)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS mil_scheme (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS mil_scheme (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "remark TEXT DEFAULT ''," +
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
-        jdbc.execute("CREATE TABLE IF NOT EXISTS mil_scheme_item (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS mil_scheme_item (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "scheme_id INTEGER NOT NULL," +
                 "parent_id INTEGER DEFAULT 0," +
@@ -469,25 +470,25 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         try { jdbc.execute("ALTER TABLE fitness_record ADD COLUMN points REAL DEFAULT 0"); } catch (Exception ignore) {}
 
         // 通用设置表(如体能评定标准)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS sys_setting (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS sys_setting (" +
                 "skey TEXT PRIMARY KEY," +
                 "svalue TEXT DEFAULT '')");
-        jdbc.update("INSERT OR IGNORE INTO sys_setting(skey, svalue) VALUES('fitness_grade_rule', ?)",
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_setting(skey, svalue) VALUES('fitness_grade_rule', ?)",
                 "[{\"label\":\"优秀\",\"op\":\">=\",\"min\":90},{\"label\":\"良好\",\"op\":\">=\",\"min\":80},{\"label\":\"及格\",\"op\":\">=\",\"min\":60}]");
         // 仪表盘布局设置(独立成表,备份页可单独勾选"仪表盘"模块)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS dash_setting (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS dash_setting (" +
                 "skey TEXT PRIMARY KEY," +
                 "svalue TEXT DEFAULT '')");
 
         // 老数据迁移:grade 存数字分数的 → 挪到 points,并按默认阈值换算成评定
         jdbc.update("UPDATE fitness_record SET points = CAST(TRIM(grade) AS REAL) " +
-                "WHERE (points IS NULL OR points = 0) AND TRIM(grade) GLOB '[0-9]*'");
+                "WHERE (points IS NULL OR points = 0) AND SUBSTR(TRIM(grade),1,1) BETWEEN '0' AND '9'");
         jdbc.update("UPDATE fitness_record SET grade = CASE " +
                 "WHEN points >= 90 THEN '优秀' WHEN points >= 80 THEN '良好' " +
                 "WHEN points >= 60 THEN '及格' ELSE '不及格' END " +
-                "WHERE TRIM(grade) GLOB '[0-9]*'");
+                "WHERE SUBSTR(TRIM(grade),1,1) BETWEEN '0' AND '9'");
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS admin_user (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS admin_user (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "username TEXT NOT NULL UNIQUE," +
                 "password_hash TEXT NOT NULL," +
@@ -499,7 +500,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         migrateAccounts();
 
         // 任职经历(人员的子记录)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS position_history (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS position_history (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "start_date TEXT DEFAULT ''," +
@@ -524,7 +525,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         ensureColumn("personnel", "edu_length", "edu_length TEXT DEFAULT ''");
 
         // 奖惩情况(人员的子记录,kind 区分 奖励/处分)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS reward_punish (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS reward_punish (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "kind TEXT DEFAULT ''," +
@@ -538,7 +539,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_reward_punish_person ON reward_punish(personnel_id)");
 
         // 家庭成员(统一:配偶/子女/父母/岳父母等)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS family_member (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS family_member (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "relationship TEXT DEFAULT ''," +
@@ -556,7 +557,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_family_member_person ON family_member(personnel_id)");
 
         // 子女信息(人员的子记录)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS child_info (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS child_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "name TEXT DEFAULT ''," +
@@ -590,7 +591,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
 
 
         // 驾驶证(军本/地方本)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS driver_license (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS driver_license (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "license_type TEXT DEFAULT ''," +
@@ -605,7 +606,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 个人卡号(保障卡/银行卡等)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS personal_card (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS personal_card (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "card_type TEXT DEFAULT ''," +
@@ -618,7 +619,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 私家车
-        jdbc.execute("CREATE TABLE IF NOT EXISTS private_vehicle (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS private_vehicle (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "plate_no TEXT DEFAULT ''," +
@@ -631,7 +632,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 组织建设:组织定义/成员名单/自定义表头
-        jdbc.execute("CREATE TABLE IF NOT EXISTS organization (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS organization (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "sort INTEGER DEFAULT 0," +
@@ -639,7 +640,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
-        jdbc.execute("CREATE TABLE IF NOT EXISTS organization_member (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS organization_member (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "organization_id INTEGER NOT NULL," +
                 "personnel_id INTEGER NOT NULL," +
@@ -650,7 +651,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime'))" +
                 ")");
-        jdbc.execute("CREATE TABLE IF NOT EXISTS organization_column (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS organization_column (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "organization_id INTEGER NOT NULL," +
                 "column_key TEXT NOT NULL," +
@@ -661,7 +662,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         ensureColumn("organization_column", "personnel_field", "personnel_field TEXT DEFAULT ''");
 
         // 人员变动轨迹:入职/调动/退役自动记录(单位名称快照,单位改名删除不影响历史可读)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS transfer_record (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS transfer_record (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "type TEXT NOT NULL," +
@@ -675,7 +676,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 站内信/消息通知(局域网多用户):用户互发+系统通知(审批流联动)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS message (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS message (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "sender_id INTEGER NOT NULL," +
                 "receiver_id INTEGER NOT NULL," +
@@ -687,7 +688,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 审批工作流:休假/在外申请→管理员审批,通过自动登记并双向站内信通知
-        jdbc.execute("CREATE TABLE IF NOT EXISTS approval_request (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS approval_request (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "type TEXT NOT NULL," +
                 "applicant_id INTEGER NOT NULL," +
@@ -701,7 +702,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 住房情况
-        jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS housing_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "personnel_id INTEGER NOT NULL," +
                 "housing_type TEXT DEFAULT ''," +
@@ -735,7 +736,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         }
 
         // 体能评分矩阵:项目 x 年龄段 x 分数 → 达标值(用户可自行维护)
-        jdbc.execute("CREATE TABLE IF NOT EXISTS fitness_matrix (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS fitness_matrix (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "item TEXT NOT NULL," +
                 "age_group TEXT NOT NULL," +
@@ -780,7 +781,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         ensureColumn("leave_record", "leave_location", "leave_location TEXT DEFAULT ''");
 
         // 节假日日历
-        jdbc.execute("CREATE TABLE IF NOT EXISTS holiday_calendar (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS holiday_calendar (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "holiday_date TEXT NOT NULL," +
                 "holiday_name TEXT DEFAULT ''" +
@@ -809,7 +810,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         }
 
         // 操作日志:谁、何时、从哪个 IP、做了什么
-        jdbc.execute("CREATE TABLE IF NOT EXISTS op_log (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS op_log (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "username TEXT DEFAULT ''," +
                 "action TEXT DEFAULT ''," +
@@ -822,7 +823,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         // 人员类别(军衔按类别级联挂接在 initDefaultDict 中执行)
         try { jdbc.execute("ALTER TABLE personnel ADD COLUMN category TEXT DEFAULT ''"); } catch (Exception ignore) {}
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS equipment (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS equipment (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "code TEXT DEFAULT ''," +
@@ -846,7 +847,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         ensureColumn("equipment", "ident_code", "ident_code TEXT DEFAULT ''");
         ensureColumn("equipment", "brand", "brand TEXT DEFAULT ''");
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS material (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS material (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "name TEXT NOT NULL," +
                 "category TEXT DEFAULT ''," +
@@ -867,10 +868,10 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         // 物资详细存放点
         try { jdbc.execute("ALTER TABLE material ADD COLUMN detail_location TEXT DEFAULT ''"); } catch (Exception ignore) {}
         // 已用的存放位置收进字典,老数据下拉仍可选
-        jdbc.update("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
+        Db.insertIgnore(jdbc, "INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) " +
                 "SELECT 'material_location', location, 90, 1, '', 0 FROM material WHERE location IS NOT NULL AND TRIM(location) <> ''");
 
-        jdbc.execute("CREATE TABLE IF NOT EXISTS vehicle (" +
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS vehicle (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "plate_no TEXT NOT NULL," +
                 "brand TEXT DEFAULT ''," +
@@ -908,7 +909,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         // 私家车价格单位统一为元:历史以万元记录的值(0<price<1000)一次性换算;换算后不再命中条件,幂等
         try {
             jdbc.update("UPDATE private_vehicle SET price = CAST(CAST(price AS REAL) * 10000 AS INTEGER) " +
-                    "WHERE TRIM(IFNULL(price,'')) <> '' AND CAST(price AS REAL) > 0 AND CAST(price AS REAL) < 1000");
+                    "WHERE TRIM(COALESCE(price,'')) <> '' AND CAST(price AS REAL) > 0 AND CAST(price AS REAL) < 1000");
         } catch (org.springframework.dao.DataAccessException e) {
             // 旧库尚无 price 列时静默跳过(该列由 ensureColumn 补齐)
         }
@@ -942,7 +943,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 new org.springframework.transaction.support.TransactionTemplate(
                         new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
         tx.execute(status -> {
-            List<Map<String, Object>> columns = jdbc.queryForList("PRAGMA table_info(admin_user)");
+            List<Map<String, Object>> columns = Db.columns(jdbc, "admin_user");
             boolean parent = false, enabled = false;
             for (Map<String, Object> column : columns) {
                 parent |= "parent_id".equals(column.get("name"));
@@ -951,7 +952,7 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
             // Every legacy account remains a root administrator; never rename or reset passwords.
             if (!parent) jdbc.execute("ALTER TABLE admin_user ADD COLUMN parent_id INTEGER NOT NULL DEFAULT 0");
             if (!enabled) jdbc.execute("ALTER TABLE admin_user ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
-            jdbc.execute("CREATE TABLE IF NOT EXISTS account_department (" +
+            Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS account_department (" +
                     "user_id INTEGER NOT NULL REFERENCES admin_user(id)," +
                     "department_id INTEGER NOT NULL REFERENCES department(id)," +
                     "PRIMARY KEY(user_id,department_id))");

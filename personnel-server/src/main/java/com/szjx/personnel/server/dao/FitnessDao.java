@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.FitnessRecord;
@@ -46,7 +47,7 @@ public class FitnessDao {
     };
 
     private static final String BASE =
-            "SELECT f.*, IFNULL(p.name,'') AS personnel_name, p.id_card FROM fitness_record f " +
+            "SELECT f.*, COALESCE(p.name,'') AS personnel_name, p.id_card FROM fitness_record f " +
             "LEFT JOIN personnel p ON f.personnel_id = p.id ";
 
     public List<FitnessRecord> query(String keyword, String item, int page, int size) {
@@ -92,10 +93,8 @@ public class FitnessDao {
 
     public long insert(FitnessRecord r) {
         DataScope.requirePerson(jdbc, r.getPersonnelId());
-        return jdbc.queryForObject(
-                "INSERT INTO fitness_record(personnel_id, item, score, points, grade, test_date, tester, remark) " +
+        return Db.id(jdbc, "INSERT INTO fitness_record(personnel_id, item, score, points, grade, test_date, tester, remark) " +
                 "VALUES(?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 r.getPersonnelId(),
                 nvl(r.getItem()), nvl(r.getScore()),
                 r.getPoints() == null ? 0 : r.getPoints(), nvl(r.getGrade()),

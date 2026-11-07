@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.LeaveRecord;
@@ -49,7 +50,7 @@ public class LeaveDao {
     };
 
     private static final String BASE =
-            "SELECT l.*, IFNULL(p.name,'') AS personnel_name FROM leave_record l " +
+            "SELECT l.*, COALESCE(p.name,'') AS personnel_name FROM leave_record l " +
             "LEFT JOIN personnel p ON l.personnel_id = p.id ";
 
     public List<LeaveRecord> query(String keyword, int page, int size) {
@@ -87,10 +88,8 @@ public class LeaveDao {
 
     public long insert(LeaveRecord r) {
         DataScope.requirePerson(jdbc, r.getPersonnelId());
-        return jdbc.queryForObject(
-                "INSERT INTO leave_record(personnel_id, year, leave_type, start_date, end_date, days, " +
+        return Db.id(jdbc, "INSERT INTO leave_record(personnel_id, year, leave_type, start_date, end_date, days, " +
                 "travel_days, holiday_days, holiday_name, leave_location, reason, remark) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 r.getPersonnelId(), nvl(r.getYear()),
                 nvl(r.getLeaveType()), nvl(r.getStartDate()), nvl(r.getEndDate()),
                 r.getDays() == null ? 0 : r.getDays(),

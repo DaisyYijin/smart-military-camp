@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.util.Db;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.szjx.personnel.server.auth.DataScope;
@@ -43,7 +44,7 @@ public class PreferenceController {
         try {
             String value = mapper.writeValueAsString(body);
             if (value.getBytes(StandardCharsets.UTF_8).length > 65536) throw new IllegalArgumentException("个人布局不能超过64KB");
-            jdbc.update("INSERT INTO sys_setting(skey,svalue) VALUES(?,?) ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", target, value);
+            Db.upsertSetting(jdbc, "sys_setting", target, value);
             return ApiResponse.ok();
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalArgumentException("个人布局格式不正确");

@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.model.ApiResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -63,8 +64,7 @@ public class SettingController {
             }
             if (v != null) {
                 final String value = v;
-                jdbc.update("INSERT INTO dash_setting(skey, svalue) VALUES(?,?) "
-                        + "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", key, value);
+                Db.upsertSetting(jdbc, "dash_setting", key, value);
             }
         }
         if ("fitness_grade_rule".equals(key) || "bmi_standard".equals(key) || "rank_promotion_rules".equals(key)) {
@@ -112,8 +112,7 @@ public class SettingController {
         }
         try {
             String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(body);
-            jdbc.update("INSERT INTO " + tableOf(key) + "(skey, svalue) VALUES(?,?) " +
-                    "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", key, json);
+            Db.upsertSetting(jdbc, tableOf(key), key, json);
             return ApiResponse.ok();
         } catch (Exception e) {
             throw new IllegalArgumentException("保存失败:" + e.getMessage());

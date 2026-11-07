@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.Equipment;
@@ -51,7 +52,7 @@ public class EquipmentDao {
     };
 
     private static final String BASE =
-            "SELECT e.*, IFNULL(p.name,'') AS keeper_name FROM equipment e " +
+            "SELECT e.*, COALESCE(p.name,'') AS keeper_name FROM equipment e " +
             "LEFT JOIN personnel p ON e.keeper_id = p.id ";
 
     /** 列表查询(驼峰别名列,与前端字段一一对应);SQL 统一住址在 dao,controller 只做参数绑定 */
@@ -133,10 +134,8 @@ public class EquipmentDao {
 
     public long insert(Equipment e) {
         requireOwner(e.getKeeperId());
-        return jdbc.queryForObject(
-                "INSERT INTO equipment(name, code, ident_code, category, brand, model, status, keeper_id, location, buy_date, equip_date, remark, photo) " +
+        return Db.id(jdbc, "INSERT INTO equipment(name, code, ident_code, category, brand, model, status, keeper_id, location, buy_date, equip_date, remark, photo) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 nvl(e.getName()), nvl(e.getCode()), nvl(e.getIdentCode()), nvl(e.getCategory()), nvl(e.getBrand()), nvl(e.getModel()),
                 nvl(e.getStatus()), e.getKeeperId(), nvl(e.getLocation()), nvl(e.getBuyDate()), nvl(e.getEquipDate()), nvl(e.getRemark()), nvl(e.getPhoto()));
     }

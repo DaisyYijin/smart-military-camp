@@ -44,7 +44,7 @@ public class StatsService {
     }
 
     private List<StatsSummary.NameCount> departmentGroup(String limit) {
-        return group("SELECT IFNULL(d.name, '未分配') AS name, COUNT(*) AS count FROM personnel p "
+        return group("SELECT COALESCE(d.name, '未分配') AS name, COUNT(*) AS count FROM personnel p "
                 + "LEFT JOIN department d ON p.department_id=d.id WHERE " + DataScope.departmentSql("p.department_id")
                 + " GROUP BY p.department_id ORDER BY count DESC" + limit);
     }
@@ -104,19 +104,19 @@ public class StatsService {
     }
 
     private List<StatsSummary.NameCount> personGroup(String column, String limit) {
-        return group("SELECT IFNULL(NULLIF(p." + column + ", ''), '未填写') AS name, COUNT(*) AS count FROM personnel p WHERE "
+        return group("SELECT COALESCE(NULLIF(p." + column + ", ''), '未填写') AS name, COUNT(*) AS count FROM personnel p WHERE "
                 + DataScope.departmentSql("p.department_id") + " GROUP BY p." + column + " ORDER BY count DESC, name" + limit);
     }
 
     private List<StatsSummary.NameCount> provinceGroup(String column) {
-        return group("SELECT IFNULL(NULLIF(prov, ''), '未填写') AS name, COUNT(*) AS count FROM ("
+        return group("SELECT COALESCE(NULLIF(prov, ''), '未填写') AS name, COUNT(*) AS count FROM ("
                 + "SELECT CASE WHEN INSTR(p." + column + ", '/')>0 THEN SUBSTR(p." + column
                 + ",1,INSTR(p." + column + ",'/')-1) ELSE p." + column + " END AS prov FROM personnel p WHERE "
                 + DataScope.departmentSql("p.department_id") + ") GROUP BY name ORDER BY count DESC, name");
     }
 
     private List<StatsSummary.NameCount> relatedGroup(String table, String alias, String owner, String column, String extra) {
-        return group("SELECT IFNULL(NULLIF(" + alias + "." + column + ", ''), '未填写') AS name, COUNT(*) AS count FROM "
+        return group("SELECT COALESCE(NULLIF(" + alias + "." + column + ", ''), '未填写') AS name, COUNT(*) AS count FROM "
                 + table + " " + alias + " WHERE " + DataScope.personSql(alias + "." + owner) + extra
                 + " GROUP BY " + alias + "." + column + " ORDER BY count DESC");
     }

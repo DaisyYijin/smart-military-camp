@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.Personnel;
@@ -97,7 +98,7 @@ public class PersonnelDao {
     };
 
     private static final String BASE_SELECT =
-            "SELECT p.*, IFNULL(d.name, '') AS department_name, IFNULL(ad.name, '') AS actual_department_name FROM personnel p " +
+            "SELECT p.*, COALESCE(d.name, '') AS department_name, COALESCE(ad.name, '') AS actual_department_name FROM personnel p " +
             "LEFT JOIN department d ON p.department_id = d.id " +
             "LEFT JOIN department ad ON p.actual_department_id = ad.id ";
 
@@ -295,17 +296,15 @@ public class PersonnelDao {
     public String devicePhone(Long id) {
         DataScope.requirePerson(jdbc, id);
         List<String> phones = jdbc.queryForList("SELECT TRIM(phone_number) FROM phone_device WHERE personnel_id=? " +
-                "AND TRIM(IFNULL(phone_number,''))<>'' ORDER BY id DESC LIMIT 1", String.class, id);
+                "AND TRIM(COALESCE(phone_number,''))<>'' ORDER BY id DESC LIMIT 1", String.class, id);
         return phones.isEmpty() ? "" : phones.get(0);
     }
 
     public long insert(Personnel p) {
         DataScope.requireDepartment(p.getDepartmentId());
-        return jdbc.queryForObject(
-                "INSERT INTO personnel(name, gender, id_card, military_id_no, birthday, phone, department_id, category, rank, post, post_date, actual_department_id, status, entry_date, equiv_entry_date, address, photo, remark, " +
+        return Db.id(jdbc, "INSERT INTO personnel(name, gender, id_card, military_id_no, birthday, phone, department_id, category, rank, post, post_date, actual_department_id, status, entry_date, equiv_entry_date, address, photo, remark, " +
                 "blood_type, nation, political_status, party_join_date, marital_status, education, edu_enroll_date, edu_graduate_date, edu_school, edu_major, edu_degree, edu_form, edu_length, edu_cert_no, only_child, native_place, enlist_place, location_point, height, weight, spouse_name, spouse_work, spouse_phone, spouse_id_card, spouse_job, marriage_date, party_org_location, party_post, party_remark, divorce_date, marriage_remark, party_apply_date, party_activist_date, party_candidate_date, party_full_date, follow_army_date, follow_army_status, follow_army) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 nvl(p.getName()), nvl(p.getGender()), nvl(p.getIdCard()), nvl(p.getMilitaryIdNo()), nvl(p.getBirthday()),
                 nvl(p.getPhone()), p.getDepartmentId(), nvl(p.getCategory()), nvl(p.getRank()), nvl(p.getPost()), nvl(p.getPostDate()),
                 p.getActualDepartmentId(),
@@ -377,7 +376,7 @@ public class PersonnelDao {
     /** 全部人员精简列表(供下拉选择,不分页) */
     public List<Map<String, Object>> findAllSimple() {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT p.id, p.name, p.id_card, p.military_id_no, p.department_id, p.rank, p.post, IFNULL(d.name,'') AS department_name " +
+                "SELECT p.id, p.name, p.id_card, p.military_id_no, p.department_id, p.rank, p.post, COALESCE(d.name,'') AS department_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id=d.id WHERE " + DataScope.departmentSql("p.department_id") + " ORDER BY p.id");
         if (!rows.isEmpty()) {
             DepartmentHierarchy hierarchy = DepartmentHierarchy.load(jdbc);

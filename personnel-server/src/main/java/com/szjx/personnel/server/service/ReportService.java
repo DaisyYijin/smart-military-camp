@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.service;
 
+import com.szjx.personnel.server.util.Db;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.szjx.personnel.server.model.FitnessRecord;
 import org.springframework.transaction.annotation.Transactional;
@@ -241,8 +242,8 @@ public class ReportService {
 
     private long insert(String table, Map<String, Object> row) {
         List<String> cols = new ArrayList<String>(row.keySet());
-        return jdbc.queryForObject("INSERT INTO " + safeTable(table) + "(" + joinList(cols) + ") VALUES(" + marks(cols.size()) + ") RETURNING id",
-                Long.class, row.values().toArray());
+        return Db.id(jdbc, "INSERT INTO " + safeTable(table) + "(" + joinList(cols) + ") VALUES(" + marks(cols.size()) + ") RETURNING id",
+                row.values().toArray());
     }
 
     private void update(String table, long id, Map<String, Object> row) {
@@ -310,8 +311,7 @@ public class ReportService {
         if (createNew) {
             long parent = parentId == null ? 0 : parentId;
             if (parent != 0 && jdbc.queryForList("SELECT id FROM department WHERE id=?", parent).isEmpty()) { throw new IllegalArgumentException("上级单位不存在"); }
-            targetDept = jdbc.queryForObject("INSERT INTO department(name,parent_id,sort,remark) VALUES(?,?,50,'下级上报自动创建') RETURNING id",
-                    Long.class, unit, parent); deptName = unit;
+            targetDept = Db.id(jdbc, "INSERT INTO department(name,parent_id,sort,remark) VALUES(?,?,50,'下级上报自动创建') RETURNING id", unit, parent); deptName = unit;
         } else {
             if (deptId == null) { throw new IllegalArgumentException("请选择接收单位"); }
             targetDept = deptId; deptName = jdbc.queryForObject("SELECT name FROM department WHERE id=?", String.class, deptId);

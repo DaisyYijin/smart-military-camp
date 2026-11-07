@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.MilitaryAssessment;
@@ -117,10 +118,8 @@ public class MilitaryAssessmentDao {
 
     public long insert(MilitaryAssessment m) {
         DataScope.requirePerson(jdbc, m.getPersonnelId());
-        return jdbc.queryForObject(
-                "INSERT INTO military_assessment(personnel_id, scheme_id, detail, category, item, score, points, grade, test_date, remark) " +
+        return Db.id(jdbc, "INSERT INTO military_assessment(personnel_id, scheme_id, detail, category, item, score, points, grade, test_date, remark) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 m.getPersonnelId(), m.getSchemeId() == null ? Long.valueOf(0L) : m.getSchemeId(), nvl(m.getDetail()), nvl(m.getCategory()), nvl(m.getItem()), nvl(m.getScore()),
                 m.getPoints(), nvl(m.getGrade()), nvl(m.getTestDate()), nvl(m.getRemark()));
     }
@@ -175,7 +174,7 @@ public class MilitaryAssessmentDao {
     }
 
     public long insertScheme(String name, String remark) {
-        return jdbc.queryForObject("INSERT INTO mil_scheme(name, remark) VALUES(?,?) RETURNING id", Long.class, name, remark);
+        return Db.id(jdbc, "INSERT INTO mil_scheme(name, remark) VALUES(?,?) RETURNING id", name, remark);
     }
 
     public void updateScheme(long id, String name, String remark) {
@@ -192,8 +191,7 @@ public class MilitaryAssessmentDao {
     }
 
     public long insertSchemeItem(long schemeId, long parentId, String name, double weight, int sort) {
-        return jdbc.queryForObject("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?) RETURNING id",
-                Long.class, schemeId, parentId, name, weight, sort);
+        return Db.id(jdbc, "INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?) RETURNING id", schemeId, parentId, name, weight, sort);
     }
 
     public void insertChildSchemeItem(long schemeId, long parentId, String name, double weight, int sort) {

@@ -82,7 +82,7 @@ public class DashboardController {
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT p.name AS name, lp.start_date AS s, lp.end_date AS e, lp.leave_type AS lt FROM leave_plan lp " +
                 "JOIN personnel p ON lp.personnel_id = p.id " +
-                "WHERE " + DataScope.departmentSql("p.department_id") + " AND IFNULL(lp.status,'计划中')='计划中' " +
+                "WHERE " + DataScope.departmentSql("p.department_id") + " AND COALESCE(lp.status,'计划中')='计划中' " +
                 "AND NOT EXISTS (SELECT 1 FROM leave_record lr WHERE lr.personnel_id=lp.personnel_id AND lr.start_date<=lp.start_date AND lr.end_date>=lp.start_date) " +
                 "AND lp.start_date >= ? AND lp.start_date <= ? ORDER BY lp.start_date", t0, plus10)) {
             String s = String.valueOf(r.get("s"));

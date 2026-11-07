@@ -46,7 +46,7 @@ public class MessageController {
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM message WHERE receiver_id=?", Long.class, uid);
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT m.id, m.title, m.content, m.type, m.read_flag AS readFlag, m.created_at AS createdAt, " +
-                "CASE WHEN m.sender_id=0 THEN '系统' ELSE IFNULL(u.username,'') END AS senderName " +
+                "CASE WHEN m.sender_id=0 THEN '系统' ELSE COALESCE(u.username,'') END AS senderName " +
                 "FROM message m LEFT JOIN admin_user u ON m.sender_id=u.id " +
                 "WHERE m.receiver_id=? ORDER BY m.id DESC LIMIT ? OFFSET ?", uid, size, (page - 1) * size);
         Map<String, Object> result = new LinkedHashMap<String, Object>();

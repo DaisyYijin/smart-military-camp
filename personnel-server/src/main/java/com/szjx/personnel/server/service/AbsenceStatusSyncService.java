@@ -74,7 +74,7 @@ public class AbsenceStatusSyncService {
 
     private int[] syncWithinTransaction() {
         // 1) 手工改状态 → 放弃自动管理(与休假联动的 auto_leave 机制一致)
-        int abandoned = jdbc.update("UPDATE personnel SET auto_absence=0 WHERE auto_absence=1 AND IFNULL(status,'') NOT IN ('出差','培训','其他')");
+        int abandoned = jdbc.update("UPDATE personnel SET auto_absence=0 WHERE auto_absence=1 AND COALESCE(status,'') NOT IN ('出差','培训','其他')");
         // 2) 预登记到期生效:离开日期已到且未归队 → 按事由变更状态(创建时未动状态,等真实离开日)
         int activated = jdbc.update(
                 "UPDATE personnel SET status=(SELECT CASE a.reason WHEN '出差' THEN '出差' WHEN '学习' THEN '培训' ELSE '其他' END " +

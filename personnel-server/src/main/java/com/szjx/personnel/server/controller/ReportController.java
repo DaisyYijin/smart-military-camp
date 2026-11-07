@@ -86,7 +86,7 @@ public class ReportController extends com.szjx.personnel.server.service.ReportSe
         }
         List<Map<String, Object>> result = new java.util.ArrayList<Map<String, Object>>();
         for (Map<String, Object> p : jdbc.queryForList(
-                "SELECT p.id, p.name AS name, IFNULL(d.name,'') AS deptName FROM personnel p " +
+                "SELECT p.id, p.name AS name, COALESCE(d.name,'') AS deptName FROM personnel p " +
                 "LEFT JOIN department d ON d.id = p.department_id " +
                 "WHERE " + DataScope.departmentSql("p.department_id") + " ORDER BY deptName, name")) {
             Object[] acc = spans.get(((Number) p.get("id")).longValue());

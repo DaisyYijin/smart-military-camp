@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.controller;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.model.ApiResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
@@ -360,8 +361,7 @@ public class FitnessStdExcelController {
             merged.put("male", out.containsKey("male") ? out.get("male") : cur.get("male"));
             merged.put("female", out.containsKey("female") ? out.get("female") : cur.get("female"));
             String json = mapper.writeValueAsString(merged);
-            jdbc.update("INSERT INTO sys_setting(skey, svalue) VALUES('bmi_standard',?) " +
-                    "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue", json);
+            Db.upsertSetting(jdbc, "sys_setting", "bmi_standard", json);
             Map<String, Object> result = new LinkedHashMap<String, Object>();
             result.put("rows", totalRows);
             result.put("ageGroups", agesOut);

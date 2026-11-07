@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -34,9 +35,7 @@ public class OrganizationDao {
     }
 
     public long insertOrganization(String name, String remark, int sort) {
-        return jdbc.queryForObject(
-                "INSERT INTO organization(name, remark, sort) VALUES(?,?,?) RETURNING id",
-                Long.class, name, remark, sort);
+        return Db.id(jdbc, "INSERT INTO organization(name, remark, sort) VALUES(?,?,?) RETURNING id", name, remark, sort);
     }
 
     public int updateOrganization(Long id, String name, String remark) {
@@ -70,10 +69,8 @@ public class OrganizationDao {
     }
 
     public long insertMember(Long organizationId, Long personnelId, String role, String extra, String remark, int sort) {
-        return jdbc.queryForObject(
-                "INSERT INTO organization_member(organization_id, personnel_id, role, extra, remark, sort) " +
-                "VALUES(?,?,?,?,?,?) RETURNING id",
-                Long.class, organizationId, personnelId, role, extra, remark, sort);
+        return Db.id(jdbc, "INSERT INTO organization_member(organization_id, personnel_id, role, extra, remark, sort) " +
+                "VALUES(?,?,?,?,?,?) RETURNING id", organizationId, personnelId, role, extra, remark, sort);
     }
 
     public int updateMember(Long id, Long personnelId, String role, String extra, String remark) {

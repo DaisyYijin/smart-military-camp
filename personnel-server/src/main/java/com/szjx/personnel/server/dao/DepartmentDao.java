@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.model.Department;
 import com.szjx.personnel.server.auth.DataScope;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -125,10 +126,7 @@ public class DepartmentDao {
     }
 
     public long insert(Department d) {
-        return jdbc.queryForObject(
-                "INSERT INTO department(name, parent_id, sort, remark, leader_id) VALUES(?,?,?,?,?) RETURNING id",
-                Long.class,
-                d.getName(),
+        return Db.id(jdbc, "INSERT INTO department(name, parent_id, sort, remark, leader_id) VALUES(?,?,?,?,?) RETURNING id", d.getName(),
                 d.getParentId() == null ? 0 : d.getParentId(),
                 d.getSort() == null ? 0 : d.getSort(),
                 d.getRemark() == null ? "" : d.getRemark(),

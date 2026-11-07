@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 
 import com.szjx.personnel.server.model.Vehicle;
@@ -56,7 +57,7 @@ public class VehicleDao {
     };
 
     private static final String BASE =
-            "SELECT v.*, IFNULL(p.name,'') AS driver_name FROM vehicle v " +
+            "SELECT v.*, COALESCE(p.name,'') AS driver_name FROM vehicle v " +
             "LEFT JOIN personnel p ON v.driver_id = p.id ";
 
     /** 列表查询(驼峰别名列,与前端字段一一对应);SQL 统一住址在 dao,controller 只做参数绑定 */
@@ -121,11 +122,9 @@ public class VehicleDao {
 
     public long insert(Vehicle v) {
         requireOwner(v.getDriverId());
-        return jdbc.queryForObject(
-                "INSERT INTO vehicle(plate_no, vin, engine_no, brand, model, type, color, fuel_type, status, driver_id, " +
+        return Db.id(jdbc, "INSERT INTO vehicle(plate_no, vin, engine_no, brand, model, type, color, fuel_type, status, driver_id, " +
                 "seats, mileage, purchase_date, equip_date, insurance_expiry, inspection_expiry, remark, photo) " +
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
-                Long.class,
                 nvl(v.getPlateNo()), nvl(v.getVin()), nvl(v.getEngineNo()),
                 nvl(v.getBrand()), nvl(v.getModel()), nvl(v.getType()), nvl(v.getColor()), nvl(v.getFuelType()), nvl(v.getStatus()),
                 v.getDriverId(), v.getSeats(), v.getMileage(),

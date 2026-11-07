@@ -128,7 +128,7 @@ public class RollCallExcelService {
         Map<Long, String> returns = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT personnel_id, MAX(end_date) AS ed FROM leave_record " +
-                        "WHERE " + DataScope.personSql("personnel_id") + " AND IFNULL(end_date,'')<>'' AND end_date>=date('now','localtime') GROUP BY personnel_id")) {
+                        "WHERE " + DataScope.personSql("personnel_id") + " AND COALESCE(end_date,'')<>'' AND end_date>=date('now','localtime') GROUP BY personnel_id")) {
             Object pid = r.get("personnel_id");
             if (pid != null) {
                 returns.put(((Number) pid).longValue(), String.valueOf(r.get("ed")));
@@ -593,7 +593,7 @@ public class RollCallExcelService {
     private java.util.Set<Long> loadDrivers() {
         java.util.Set<Long> ids = new java.util.HashSet<Long>();
         String sql = "SELECT DISTINCT personnel_id FROM driver_license " +
-                "WHERE personnel_id IS NOT NULL AND IFNULL(license_status,'')<>'吊销'";
+                "WHERE personnel_id IS NOT NULL AND COALESCE(license_status,'')<>'吊销'";
         if (DataScope.restricted()) {
             sql += " AND " + DataScope.personSql("personnel_id");
         }

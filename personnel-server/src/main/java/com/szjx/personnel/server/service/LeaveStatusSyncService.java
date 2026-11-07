@@ -76,10 +76,10 @@ public class LeaveStatusSyncService {
         String today = java.time.LocalDate.now().toString();
         // 人工切换培训/借调/离职等状态，取消自动标记，不得自动覆盖。
         jdbc.update("UPDATE personnel SET auto_leave=0, auto_leave_previous_status='' " +
-                "WHERE auto_leave=1 AND IFNULL(status,'')<>'休假'");
+                "WHERE auto_leave=1 AND COALESCE(status,'')<>'休假'");
         int goOn = jdbc.update(
                 "UPDATE personnel SET auto_leave_previous_status=status, status='休假', auto_leave=1, updated_at=datetime('now','localtime') " +
-                "WHERE IFNULL(auto_leave,0)=0 AND status IN ('在职','在位') AND EXISTS (" +
+                "WHERE COALESCE(auto_leave,0)=0 AND status IN ('在职','在位') AND EXISTS (" +
                 "SELECT 1 FROM leave_record l WHERE l.personnel_id=personnel.id AND l.start_date <= ? AND l.end_date >= ?)",
                 today, today);
         int back = jdbc.update(

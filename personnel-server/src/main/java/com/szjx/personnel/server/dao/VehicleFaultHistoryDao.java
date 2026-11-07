@@ -1,5 +1,6 @@
 package com.szjx.personnel.server.dao;
 
+import com.szjx.personnel.server.util.Db;
 import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.model.VehicleFaultHistory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,8 +40,7 @@ public class VehicleFaultHistoryDao {
 
     public Long insert(VehicleFaultHistory record) {
         requireVehicle(record.getVehicleId());
-        return jdbc.queryForObject("INSERT INTO vehicle_fault_history(vehicle_id, fault_date, description) VALUES(?,?,?) RETURNING id",
-                Long.class, record.getVehicleId(), record.getFaultDate(), record.getDescription());
+        return Db.id(jdbc, "INSERT INTO vehicle_fault_history(vehicle_id, fault_date, description) VALUES(?,?,?) RETURNING id", record.getVehicleId(), record.getFaultDate(), record.getDescription());
     }
 
     public void update(Long vehicleId, Long id, VehicleFaultHistory record) {
