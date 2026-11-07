@@ -90,7 +90,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (matches(route, "(GET|POST) /api/item-loans|(PUT|DELETE) /api/item-loans/[0-9]+|POST /api/item-loans/[0-9]+/return")) return true;
         if (matches(route, "(GET|POST) /api/(equipment|material|vehicle|phone|leave|leave-plan|fitness|military)")) return true;
         if (matches(route, "(PUT|DELETE) /api/(equipment|material|vehicle|phone|leave|leave-plan|fitness|military)/[0-9]+")) return true;
-        if (matches(route, "GET /api/(equipment|material|vehicle)/[0-9]+/photo|GET /api/phone/by-person|GET /api/fitness/(stats|summary)|GET /api/leave/(check-travel|find-person|summary|holidays)")) return true;
+        if (matches(route, "GET /api/(equipment|material|vehicle)/[0-9]+/photo|GET /api/personnel/[0-9]+/transfers|GET /api/phone/by-person|GET /api/fitness/(stats|summary)|GET /api/leave/(check-travel|find-person|summary|holidays)")) return true;
         if (matches(route, "(GET|POST) /api/double-excellence|(GET|PUT|DELETE) /api/double-excellence/[0-9]+|GET /api/double-excellence/(stats|template|export)|POST /api/double-excellence/import-excel")) return true;
         if (matches(route, "(GET|POST) /api/annual-appraisal|(GET|PUT|DELETE) /api/annual-appraisal/[0-9]+|GET /api/annual-appraisal/(stats|template|export)|POST /api/annual-appraisal/import-excel")) return true;
         String kinds = "(position-history|reward-punish|children|family|driver|card|pvehicle|housing|fitness)";

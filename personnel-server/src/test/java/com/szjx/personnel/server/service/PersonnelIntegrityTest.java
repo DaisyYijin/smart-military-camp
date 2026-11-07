@@ -47,6 +47,9 @@ public class PersonnelIntegrityTest {
         }
         jdbc.execute(ddl + ", auto_leave INTEGER DEFAULT 0, auto_leave_previous_status TEXT DEFAULT '')");
         jdbc.execute("CREATE TABLE department(id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER, sort INTEGER, remark TEXT, leader_id INTEGER DEFAULT 0)");
+        jdbc.execute("CREATE TABLE transfer_record(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER NOT NULL, type TEXT NOT NULL, " +
+                "from_department_id INTEGER, from_department_name TEXT DEFAULT '', to_department_id INTEGER, to_department_name TEXT DEFAULT '', " +
+                "change_date TEXT NOT NULL, remark TEXT DEFAULT '', created_at TEXT DEFAULT '')");
         jdbc.update("INSERT INTO department(id, name) VALUES(1, '机关')");
         jdbc.execute("CREATE TABLE phone_device(id INTEGER PRIMARY KEY, personnel_id INTEGER, phone_number TEXT)");
         jdbc.execute("CREATE TABLE delete_undo(id INTEGER PRIMARY KEY AUTOINCREMENT, personnel_id INTEGER, name TEXT, summary TEXT DEFAULT '', payload TEXT, photo_trash TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now','localtime')))");

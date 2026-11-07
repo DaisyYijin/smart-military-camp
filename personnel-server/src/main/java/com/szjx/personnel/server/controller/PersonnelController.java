@@ -198,6 +198,14 @@ public class PersonnelController {
     }
 
     /**
+     * 人员变动轨迹(入职/调动/退役)
+     */
+    @GetMapping("/{id:\\d+}/transfers")
+    public ApiResponse transfers(@PathVariable Long id) {
+        return ApiResponse.ok(personnelService.listTransfers(id));
+    }
+
+    /**
      * 人员照片下载
      */
     @GetMapping("/{id:\\d+}/photo")

@@ -72,7 +72,7 @@ public class BackupService {
     public static final Map<String, String[]> MODULE_TABLES = new LinkedHashMap<String, String[]>();
 
     static {
-        MODULE_TABLES.put("personnel", new String[]{"personnel", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo"});
+        MODULE_TABLES.put("personnel", new String[]{"personnel", "position_history", "reward_punish", "child_info", "family_member", "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo", "transfer_record"});
         MODULE_TABLES.put("department", new String[]{"department"});
         MODULE_TABLES.put("dict", new String[]{"sys_dict", "sys_setting", "holiday_calendar", "admin_user", "op_log"});
         MODULE_TABLES.put("dashboard", new String[]{"dash_setting"});
@@ -437,6 +437,8 @@ public class BackupService {
                 if ("personnel".equals(key) && !(version >= 4 && Boolean.TRUE.equals(meta.get("personnelTrash")))) {
                     required.remove("delete_undo");
                 }
+                // 变动轨迹表是后来加入 personnel 模块的:旧备份没有它不算缺表,声明了仍照常校验
+                if ("personnel".equals(key)) { required.remove("transfer_record"); }
                 if ("vehicle".equals(key)) { required.remove("vehicle_fault_history"); }
                 // v1/v2 predate leave plans and military scheme tables; still verify any such declared files.
                 if (version <= 2 && "leave".equals(key)) { required.remove("leave_plan"); }
@@ -668,6 +670,10 @@ public class BackupService {
                         tables.remove("delete_undo");
                         clearPersonnelUndo = true;
                         warnings.add("备份未包含完整的人员撤回记录或撤回照片,已清空本地撤回缓存");
+                    }
+                    if (!declared.containsKey("transfer_record")) {
+                        tables.remove("transfer_record");
+                        warnings.add("旧备份未包含变动轨迹表,本次跳过轨迹恢复");
                     }
                 }
                 if ("vehicle".equals(module) && !declared.containsKey("vehicle_fault_history")) {

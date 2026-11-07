@@ -282,13 +282,13 @@ test('rollcall options do not alter roster selection, defaults, filters or expor
   const h = harness({ departmentId: '4', keyword: '当前筛选' }); const c = ui(h.open()); c.all.click(); c.choose(0, 'rank'); c.download.click();
   h.context.openRosterDialog(); await flush(); assert.deepEqual(h.gets, ['/api/personnel/roster/fields']);
   const roster = h.modals.at(-1); const download = roster.dialog.querySelector('.btn-primary');
-  const chips = roster.dialog.querySelectorAll('.field-chip'); assert.ok(chips.every((chip) => !chip.classList.contains('on')));
+  const chips = roster.dialog.querySelectorAll('.roster-field-check'); assert.ok(chips.every((chip) => !chip.classList.contains('on')));
   const count = h.calls.length; download.click(); assert.equal(h.calls.length, count); assert.equal(roster.closed, false); assert.match(h.messages.at(-1).text, /至少选择一个字段/);
   chips[0].click(); download.click();
   assert.equal(h.calls.at(-1).url.split('?')[0], '/api/personnel/roster/excel');
   assert.equal(query(h).get('fields'), 'name'); assert.equal(query(h).get('departmentId'), '4'); assert.equal(query(h).get('keyword'), '当前筛选');
   assert.equal(query(h).has('sort'), false); assert.equal(query(h).has('marks'), false);
-  h.context.openRosterDialog(); await flush(); assert.ok(h.modals.at(-1).dialog.querySelectorAll('.field-chip').every((chip) => !chip.classList.contains('on')));
+  h.context.openRosterDialog(); await flush(); assert.ok(h.modals.at(-1).dialog.querySelectorAll('.roster-field-check').every((chip) => !chip.classList.contains('on')));
 });
 
 test('subtree and point filters flow through both downloads without leaking rollcall options into roster fields', async () => {
@@ -297,7 +297,7 @@ test('subtree and point filters flow through both downloads without leaking roll
   assert.equal(query(h).get('departmentId'), '22'); assert.equal(query(h).get('includeDescendants'), 'true');
   assert.equal(query(h).get('locationPoint'), '点位 A&B'); assert.equal(query(h).get('marks'), 'party'); assert.equal(query(h).get('sort'), 'rank:desc');
   h.context.openRosterDialog(); await flush(); const modal = h.modals.at(-1);
-  const chips = modal.dialog.querySelectorAll('.field-chip');
+  const chips = modal.dialog.querySelectorAll('.roster-field-check');
   assert.equal(chips.length, 4); assert.ok(chips.every((chip) => !chip.classList.contains('on')));
   for (const label of ['军人证件号', '单位全路径']) chips.find((chip) => chip.textContent === label).click();
   modal.dialog.querySelector('.btn-primary').click();
@@ -316,7 +316,7 @@ test('roster field area never creates its own scroll container alongside the dia
   const descendants = modal.dialog.querySelectorAll('div');
   const scrollables = descendants.filter((el) => /auto|scroll/.test(String((el.style || {}).overflow) + String((el.style || {}).overflowY)));
   assert.equal(scrollables.length, 0, 'only the dialog body may scroll');
-  const chips = modal.dialog.querySelectorAll('.field-chip');
+  const chips = modal.dialog.querySelectorAll('.roster-field-check');
   assert.equal(chips.length, 40);
   assert.doesNotMatch(chips[0].parentNode.getAttribute('style'), /max-height|overflow/);
 });
@@ -326,7 +326,7 @@ test('roster dynamically offers license columns without preselection and keeps f
   const keys = ['name', 'driverLicense', 'hasDriverLicense', 'driverLicenseType', 'driverLicenseNo', 'driverVehicleClass', 'driverIssueDate', 'driverExpiryDate', 'driverLicenseStatus', 'driverReviewDate', 'driverIssuingAuth'];
   h.context.GET = () => Promise.resolve(keys.map((key) => ({ key, label: key })));
   h.context.openRosterDialog(); await flush();
-  const modal = h.modals.at(-1); const chips = modal.dialog.querySelectorAll('.field-chip');
+  const modal = h.modals.at(-1); const chips = modal.dialog.querySelectorAll('.roster-field-check');
   assert.equal(chips.length, 11); assert.ok(chips.every((chip) => !chip.classList.contains('on')));
   assert.match(modal.dialog.textContent, /多证在同一人员行内分行显示/);
   for (const key of ['name', 'driverLicense', 'driverLicenseNo']) chips.find((chip) => chip.textContent === key).click();
@@ -341,7 +341,7 @@ test('license filters reach both real download functions without changing the ol
   assert.equal(query(h).get('driverLicense'), 'yes'); assert.equal(query(h).get('driverLicenseType'), '地方本'); assert.equal(query(h).get('driverLicenseStatus'), '过期');
   assert.equal(query(h).get('marks'), 'driver');
   h.context.openRosterDialog(); await flush();
-  const modal = h.modals.at(-1); modal.dialog.querySelectorAll('.field-chip')[0].click(); modal.dialog.querySelector('.btn-primary').click();
+  const modal = h.modals.at(-1); modal.dialog.querySelectorAll('.roster-field-check')[0].click(); modal.dialog.querySelector('.btn-primary').click();
   assert.equal(query(h).get('driverLicense'), 'yes'); assert.equal(query(h).get('driverLicenseType'), '地方本'); assert.equal(query(h).get('driverLicenseStatus'), '过期');
   assert.equal(query(h).has('marks'), false); assert.equal(query(h).has('sort'), false);
 });
@@ -408,7 +408,7 @@ test('actual-unit never leaks into roster downloads and the roster note explains
   h.context.openRosterDialog(); await flush();
   const roster = h.modals.at(-1);
   assert.match(roster.dialog.textContent, /实际单位显示完整路径/);
-  roster.dialog.querySelectorAll('.field-chip')[0].click(); roster.dialog.querySelector('.btn-primary').click();
+  roster.dialog.querySelectorAll('.roster-field-check')[0].click(); roster.dialog.querySelector('.btn-primary').click();
   const q = query(h);
   assert.equal(q.get('fields'), 'name'); assert.equal(q.get('departmentId'), '4');
   assert.equal(q.has('actualUnit'), false); assert.equal(q.has('sort'), false); assert.equal(q.has('marks'), false);

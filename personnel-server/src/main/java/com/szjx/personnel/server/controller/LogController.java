@@ -22,8 +22,12 @@ public class LogController {
 
     @GetMapping
     public ApiResponse query(@RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String action,
+                             @RequestParam(required = false) String user,
+                             @RequestParam(required = false) String startDate,
+                             @RequestParam(required = false) String endDate,
                              @RequestParam(defaultValue = "1") int page,
                              @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(logService.query(keyword, page, size));
+        return ApiResponse.ok(logService.query(keyword, action, user, startDate, endDate, page, size));
     }
 }

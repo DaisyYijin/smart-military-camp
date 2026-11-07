@@ -660,6 +660,20 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
         ensureColumn("organization_column", "personnel_field", "personnel_field TEXT DEFAULT ''");
 
+        // 人员变动轨迹:入职/调动/退役自动记录(单位名称快照,单位改名删除不影响历史可读)
+        jdbc.execute("CREATE TABLE IF NOT EXISTS transfer_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "type TEXT NOT NULL," +
+                "from_department_id INTEGER," +
+                "from_department_name TEXT DEFAULT ''," +
+                "to_department_id INTEGER," +
+                "to_department_name TEXT DEFAULT ''," +
+                "change_date TEXT NOT NULL," +
+                "remark TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))" +
+                ")");
+
         // 住房情况
         jdbc.execute("CREATE TABLE IF NOT EXISTS housing_info (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +

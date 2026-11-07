@@ -734,19 +734,31 @@
         chips.forEach(function (c) {
           c.on = v;
           c.chip.classList.toggle('on', v);
+          if (c.box) { c.box.checked = v; }
         });
         syncCount();
       }
       list.forEach(function (f) {
-        var entry = { key: f.key, on: ROSTER_DEFAULT.indexOf(f.key) >= 0, chip: null };
-        entry.chip = h('button', {
-          type: 'button', class: 'field-chip' + (entry.on ? ' on' : ''), text: f.label,
-          title: entry.on ? '点击取消该列' : '点击选中该列',
-          onclick: function () {
-            entry.on = !entry.on;
-            entry.chip.classList.toggle('on', entry.on);
-            syncCount();
-          }
+        var entry = { key: f.key, on: ROSTER_DEFAULT.indexOf(f.key) >= 0, chip: null, box: null };
+        var box = h('input', { type: 'checkbox' });
+        box.checked = entry.on;
+        box.addEventListener('change', function () {
+          entry.on = box.checked;
+          entry.chip.classList.toggle('on', entry.on);
+          syncCount();
+        });
+        entry.box = box;
+        entry.chip = h('span', {
+          class: 'roster-field-check' + (entry.on ? ' on' : ''),
+          title: entry.on ? '点击取消该列' : '点击选中该列'
+        }, box, h('span', { text: f.label }));
+        // 点击文字区域等同勾选/取消(直接点复选框由 change 事件处理,避免双触发)
+        entry.chip.addEventListener('click', function (ev) {
+          if (ev.target === box) return;
+          box.checked = !box.checked;
+          entry.on = box.checked;
+          entry.chip.classList.toggle('on', entry.on);
+          syncCount();
         });
         chips.push(entry);
         grid.appendChild(entry.chip);
@@ -756,7 +768,7 @@
         title: '花名册下载 - 点击按钮选择需要的字段',
         body: h('div', {},
           h('div', { style: 'display:flex;align-items:center;gap:10px;margin-bottom:10px' },
-            h('span', { style: 'color:#66707f;font-size:12px', text: '点击字段按钮选中/取消(蓝色=选中):' }),
+            h('span', { style: 'color:#66707f;font-size:12px', text: '勾选需要导出的字段:' }),
             h('button', {
               type: 'button', class: 'btn btn-ghost btn-sm', text: '全选',
               onclick: function () { setAll(true); }

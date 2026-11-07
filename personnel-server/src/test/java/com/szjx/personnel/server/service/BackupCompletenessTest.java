@@ -22,7 +22,7 @@ public class BackupCompletenessTest {
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo",
             "double_excellence_record", "annual_appraisal_record", "absence_record",
-            "organization", "organization_member", "organization_column"
+            "organization", "organization_member", "organization_column", "transfer_record"
     };
 
     private Set<String> coveredTables() {

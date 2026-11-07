@@ -1161,6 +1161,11 @@ tr.dict-drop-after td { box-shadow: inset 0 -3px 0 var(--pri, #2f6fd6); animatio
 /* 表头列交换后的高亮闪烁,提示哪些列换了位置 */
 @keyframes colFlash { 0% { background: var(--pri-a28, rgba(47, 111, 214, .28)); } 100% { background: transparent; } }
 th.col-flash, td.col-flash { animation: colFlash 1.1s ease-out; }
+/* 花名册字段选择:传统复选框样式(勾选后蓝色高亮) */
+.roster-field-check { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--c-border, #c5cdd8); border-radius: 14px; cursor: pointer; font-size: 13px; color: var(--c-body, #34435c); background: #fff; user-select: none; }
+.roster-field-check:hover { border-color: var(--pri, #2f6fd6); }
+.roster-field-check.on { border-color: var(--pri, #2f6fd6); background: var(--c-pribg, #e8f0fd); color: var(--pri, #2f6fd6); }
+.roster-field-check input[type="checkbox"] { margin: 0; flex: none; }
 
 .filter-toggle-btn .badge {
   font-size: 11px;

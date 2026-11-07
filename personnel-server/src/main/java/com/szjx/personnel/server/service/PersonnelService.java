@@ -72,6 +72,27 @@ public class PersonnelService {
     }
 
     @Transactional
+    /** 记录人员变动轨迹(入职/调动/退役);单位名称取当前快照,单位后续改名/删除不影响历史可读。 */
+    private void recordTransfer(Long personnelId, String type, Long fromId, Long toId, String remark) {
+        jdbc.update("INSERT INTO transfer_record(personnel_id, type, from_department_id, from_department_name, " +
+                        "to_department_id, to_department_name, change_date, remark) " +
+                        "VALUES(?,?,?,?,?,?,date('now','localtime'),?)",
+                personnelId, type, fromId, deptName(fromId), toId, deptName(toId), remark);
+    }
+
+    private String deptName(Long id) {
+        if (id == null || id <= 0) { return ""; }
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT name FROM department WHERE id=?", id);
+        return rows.isEmpty() ? "" : String.valueOf(rows.get(0).get("name"));
+    }
+
+    /** 人员变动轨迹(倒序):详情弹窗展示用。 */
+    public List<Map<String, Object>> listTransfers(Long personnelId) {
+        DataScope.requirePerson(jdbc, personnelId);
+        return jdbc.queryForList("SELECT id, type, from_department_name, to_department_name, change_date, remark, created_at " +
+                "FROM transfer_record WHERE personnel_id=? ORDER BY change_date DESC, id DESC", personnelId);
+    }
+
     public Personnel create(Personnel p) {
         p.setId(null);
         DataScope.requireDepartment(p.getDepartmentId());
@@ -83,6 +104,7 @@ public class PersonnelService {
             deleteOnRollback(photoFile); // 必须在入库前注册，否则入库异常无法清理照片
         }
         long id = personnelDao.insert(p);
+        recordTransfer(id, "入职", null, p.getDepartmentId(), "新进人员录入");
         return personnelDao.findById(id);
     }
 
@@ -153,6 +175,10 @@ public class PersonnelService {
         p.setPhone(personnelDao.devicePhone(id));
         if (!java.util.Objects.equals(old.getStatus(), p.getStatus())) {
             jdbc.update("UPDATE personnel SET auto_leave=0, auto_leave_previous_status='' WHERE id=?", id);
+        }
+        // 单位变更 → 自动记录调动轨迹(政工场景常需回溯"何时从哪个单位调来")
+        if (!java.util.Objects.equals(old.getDepartmentId(), p.getDepartmentId())) {
+            recordTransfer(id, "调动", old.getDepartmentId(), p.getDepartmentId(), "单位变更");
         }
         String photoFile = old.getPhoto();
         if (StringUtils.hasText(p.getPhotoBase64())) {
@@ -240,6 +266,7 @@ public class PersonnelService {
                 throw new com.szjx.personnel.server.auth.ForbiddenException("该人员仍被管理范围外的单位引用，请联系上级先调整负责人");
             }
         }
+        recordTransfer(id, "退役", old.getDepartmentId(), null, "人员删除(删除撤回可恢复)");
         // 打包快照:人员行 + 级联记录 + 被解除的引用 + 照片移入回收站
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("person", jdbc.queryForMap("SELECT * FROM personnel WHERE id=?", id));

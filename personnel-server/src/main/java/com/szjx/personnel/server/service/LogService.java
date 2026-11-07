@@ -32,15 +32,15 @@ public class LogService {
         }
     }
 
-    public PageResult<Map<String, Object>> query(String keyword, int page, int size) {
+    public PageResult<Map<String, Object>> query(String keyword, String action, String user, String startDate, String endDate, int page, int size) {
         if (page < 1) {
             page = 1;
         }
         if (size < 1 || size > 200) {
             size = 20;
         }
-        long total = opLogDao.count(keyword);
-        List<Map<String, Object>> list = opLogDao.query(keyword, page, size);
+        long total = opLogDao.count(keyword, action, user, startDate, endDate);
+        List<Map<String, Object>> list = opLogDao.query(keyword, action, user, startDate, endDate, page, size);
         return new PageResult<Map<String, Object>>(total, list);
     }
 }

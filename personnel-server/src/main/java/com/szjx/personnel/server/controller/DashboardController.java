@@ -5,6 +5,7 @@ import com.szjx.personnel.server.auth.DataScope;
 import com.szjx.personnel.server.dao.ItemLoanDao;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,13 +33,17 @@ public class DashboardController {
         this.itemLoanDao = itemLoanDao;
     }
 
+    /** 兼容无参调用(默认30天窗口):既有前端与测试调用不变 */
+    public ApiResponse events() { return events(30); }
+
     @GetMapping("/events")
-    public ApiResponse events() {
+    public ApiResponse events(@RequestParam(value = "days", defaultValue = "30") int daysAhead) {
         LocalDate today = LocalDate.now();
         String t0 = today.toString();
         String plus10 = today.plusDays(10).toString();
         String plus3 = today.plusDays(3).toString();
-        String plus30 = today.plusDays(30).toString();
+        int horizon = Math.max(7, Math.min(365, daysAhead)); // 窗口参数化:默认30天,汇总弹窗可查90/180/365
+        String plus30 = today.plusDays(horizon).toString();
 
         List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
 
@@ -193,7 +198,7 @@ public class DashboardController {
             for (String[] s : rankStages) { if (s[0].equals(rankName)) { stage = s; break; } }
             if (stage == null) { continue; }
             java.time.LocalDate due = baseDate.plusMonths(Long.parseLong(stage[1]));
-            if (due.isAfter(today.plusDays(30))) { continue; }
+            if (due.isAfter(today.plusDays(horizon))) { continue; }
             boolean overdue = due.isBefore(today);
             list.add(event(overdue ? "danger" : "warn", "军衔",
                     r.get("name") + " " + rankName + (overdue ? " 已满期可晋升" : " 将于 " + fmtDate(due.toString()) + " 满期晋升") + stage[2],

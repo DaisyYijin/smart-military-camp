@@ -1340,6 +1340,48 @@ function attachPersonnelAvatar(dd, ddOpts, wrap) {
   if (dd.value) { setTimeout(function () { show(dd.value); }, 0); }
 }
 
+/* ============ 列宽拖动调整(表头右缘拖动,localStorage 按视图+表头名记忆,列表页通用) ============ */
+function attachColumnResize(table, viewKey) {
+  if (!table || !table.tHead || !table.tHead.rows.length) return;
+  var ths = Array.prototype.slice.call(table.tHead.rows[0].cells);
+  // 应用记忆宽度
+  ths.forEach(function (th) {
+    var w = null;
+    try { w = localStorage.getItem('colw:' + viewKey + ':' + th.textContent.trim()); } catch (e) { /* 忽略 */ }
+    if (w) { th.style.width = w + 'px'; }
+  });
+  ths.forEach(function (th) {
+    th.addEventListener('mousemove', function (e) {
+      var rect = th.getBoundingClientRect();
+      th.style.cursor = (rect.right - e.clientX < 6) ? 'col-resize' : '';
+    });
+    th.addEventListener('mousedown', function (e) {
+      var rect = th.getBoundingClientRect();
+      if (rect.right - e.clientX >= 6) return; // 仅右缘 6px 内启动列宽拖动
+      e.preventDefault();
+      // 固化各列当前宽度后切 fixed 布局,拖动才精确生效
+      table.style.tableLayout = 'fixed';
+      Array.prototype.forEach.call(table.tHead.rows[0].cells, function (c) {
+        c.style.width = c.getBoundingClientRect().width + 'px';
+      });
+      var startX = e.clientX, startW = rect.width;
+      function onMove(ev) {
+        th.style.width = Math.max(50, startW + (ev.clientX - startX)) + 'px';
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        try {
+          localStorage.setItem('colw:' + viewKey + ':' + th.textContent.trim(),
+            String(Math.round(th.getBoundingClientRect().width)));
+        } catch (err) { /* 记忆失败不影响本次调整 */ }
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function buildForm(fields, values, extraPanels) {
   values = values || {};
   extraPanels = extraPanels || {};
@@ -3151,6 +3193,7 @@ function crudView(cfg) {
       '<th class="cb-cell"><input type="checkbox" class="cb-all" title="全选本页"/></th>' +
       cfg.columns.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') +
       '<th class="action-col" style="width:110px">操作</th></tr></thead><tbody></tbody>';
+    attachColumnResize(table, cfg.key); // 列宽拖动+记忆(按视图+表头名存 localStorage)
     table.addEventListener('change', function (e) {
       var t = e.target;
       if (locked()) {
@@ -3296,6 +3339,21 @@ function crudView(cfg) {
 /** 通用详情弹窗:按模块表单定义分栏展示全部字段(人员模块附带照片) */
 function openDetailModal(cfg, row, act) {
   var grid = h('div', { class: 'detail-grid' });
+  // 变动轨迹(人员档案专属):入职/调动/退役时间线,自动记录于增改删
+  if (cfg.key === 'personnel' && row.id) {
+    grid.appendChild(h('div', { class: 'form-section', text: '变动轨迹' }));
+    var trHolder = h('div', { style: 'grid-column:1/-1' });
+    grid.appendChild(trHolder);
+    GET('/api/personnel/' + row.id + '/transfers').then(function (list) {
+      (list || []).forEach(function (t) {
+        trHolder.appendChild(h('div', { class: 'detail-sub-line',
+          text: t.change_date + '　' + (t.type || '') + '　' + (t.from_department_name || '—') + ' → ' + (t.to_department_name || '—') + (t.remark ? '　(' + t.remark + ')' : '') }));
+      });
+      if (!list || !list.length) {
+        trHolder.appendChild(h('div', { class: 'detail-sub-line', text: '暂无记录' }));
+      }
+    }).catch(function () { trHolder.appendChild(h('div', { class: 'detail-sub-line', text: '暂无记录' })); });
+  }
   var SUB_KINDS = {
     '任职经历': POSITION_SUB, '奖惩情况': REWARD_SUB, '家庭信息': FAMILY_SUB,
     '驾驶证': DRIVER_SUB, '个人卡号': CARD_SUB, '私家车': PVEHICLE_SUB, '住房情况': HOUSING_SUB
@@ -7894,6 +7952,62 @@ function dashboardView() {
     PUT('/api/preferences/dashWidgets', widgets).catch(function () { });
   }
 
+  /* ---------- 到期事项汇总:大弹窗查看全部提醒(时间范围+类型筛选) ---------- */
+  function openRemindersAll() {
+    var rangeSel = makeDropdown([{ v: '90', l: '未来90天' }, { v: '180', l: '未来半年' }, { v: '365', l: '未来一年' }], '时间范围');
+    rangeSel.value = '90';
+    var chipBar = h('div', { class: 'ev-chips', style: 'margin-bottom:8px' });
+    var listBox = h('div', { style: 'max-height:58vh;overflow:auto' });
+    var filter = '全部';
+    var allEvents = [];
+    function renderList() {
+      listBox.innerHTML = '';
+      var counts = {};
+      allEvents.forEach(function (ev) { var t = ev.tag || '动态'; counts[t] = (counts[t] || 0) + 1; });
+      var defs = ['全部'].concat(Object.keys(counts));
+      chipBar.innerHTML = '';
+      defs.forEach(function (t) {
+        chipBar.appendChild(h('button', {
+          type: 'button', class: 'ev-chip' + (filter === t ? ' on' : ''),
+          text: t + '(' + (t === '全部' ? allEvents.length : counts[t]) + ')',
+          onclick: function () { filter = t; renderList(); }
+        }));
+      });
+      var list = filter === '全部' ? allEvents : allEvents.filter(function (ev) { return (ev.tag || '') === filter; });
+      if (!list.length) {
+        listBox.appendChild(h('div', { class: 'empty-row', text: '该范围内暂无需要关注的事项' }));
+        return;
+      }
+      list.forEach(function (ev) {
+        listBox.appendChild(h('div', { class: 'dash-event ' + (ev.type || 'info'), title: ev.text },
+          h('span', { class: 'tag', text: ev.tag || '动态' }),
+          h('span', { class: 'txt', text: ev.text || '' }),
+          h('span', { class: 'dt', text: (ev.date || '') })));
+      });
+    }
+    function load() {
+      listBox.innerHTML = '';
+      listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…' }));
+      GET('/api/dashboard/events?days=' + (rangeSel.value || '90')).then(function (evs) {
+        allEvents = evs && evs.list ? evs.list : (evs || []);
+        renderList();
+      }).catch(function (e) {
+        listBox.innerHTML = '';
+        listBox.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败' }));
+      });
+    }
+    rangeSel.addEventListener('change', load);
+    var m = openModal({
+      title: '到期事项汇总', wide: true,
+      body: h('div', {},
+        h('div', { style: 'display:flex;gap:8px;align-items:center;margin-bottom:10px' },
+          h('span', { style: 'font-size:13px;color:var(--c-sub,#66788c)', text: '时间范围:' }), rangeSel),
+        chipBar, listBox),
+      footer: [h('button', { class: 'btn btn-ghost', text: '关闭', onclick: function () { m.close(); } })]
+    });
+    load();
+  }
+
   /* ---------- 近期事件(带快捷筛选) ---------- */
   function renderEvents() {
     eventsBox.innerHTML = '';
@@ -7908,6 +8022,7 @@ function dashboardView() {
         onclick: function () { evFilter = t; renderEvents(); }
       }));
     });
+    chipBar.appendChild(h('button', { type: 'button', class: 'ev-chip', text: '查看全部→', title: '打开到期事项汇总,可查未来一年', onclick: openRemindersAll }));
     eventsBox.appendChild(chipBar);
     // 固定高度内部滚动:切换筛选时面板尺寸不变,不闪动
     var listBox = h('div', { class: 'ev-list' });
@@ -8477,16 +8592,17 @@ function dashboardView() {
 /* ================= 操作日志视图 ================= */
 
 function logView() {
-  var state = { page: 1, size: 20, total: 0, keyword: '' };
+  var state = { page: 1, size: 20, total: 0, keyword: '', action: '', startDate: '', endDate: '' };
   var root = h('div');
   var pagerBox = h('div');
   var table = h('table', { class: 'grid' });
 
   function load() {
     var q = { page: state.page, size: state.size };
-    if (state.keyword) {
-      q.keyword = state.keyword;
-    }
+    if (state.keyword) { q.keyword = state.keyword; }
+    if (state.action) { q.action = state.action; }
+    if (state.startDate) { q.startDate = state.startDate; }
+    if (state.endDate) { q.endDate = state.endDate; }
     var qs = Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
     GET('/api/log?' + qs).then(function (pageData) {
       var rows = (pageData && pageData.list) || [];
@@ -8511,12 +8627,35 @@ function logView() {
     kw.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { state.keyword = kw.value.trim(); state.page = 1; load(); }
     });
+    // 筛选增强:操作类型 + 时间范围,组合过滤
+    var actionSel = makeDropdown(['', '登录', '登出', '新增', '修改', '删除', '导入', '导出', '备份', '恢复'].map(function (a) {
+      return { v: a, l: a || '全部操作' };
+    }), '操作类型');
+    var startInput = makeDateField();
+    startInput.placeholder = '开始日期';
+    var endInput = makeDateField();
+    endInput.placeholder = '结束日期';
+    function applyFilters() {
+      state.keyword = kw.value.trim();
+      state.action = actionSel.value || '';
+      state.startDate = startInput.value || '';
+      state.endDate = endInput.value || '';
+      state.page = 1;
+      load();
+    }
     root.appendChild(h('div', { class: 'panel' },
       h('div', { class: 'toolbar' },
         h('div', { class: 'field-inline' }, h('label', { text: '检索' }), kw),
+        h('div', { class: 'field-inline' }, h('label', { text: '操作' }), actionSel),
+        h('div', { class: 'field-inline' }, h('label', { text: '开始' }), startInput),
+        h('div', { class: 'field-inline' }, h('label', { text: '结束' }), endInput),
+        h('button', { class: 'btn btn-ghost', text: '查询', onclick: applyFilters }),
         h('button', {
-          class: 'btn btn-ghost', text: '查询',
-          onclick: function () { state.keyword = kw.value.trim(); state.page = 1; load(); }
+          class: 'btn btn-ghost', text: '重置',
+          onclick: function () {
+            kw.value = ''; actionSel.value = ''; startInput.value = ''; endInput.value = '';
+            applyFilters();
+          }
         }),
         h('div', { class: 'spacer' }),
         h('span', { title: '自动记录:登录/登出/增删改/导入导出/备份', style: 'width:18px;height:18px;border:1px solid var(--c-border, #c5cdd8);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:var(--c-muted, #8a97a8);cursor:help;flex:none', text: '?' })),
