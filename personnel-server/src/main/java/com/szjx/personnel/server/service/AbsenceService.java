@@ -50,7 +50,7 @@ public class AbsenceService {
         validate(r);
         long id = absenceDao.insert(r);
         // 补录历史记录(创建即带实际返回日期)不改变当前状态;在外中的登记才按事由置状态
-        applyStatus(r.getPersonnelId(), r.getReason(), StringUtils.hasText(r.getActualReturnDate()));
+        applyStatus(r.getPersonnelId(), r.getReason(), r.getLeaveDate(), StringUtils.hasText(r.getActualReturnDate()));
         return absenceDao.findById(id);
     }
 
@@ -71,7 +71,7 @@ public class AbsenceService {
         validate(r);
         absenceDao.update(r);
         // 状态由"是否已填实际返回日期"决定:未归→按事由映射;已归→恢复在位
-        applyStatus(r.getPersonnelId(), r.getReason(), StringUtils.hasText(r.getActualReturnDate()));
+        applyStatus(r.getPersonnelId(), r.getReason(), r.getLeaveDate(), StringUtils.hasText(r.getActualReturnDate()));
         return absenceDao.findById(id);
     }
 
@@ -133,9 +133,12 @@ public class AbsenceService {
         absenceDao.delete(id);
     }
 
-    private void applyStatus(Long personnelId, String reason, boolean returned) {
+    private void applyStatus(Long personnelId, String reason, String leaveDate, boolean returned) {
         if (returned) {
             restoreStatus(personnelId);
+        } else if (leaveDate != null && leaveDate.compareTo(java.time.LocalDate.now().toString()) > 0) {
+            // 预登记:离开日期还没到,不改当前状态;标记待生效(auto_absence=2),到期由 AbsenceStatusSyncService 每小时核对自动变更
+            jdbc.update("UPDATE personnel SET auto_absence=2, updated_at=datetime('now','localtime') WHERE id=?", personnelId);
         } else {
             jdbc.update("UPDATE personnel SET status=?, auto_absence=1, updated_at=datetime('now','localtime') WHERE id=?",
                     statusFor(reason), personnelId);

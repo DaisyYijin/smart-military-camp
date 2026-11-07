@@ -196,4 +196,29 @@ class AbsenceServiceTest {
         assertThrows(RuntimeException.class, () -> service.update(created.getId(), record(1, "学习", "2026-11-01", "", null)));
         assertThrows(RuntimeException.class, () -> service.delete(created.getId()));
     }
+
+    @Test void futureLeaveDatePreRegistrationKeepsStatusUntilDue() {
+        // 11月预登记12月的在外 → 状态不应立即变更
+        AbsenceRecord created = service.create(record(1, "学习",
+                LocalDate.now().plusDays(30).toString(), LocalDate.now().plusDays(90).toString(), null));
+        assertEquals("在位", personStatus(1));
+        assertEquals(2, jdbc.queryForObject("SELECT auto_absence FROM personnel WHERE id=1", Integer.class));
+        // 离开日期到期(把记录改到昨天) → 每小时同步生效为"培训"
+        jdbc.update("UPDATE absence_record SET leave_date=? WHERE id=?",
+                LocalDate.now().minusDays(1).toString(), created.getId());
+        sync.sync();
+        assertEquals("培训", personStatus(1));
+        assertEquals(1, jdbc.queryForObject("SELECT auto_absence FROM personnel WHERE id=1", Integer.class));
+    }
+
+    @Test void syncDemotesPrematurelyActivatedPreRegistration() {
+        // 自愈:历史登记被提前改了状态但离开日期在未来 → 恢复在位并回退待生效
+        jdbc.update("INSERT INTO absence_record(personnel_id,reason,leave_date,expected_return_date,actual_return_date,remark,created_at,updated_at) " +
+                        "VALUES(1,'学习',?,?,'','','','')",
+                LocalDate.now().plusDays(30).toString(), LocalDate.now().plusDays(90).toString());
+        jdbc.update("UPDATE personnel SET status='培训', auto_absence=1 WHERE id=1");
+        sync.sync();
+        assertEquals("在位", personStatus(1));
+        assertEquals(2, jdbc.queryForObject("SELECT auto_absence FROM personnel WHERE id=1", Integer.class));
+    }
 }
