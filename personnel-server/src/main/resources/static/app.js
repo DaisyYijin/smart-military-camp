@@ -252,6 +252,7 @@ function importRuleText(key) {
 
 var ICON_PATHS = {
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
   shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
   box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
   truck: '<rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
@@ -11313,8 +11314,7 @@ var NAV_GROUPS = [
   { key: 'personnel-group', icon: 'users', label: '人员管理', children: [
     { key: 'personnel', label: '人员档案' },
     { key: 'absence', label: '在外登记' },
-    { key: 'organization', label: '组织建设' },
-    { key: 'approval', label: '审批中心' }
+    { key: 'organization', label: '组织建设' }
   ] },
   { key: 'military', icon: 'flag', label: '军事管理', children: [
     { key: 'military', label: '军事考核' },
@@ -11428,8 +11428,7 @@ function renderShell() {
         onclick: function (e) { e.stopPropagation(); navigate(c.key); }
       },
         h('span', { class: 'dot' }),
-        h('span', { class: 'txt', text: c.label }),
-        c.key === 'approval' ? h('span', { class: 'approval-pending-badge', style: 'display:none;margin-left:auto;background:var(--c-danger,#d9463e);color:#fff;font-size:11px;line-height:1;padding:2px 7px;border-radius:9px;min-width:10px;text-align:center;flex:none' }) : null);
+        h('span', { class: 'txt', text: c.label }));
       children.appendChild(sub);
       menuItems[c.key] = sub;
     });
@@ -11458,8 +11457,8 @@ function renderShell() {
     h('div', { class: 'topbar-user' },
       h('span', { class: 'who', text: who }),
       (function () { // 消息铃铛:未读数轮询(30秒)+点击打开消息中心
-        var bell = h('button', { type: 'button', 'aria-label': '消息通知', title: '消息通知', text: '🔔',
-          style: 'background:none;border:none;cursor:pointer;font-size:17px;position:relative;padding:4px 8px;color:var(--c-body,#34435c)' });
+        var bell = h('button', { type: 'button', 'aria-label': '消息通知', title: '消息通知', html: iconSvg('bell'),
+          style: 'background:none;border:none;cursor:pointer;position:relative;padding:4px 6px;color:var(--c-body,#445262);display:inline-flex;align-items:center' });
         var badge = h('span', { style: 'display:none;position:absolute;top:0;right:0;background:var(--c-danger,#d9463e);color:#fff;font-size:10px;line-height:1;padding:2px 5px;border-radius:8px;min-width:8px;text-align:center' });
         bell.appendChild(badge);
         var timer = (typeof setInterval === 'function') ? setInterval(function () {
@@ -11481,25 +11480,6 @@ function renderShell() {
         }, 500); }
         bell.addEventListener('click', function () { openMessageCenter(); });
         return bell;
-      })(),
-      (function () { // 审批待办徽标:管理员定期刷新(60秒),侧栏「审批中心」旁显示待审批数
-        if (!USER || USER.isAdmin !== true) { return null; }
-        function refreshApprovalBadge() {
-          GET('/api/approval/pending-count').then(function (r) {
-            if (!currentShell()) { return; }
-            var n = r && r.count ? +r.count : 0;
-            $all('.approval-pending-badge', document).forEach(function (b) {
-              b.style.display = n ? '' : 'none';
-              b.textContent = n > 99 ? '99+' : String(n);
-            });
-          }).catch(function () { /* 静默:非管理员或网络异常 */ });
-        }
-        var apTimer = (typeof setInterval === 'function') ? setInterval(function () {
-          if (!currentShell()) { clearInterval(apTimer); return; }
-          refreshApprovalBadge();
-        }, 60000) : null;
-        if (typeof setTimeout === 'function') { setTimeout(refreshApprovalBadge, 800); }
-        return null;
       })(),
       h('div', { class: 'topbar-avatar-wrap' },
         h('button', {
