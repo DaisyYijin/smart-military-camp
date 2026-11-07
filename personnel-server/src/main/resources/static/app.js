@@ -11040,7 +11040,7 @@ function renderShell() {
   }
   addMenu('stats', 'chart', '仪表盘');   // 仪表盘置顶
   NAV_GROUPS.forEach(addGroupMenu);
-  [materialCfg, leaveCfg, phoneCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
+  [materialCfg, phoneCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg].forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   PENDING_MODULES.forEach(function (m) { addMenu(m.key, m.icon, m.title); });
   addMenu('department', 'building', '单位管理');
   addMenu('accounts', 'users', '账号管理');
