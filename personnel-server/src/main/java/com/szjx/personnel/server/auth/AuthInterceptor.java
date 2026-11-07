@@ -84,7 +84,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (matches(route, "GET /api/fitness-matrix(/items)?|GET /api/fitness-std/(matrix|weight)/template|GET /api/military/schemes")) return true;
         if (matches(route, "GET /api/stats/(summary|dashboard)|GET /api/dashboard/events")) return true;
         if (matches(route, "(GET|POST) /api/departments|(PUT|DELETE) /api/departments/[0-9]+")) return true;
-        if (matches(route, "(GET|POST) /api/organization|(PUT|DELETE) /api/organization/[0-9]+|GET|POST|PUT|DELETE /api/organization/[0-9]+/(members(/|[0-9]+/?)?|columns)")) return true;
+        if (matches(route, "(GET|POST) /api/organization|(PUT|DELETE) /api/organization/[0-9]+|GET|POST|PUT|DELETE /api/organization/[0-9]+/(members(/|[0-9]+/?)?|columns|roster/excel)")) return true;
         if (matches(route, "(GET|POST) /api/personnel|(GET|PUT|DELETE) /api/personnel/[0-9]+")) return true;
         if (matches(route, "GET /api/personnel/([0-9]+/(age|photo)|by-idcard|options|rollcall/excel|roster/(fields|excel))")) return true;
         if (matches(route, "(GET|POST) /api/item-loans|(PUT|DELETE) /api/item-loans/[0-9]+|POST /api/item-loans/[0-9]+/return")) return true;
