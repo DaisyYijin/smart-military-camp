@@ -155,6 +155,18 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 "created_at TEXT DEFAULT (datetime('now','localtime'))," +
                 "updated_at TEXT DEFAULT (datetime('now','localtime')))");
         jdbc.execute("CREATE INDEX IF NOT EXISTS idx_absence_personnel ON absence_record(personnel_id)");
+        /* 补课登记:按日期查看人员在位情况并登记需补课人员 */
+        Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS makeup_record (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                "personnel_id INTEGER NOT NULL," +
+                "makeup_date TEXT NOT NULL," +
+                "subject TEXT DEFAULT ''," +
+                "remark TEXT DEFAULT ''," +
+                "created_by TEXT DEFAULT ''," +
+                "created_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "updated_at TEXT DEFAULT (datetime('now','localtime'))," +
+                "UNIQUE(personnel_id, makeup_date))");
+        jdbc.execute("CREATE INDEX IF NOT EXISTS idx_makeup_personnel ON makeup_record(personnel_id)");
         ensureColumn("personnel", "auto_absence", "auto_absence INTEGER DEFAULT 0");
     }
 

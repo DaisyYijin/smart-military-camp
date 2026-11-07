@@ -114,7 +114,7 @@ function harness(t) {
     const modal = { dialog, options, close(force) { if (!force && options.beforeClose && !options.beforeClose()) return; dialog.remove(); if (options.onClose) options.onClose(); } };
     modals.push(modal); return modal;
   };
-  for (const name of ['$', '$all', 'h', 'esc', 'parseCalendarDay', 'formatCalendarDay', 'makeDropdown', 'buildForm', 'attachPersonnelAvatar', 'attachColumnResize', 'aug1EasterEgg', 'martyrEasterEgg', 'oct1EasterEgg', 'lateNightCare', 'openMessageCenter', 'openMessageCompose', 'attachPersonPick', 'setupPersonLookup',
+  for (const name of ['$', '$all', 'h', 'esc', 'parseCalendarDay', 'formatCalendarDay', 'makeDropdown', 'buildForm', 'attachPersonnelAvatar', 'attachColumnResize', 'aug1EasterEgg', 'makeupView', 'martyrEasterEgg', 'oct1EasterEgg', 'lateNightCare', 'openMessageCenter', 'openMessageCompose', 'attachPersonPick', 'setupPersonLookup',
     'renderPager', 'slideFrom', 'loadAllRows', 'deRatingOptions', 'doubleExcellenceFields', 'doubleExcellencePayload', 'doubleExcellenceQuery', 'doubleExcellenceView',
     'yearMatrixView', 'cellFormValues', 'prefersReducedMotion']) vm.runInContext(definition(name), c);
   // 评级→样式类映射是单行 var 声明,definition() 只抽取函数,单独注入生产定义

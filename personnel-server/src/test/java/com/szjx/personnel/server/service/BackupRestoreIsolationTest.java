@@ -1114,7 +1114,7 @@ class BackupRestoreIsolationTest {
         jdbc.execute("CREATE TABLE fitness_standard(id INTEGER PRIMARY KEY, standard_text TEXT)");
         jdbc.update("INSERT INTO fitness_standard(id,standard_text) VALUES(1,'历史标准')");
         List<String> actual = jdbc.queryForList("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(39, actual.size());
+        assertEquals(40, actual.size());
         String backup = (String) service.createBackup(BackupService.allModuleKeys(), false).get("name");
         try (ZipFile zip = new ZipFile(service.getBackupFile(backup))) {
             Map<?,?> meta = new com.fasterxml.jackson.databind.ObjectMapper().readValue(zip.getInputStream(zip.getEntry("meta.json")), Map.class);
