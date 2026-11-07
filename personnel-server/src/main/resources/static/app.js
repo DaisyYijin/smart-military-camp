@@ -7957,11 +7957,40 @@ function openDrillModal(title, api, param, val) {
   loadDrillPage(1, []);
 }
 
+/* [彩蛋] 八一建军节:8月1日打开仪表盘自动展示五星飘落+祝福语(每天仅一次,减动效用户跳过) */
+function aug1EasterEgg() {
+  try {
+    var now = new Date();
+    if (now.getMonth() !== 7 || now.getDate() !== 1) { return; } // 仅8月1日
+    if (prefersReducedMotion()) { return; } // 减动效:不播放
+    var seen = 'egg-aug1-' + now.getFullYear();
+    if (localStorage.getItem(seen)) { return; } // 当年已展示过
+    localStorage.setItem(seen, '1');
+    var layer = h('div', { class: 'egg-aug1-layer' });
+    for (var i = 0; i < 12; i++) {
+      (function (idx) {
+        var star = h('span', { class: 'egg-aug1-star', 'aria-hidden': 'true', text: '★' });
+        star.style.left = (Math.random() * 96) + '%';
+        star.style.animationDelay = (idx * 0.25 + Math.random() * 0.5) + 's';
+        star.style.fontSize = (16 + Math.random() * 16) + 'px';
+        layer.appendChild(star);
+      })(i);
+    }
+    var msg = h('div', { class: 'egg-aug1-msg' },
+      h('div', { class: 't', text: '八一建军节' }),
+      h('div', { class: 's', text: '致敬最可爱的人 · 节日快乐' }));
+    layer.appendChild(msg);
+    document.body.appendChild(layer);
+    setTimeout(function () { if (layer.parentNode) { layer.parentNode.removeChild(layer); } }, 6000);
+  } catch (e) { /* 彩蛋失败静默,不影响正常使用 */ }
+}
+
 function dashboardView() {
   var prefUserId = USER && USER.userId, prefToken = TOKEN;
   var widgetsKey = preferenceKey('dashWidgets'), cardsKey = preferenceKey('dashStatCards');
   function currentPrefs() { return !!prefToken && TOKEN === prefToken && USER && USER.userId === prefUserId; }
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
+  aug1EasterEgg(); // [彩蛋] 8月1日进入仪表盘时触发(非8月1日自动跳过)
   var widgets;
   try { widgets = JSON.parse(localStorage.getItem(widgetsKey) || 'null'); } catch (e) { widgets = null; }
   widgets = dashDriverLayout(widgets);

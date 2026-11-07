@@ -1488,6 +1488,14 @@ th.col-flash, td.col-flash { animation: colFlash 1.1s ease-out; }
 /* —— 彩蛋弹窗(连点侧栏品牌区5次触发) —— */
 .egg { text-align: center; padding: 18px 10px 6px; }
 .egg-star { font-size: 46px; line-height: 1; color: #f5b940; animation: egg-glow 1.6s ease-in-out infinite; }
+/* [彩蛋] 八一建军节:五星飘落+祝福语(仅8月1日仪表盘触发,每天一次) */
+.egg-aug1-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; overflow: hidden; }
+.egg-aug1-star { position: absolute; top: -50px; font-size: 22px; color: #f5b940; animation: egg-aug1-fall 4s linear forwards; text-shadow: 0 0 6px rgba(245,185,64,.5); }
+.egg-aug1-msg { position: absolute; top: 38%; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; animation: egg-aug1-fadein .8s ease-out both; }
+.egg-aug1-msg .t { font-size: 42px; font-weight: bold; color: var(--pri, #2f6fd6); letter-spacing: 8px; text-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.egg-aug1-msg .s { font-size: 16px; color: var(--c-sub, #66788c); margin-top: 8px; letter-spacing: 2px; }
+@keyframes egg-aug1-fall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(360deg); opacity: .3; } }
+@keyframes egg-aug1-fadein { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 .egg-title { margin-top: 12px; font-size: 17px; font-weight: 700; letter-spacing: 2px; color: var(--c-dark, #1d2c40); }
 .egg-text { margin-top: 8px; font-size: 12px; color: var(--c-sub, #66788c); }
 .egg-info { margin-top: 14px; display: inline-block; padding: 8px 12px; border-radius: 8px; background: var(--c-bg-soft, #f4f6fa); font-size: 12px; color: var(--c-muted, #8a97a8); }
