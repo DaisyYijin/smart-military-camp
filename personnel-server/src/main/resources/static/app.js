@@ -3120,10 +3120,10 @@ function crudView(cfg) {
     if (cfg.excel !== false) {
     // 导入:按模块规则追加记录或匹配更新
     var importInput = h('input', { type: 'file', accept: '.xlsx', style: 'display:none' });
-    importInput.addEventListener('change', function () {
-      var f = importInput.files[0];
-      importInput.value = '';
+    /* 导入共享逻辑:file input 与拖拽 drop 均走此函数,保证错误提示/进度/结果一致 */
+    function importExcelFile(f) {
       if (!f) return;
+      if (!/\.xlsx$/i.test(f.name)) { toast('请拖入 .xlsx 格式的 Excel 文件', 'err'); return; }
       var fd = new FormData();
       fd.append('file', f);
       var pm = showProgressModal('导入 Excel');
@@ -3156,8 +3156,44 @@ function crudView(cfg) {
         pm.close();
         toast(e.message, 'err');
       });
+    }
+    importInput.addEventListener('change', function () {
+      var f = importInput.files[0];
+      importInput.value = '';
+      importExcelFile(f);
     });
     toolbar.appendChild(importInput);
+    /* 拖拽导入:拖 .xlsx 文件到页面区域松手即导入(与 file input 走同一 importExcelFile) */
+    if (cfg.excel !== false) {
+      var dragOverlay = h('div', { class: 'import-drop-overlay' },
+        h('div', { class: 'import-drop-hint' },
+          h('div', { class: 'ic', html: iconSvg('box') }),
+          h('div', { text: '松手导入 Excel' }),
+          h('div', { style: 'font-size:12px;color:var(--c-sub,#66788c);margin-top:4px', text: '仅支持 .xlsx 文件' })));
+      var dragDepth = 0;
+      root.addEventListener('dragenter', function (e) {
+        if (!e.dataTransfer || !Array.prototype.some.call(e.dataTransfer.types, function (t) { return t === 'Files'; })) return;
+        e.preventDefault();
+        dragDepth++;
+        if (!document.body.contains(dragOverlay)) { document.body.appendChild(dragOverlay); }
+      });
+      root.addEventListener('dragover', function (e) {
+        if (!e.dataTransfer || !Array.prototype.some.call(e.dataTransfer.types, function (t) { return t === 'Files'; })) return;
+        e.preventDefault();
+        if (e.dataTransfer) { try { e.dataTransfer.dropEffect = 'copy'; } catch (err) { /* 忽略 */ } }
+      });
+      root.addEventListener('dragleave', function (e) {
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0 && dragOverlay.parentNode) { dragOverlay.parentNode.removeChild(dragOverlay); }
+      });
+      root.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dragDepth = 0;
+        if (dragOverlay.parentNode) { dragOverlay.parentNode.removeChild(dragOverlay); }
+        var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        importExcelFile(f);
+      });
+    }
     {
       toolbar.appendChild(h('button', {
         class: 'btn btn-ghost', text: '下载模板',
