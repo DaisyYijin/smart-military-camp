@@ -769,6 +769,14 @@
           h('p', { style: 'font-size:12px;color:#66707f;margin-top:10px', text: '驾驶证按登记记录导出，多证在同一人员行内分行显示。实际单位显示完整路径。' })),
         footer: [
           h('button', {
+            type: 'button', class: 'btn btn-ghost', text: '全选',
+            onclick: function () { setAll(true); }
+          }),
+          h('button', {
+            type: 'button', class: 'btn btn-ghost', text: '全不选',
+            onclick: function () { setAll(false); }
+          }),
+          h('button', {
             class: 'btn btn-ghost', text: '取消',
             onclick: function () { modal.close(); }
           }),
