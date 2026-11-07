@@ -7957,14 +7957,14 @@ function openDrillModal(title, api, param, val) {
   loadDrillPage(1, []);
 }
 
-/* [彩蛋] 八一建军节:8月1日打开仪表盘自动展示五星飘落+祝福语(每天仅一次,减动效用户跳过) */
+/* [彩蛋] 八一建军节:8月1日打开仪表盘自动展示五星飘落+祝福语(每年仅一次,减动效跳过) */
 function aug1EasterEgg() {
   try {
     var now = new Date();
-    if (now.getMonth() !== 7 || now.getDate() !== 1) { return; } // 仅8月1日
-    if (prefersReducedMotion()) { return; } // 减动效:不播放
+    if (now.getMonth() !== 7 || now.getDate() !== 1) { return; }
+    if (prefersReducedMotion()) { return; }
     var seen = 'egg-aug1-' + now.getFullYear();
-    if (localStorage.getItem(seen)) { return; } // 当年已展示过
+    if (localStorage.getItem(seen)) { return; }
     localStorage.setItem(seen, '1');
     var layer = h('div', { class: 'egg-aug1-layer' });
     for (var i = 0; i < 12; i++) {
@@ -7982,7 +7982,59 @@ function aug1EasterEgg() {
     layer.appendChild(msg);
     document.body.appendChild(layer);
     setTimeout(function () { if (layer.parentNode) { layer.parentNode.removeChild(layer); } }, 6000);
-  } catch (e) { /* 彩蛋失败静默,不影响正常使用 */ }
+  } catch (e) { /* 彩蛋失败静默 */ }
+}
+
+/* [彩蛋] 烈士纪念日(9月30日):全屏变暗+白菊+肃穆文字(无飘落动画,庄重) */
+function martyrEasterEgg() {
+  try {
+    var now = new Date();
+    if (now.getMonth() !== 8 || now.getDate() !== 30) { return; }
+    if (prefersReducedMotion()) { return; }
+    var seen = 'egg-martyr-' + now.getFullYear();
+    if (localStorage.getItem(seen)) { return; }
+    localStorage.setItem(seen, '1');
+    var layer = h('div', { class: 'egg-martyr-layer' },
+      h('div', { class: 'egg-martyr-msg' },
+        h('div', { class: 'flower', 'aria-hidden': 'true', text: '✿' }),
+        h('div', { class: 't', text: '铭记历史 · 缅怀先烈' }),
+        h('div', { class: 's', text: '人民英雄永垂不朽' })));
+    document.body.appendChild(layer);
+    setTimeout(function () { if (layer.parentNode) { layer.parentNode.removeChild(layer); } }, 8000);
+  } catch (e) { /* 彩蛋失败静默 */ }
+}
+
+/* [彩蛋] 国庆节(10月1日):红色飘带+周年数 */
+function oct1EasterEgg() {
+  try {
+    var now = new Date();
+    if (now.getMonth() !== 9 || now.getDate() !== 1) { return; }
+    if (prefersReducedMotion()) { return; }
+    var seen = 'egg-oct1-' + now.getFullYear();
+    if (localStorage.getItem(seen)) { return; }
+    localStorage.setItem(seen, '1');
+    var years = now.getFullYear() - 1949;
+    var layer = h('div', { class: 'egg-oct1-layer' },
+      h('div', { class: 'egg-oct1-ribbon left', 'aria-hidden': 'true' }),
+      h('div', { class: 'egg-oct1-ribbon right', 'aria-hidden': 'true' }),
+      h('div', { class: 'egg-oct1-msg' },
+        h('div', { class: 't', text: '庆祝中华人民共和国成立 ' + years + ' 周年' }),
+        h('div', { class: 's', text: '祝福祖国 · 繁荣昌盛' })));
+    document.body.appendChild(layer);
+    setTimeout(function () { if (layer.parentNode) { layer.parentNode.removeChild(layer); } }, 6000);
+  } catch (e) { /* 彩蛋失败静默 */ }
+}
+
+/* [彩蛋] 深夜关怀(23:00-5:00):toast 提示注意休息(当晚仅一次,无动画) */
+function lateNightCare() {
+  try {
+    var hr = new Date().getHours();
+    if (hr < 23 && hr >= 5) { return; }
+    var key = 'egg-night-' + new Date().toDateString();
+    if (localStorage.getItem(key)) { return; }
+    localStorage.setItem(key, '1');
+    setTimeout(function () { toast('夜深了,注意休息 🌙', ''); }, 2000);
+  } catch (e) { /* 彩蛋失败静默 */ }
 }
 
 function dashboardView() {
@@ -7990,7 +8042,10 @@ function dashboardView() {
   var widgetsKey = preferenceKey('dashWidgets'), cardsKey = preferenceKey('dashStatCards');
   function currentPrefs() { return !!prefToken && TOKEN === prefToken && USER && USER.userId === prefUserId; }
   var root = h('div', { class: 'loading-inline', text: '加载中…' });
-  aug1EasterEgg(); // [彩蛋] 8月1日进入仪表盘时触发(非8月1日自动跳过)
+  aug1EasterEgg(); // [彩蛋] 8月1日
+  martyrEasterEgg(); // [彩蛋] 9月30日
+  oct1EasterEgg(); // [彩蛋] 10月1日
+  lateNightCare(); // [彩蛋] 深夜23:00-5:00
   var widgets;
   try { widgets = JSON.parse(localStorage.getItem(widgetsKey) || 'null'); } catch (e) { widgets = null; }
   widgets = dashDriverLayout(widgets);
