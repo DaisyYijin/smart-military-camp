@@ -10786,9 +10786,9 @@ function makeupView() {
   /* 日期字段:与其他模块一致的日历组件(手输"年/月/日"或点图标选日期) */
   var dateField = makeDateField();
   dateField.value = new Date().toISOString().slice(0, 10);
-  var deptSel = h('select', { style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 4px;font-size:13px;color:var(--c-body,#445262);max-width:220px' });
-  /* 单位层级下钻:选中单位后下拉展示其直接下级(└ 缩进),逐级下钻;↑ 返回上级/全部 */
-  var currentDept = null;
+  /* 单位选择:弹层树——展开/收起层级,点名称直达任意层级;选中后按钮显示路径 */
+  var currentDeptId = ''; // '' = 全部单位
+  var deptExpanded = {};  // 各节点展开状态(视图内保持)
   function deptChildren(pid) {
     return (Ctx.deptFlat || []).filter(function (d) { return pid ? String(d.parentId) === String(pid) : !d.parentId; });
   }
@@ -10798,37 +10798,76 @@ function makeupView() {
     }
     return null;
   }
-  function rebuildDeptOptions() {
-    deptSel.innerHTML = '';
-    if (currentDept) {
-      deptSel.appendChild(h('option', { value: String(currentDept.id), text: currentDept.name }));
-      deptChildren(currentDept.id).forEach(function (c) {
-        deptSel.appendChild(h('option', { value: String(c.id), text: '└ ' + c.name }));
-      });
-      var parent = currentDept.parentId ? deptById(currentDept.parentId) : null;
-      deptSel.appendChild(h('option', { value: '__up__', text: parent ? '↑ 返回 ' + parent.name : '↑ 返回全部单位' }));
-      deptSel.value = String(currentDept.id);
-    } else {
-      deptSel.appendChild(h('option', { value: '', text: '全部单位' }));
-      deptChildren(null).forEach(function (d) {
-        deptSel.appendChild(h('option', { value: String(d.id), text: d.name }));
-      });
-      deptSel.value = '';
-    }
+  function deptPath(d) {
+    var parts = [d.name], p = d.parentId ? deptById(d.parentId) : null;
+    while (p) { parts.unshift(p.name); p = p.parentId ? deptById(p.parentId) : null; }
+    return parts.join(' / ');
   }
-  rebuildDeptOptions();
-  deptSel.addEventListener('change', function () {
-    var v = deptSel.value;
-    if (v === '__up__') {
-      currentDept = currentDept && currentDept.parentId ? deptById(currentDept.parentId) : null;
-    } else if (v) {
-      currentDept = deptById(v);
-    } else {
-      currentDept = null;
+  var deptBtn = h('button', { type: 'button', style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 10px;font-size:13px;color:var(--c-body,#445262);background:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:4px;max-width:260px;white-space:nowrap;overflow:hidden' });
+  function syncDeptBtn() {
+    var d = currentDeptId ? deptById(currentDeptId) : null;
+    deptBtn.textContent = '';
+    deptBtn.appendChild(h('span', { text: d ? deptPath(d) : '全部单位', style: 'overflow:hidden;text-overflow:ellipsis' }));
+    deptBtn.appendChild(h('span', { text: '▾', style: 'color:var(--c-muted,#8a97a8);flex:none' }));
+  }
+  var deptPanel = null;
+  function closeDeptPanel() {
+    if (deptPanel && deptPanel.parentNode) { deptPanel.parentNode.removeChild(deptPanel); }
+    deptPanel = null;
+    document.removeEventListener('mousedown', onDocMouseDown, true);
+  }
+  function onDocMouseDown(e) {
+    if (deptPanel && !deptPanel.contains(e.target) && e.target !== deptBtn && !deptBtn.contains(e.target)) { closeDeptPanel(); }
+  }
+  function deptRow(d, depth) {
+    var kids = deptChildren(d.id);
+    var isOpen = !!deptExpanded[String(d.id)];
+    var sel = String(d.id) === String(currentDeptId);
+    var arrow = h('span', {
+      text: kids.length ? (isOpen ? '▾' : '▸') : '·',
+      style: 'width:18px;flex:none;text-align:center;color:var(--c-muted,#8a97a8);cursor:' + (kids.length ? 'pointer' : 'default')
+    });
+    if (kids.length) {
+      arrow.addEventListener('click', function (e) {
+        e.stopPropagation();
+        deptExpanded[String(d.id)] = !isOpen;
+        openDeptPanel(true);
+      });
     }
-    rebuildDeptOptions();
-    load();
-  });
+    var row = h('div', {
+      style: 'display:flex;align-items:center;padding:4px 8px 4px ' + (depth * 16) + 'px;cursor:pointer;font-size:13px;' +
+        (sel ? 'background:var(--c-pribg,#e8f0fd);color:var(--pri,#2f6fd6);font-weight:bold;' : 'color:var(--c-body,#445262);')
+    }, arrow, h('span', { text: d.name, style: 'flex:none' }));
+    row.addEventListener('click', function () {
+      currentDeptId = String(d.id);
+      syncDeptBtn(); closeDeptPanel(); load();
+    });
+    return { row: row, kids: kids, isOpen: isOpen };
+  }
+  function openDeptPanel(refresh) {
+    if (!refresh && deptPanel) { closeDeptPanel(); return; }
+    if (deptPanel) { closeDeptPanel(); }
+    var rect = deptBtn.getBoundingClientRect();
+    deptPanel = h('div', { style: 'position:fixed;top:' + Math.min(rect.bottom + 4, window.innerHeight - 340) + 'px;left:' + rect.left + 'px;width:280px;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--c-border,#c5cdd8);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:10000;padding:4px 0' });
+    var allRow = h('div', {
+      style: 'padding:5px 8px 5px 10px;cursor:pointer;font-size:13px;' + (!currentDeptId ? 'color:var(--pri,#2f6fd6);font-weight:bold;' : 'color:var(--c-body,#445262);')
+    }, h('span', { text: '全部单位' }));
+    allRow.addEventListener('click', function () {
+      currentDeptId = ''; syncDeptBtn(); closeDeptPanel(); load();
+    });
+    deptPanel.appendChild(allRow);
+    (function build(pid, depth) {
+      deptChildren(pid).forEach(function (d) {
+        var item = deptRow(d, depth);
+        deptPanel.appendChild(item.row);
+        if (item.isOpen) { build(d.id, depth + 1); }
+      });
+    })('', 0);
+    document.body.appendChild(deptPanel);
+    document.addEventListener('mousedown', onDocMouseDown, true);
+  }
+  deptBtn.addEventListener('click', function () { openDeptPanel(false); });
+  syncDeptBtn();
   var onlyAbsent = h('input', { type: 'checkbox', style: 'margin:0 4px 0 0' });
   var listBox = h('div');
   var statLine = h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin:10px 0 6px' });
@@ -10870,7 +10909,7 @@ function makeupView() {
     listBox.innerHTML = '';
     listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
     var url = '/api/makeup/status?date=' + encodeURIComponent(dateField.value || '');
-    if (deptSel.value) { url += '&departmentId=' + deptSel.value; }
+    if (currentDeptId) { url += '&departmentId=' + currentDeptId; }
     GET(url).then(function (rows) {
       lastRows = rows || [];
       render();
@@ -10882,7 +10921,7 @@ function makeupView() {
 
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
-    deptSel,
+    deptBtn,
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center' }, onlyAbsent, h('span', { text: '只看不在位' })),
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
   root.appendChild(statLine);
