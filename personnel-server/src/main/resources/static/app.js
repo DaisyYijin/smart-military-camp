@@ -10787,7 +10787,8 @@ function makeupView() {
   /* 起止日期双输入框:只填开始=单日查询,两个都填=区间查询(结束留空按单日) */
   var endDateField = makeDateField();
   endDateField.value = '';
-  var endDateLabel = h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
+  /* div 而非 label:label 原生会把内部点击转发给 input(合成 click),选完日期后触发 input 的开面板逻辑导致弹层重开 */
+  var endDateLabel = h('div', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
   /* 单位选择:弹层树——展开/收起层级,点名称直达任意层级;选中后按钮显示路径 */
   var currentDeptId = ''; // '' = 全部单位
   var deptExpanded = {};  // 各节点展开状态(视图内保持)
@@ -11071,7 +11072,8 @@ function makeupView() {
   }
 
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
-    h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
+    /* div 而非 label:同上,防 label 原生转发点击给 input 导致选完日期后弹层自动重开 */
+    h('div', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
     endDateLabel,
     deptBtn,
     colsBtn,
