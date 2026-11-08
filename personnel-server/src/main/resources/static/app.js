@@ -10887,6 +10887,80 @@ function makeupView() {
   var listBox = h('div');
   var statusCards = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:stretch' });
   var statusFilter = ''; // '' = 全部;点击状态卡片切换筛选,再点取消
+  /* 列选择器:10列默认全显,可勾选隐藏;#列固定;选择持久化 localStorage(makeupHiddenCols) */
+  var COLS = [
+    { key: 'idx', label: '#', width: 36, fixed: true },
+    { key: 'name', label: '姓名', width: 90 },
+    { key: 'rank', label: '军衔', width: 80 },
+    { key: 'category', label: '类别', width: 70 },
+    { key: 'idCard', label: '身份证号', width: 160 },
+    { key: 'deptName', label: '单位' },
+    { key: 'dayStatus', label: '当日状态', width: 90 },
+    { key: 'detail', label: '详情', width: 130 },
+    { key: 'currentStatus', label: '档案状态', width: 80 },
+    { key: 'phone', label: '联系电话', width: 120 }
+  ];
+  var hiddenCols = {};
+  try {
+    (JSON.parse(localStorage.getItem('makeupHiddenCols') || '[]') || []).forEach(function (k) { hiddenCols[k] = true; });
+  } catch (e) { hiddenCols = {}; }
+  function visibleCols() { return COLS.filter(function (c) { return c.fixed || !hiddenCols[c.key]; }); }
+  function colCell(c, r, idx) {
+    switch (c.key) {
+      case 'idx': return h('td', { style: 'color:var(--c-muted,#8a97a8)', text: String(idx + 1) });
+      case 'name': return h('td', null, h('b', { text: r.name || '' }));
+      case 'rank': return h('td', { text: r.rank || '—' });
+      case 'category': return h('td', { style: 'font-size:12px', text: r.category || '—' });
+      case 'idCard': return h('td', { style: 'font-size:12px', text: r.idCard || '—' });
+      case 'deptName': return h('td', { text: r.deptName || '—', title: r.deptName || '' });
+      case 'dayStatus': return h('td', { html: statusBadge(r.dayStatus || '在位') });
+      case 'detail': return h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' });
+      case 'currentStatus': return h('td', { style: 'font-size:12px', text: r.currentStatus || '—' });
+      case 'phone': return h('td', { style: 'font-size:12px', text: r.phone || '—' });
+    }
+    return h('td', null);
+  }
+  var colPanel = null;
+  function closeColPanel() {
+    if (colPanel && colPanel.parentNode) { colPanel.parentNode.removeChild(colPanel); }
+    colPanel = null;
+    document.removeEventListener('mousedown', onColDocDown, true);
+  }
+  function onColDocDown(e) {
+    if (colPanel && !colPanel.contains(e.target) && e.target !== colsBtn && !colsBtn.contains(e.target)) { closeColPanel(); }
+  }
+  function openColPanel() {
+    if (colPanel) { closeColPanel(); return; }
+    var rect = colsBtn.getBoundingClientRect();
+    colPanel = h('div', { style: 'position:fixed;top:' + Math.min(rect.bottom + 4, window.innerHeight - 380) + 'px;left:' + Math.min(rect.left, window.innerWidth - 250) + 'px;width:226px;background:#fff;border:1px solid var(--c-border,#c5cdd8);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:10000;padding:6px 0 10px' });
+    var list = h('div');
+    function refreshList() {
+      list.innerHTML = '';
+      COLS.forEach(function (c) {
+        var cb = h('input', { type: 'checkbox' });
+        cb.checked = c.fixed || !hiddenCols[c.key];
+        cb.disabled = !!c.fixed;
+        cb.addEventListener('change', function () {
+          if (cb.checked) { delete hiddenCols[c.key]; } else { hiddenCols[c.key] = true; }
+          try { localStorage.setItem('makeupHiddenCols', JSON.stringify(Object.keys(hiddenCols))); } catch (e2) { /* 持久化失败不影响本次 */ }
+          render();
+        });
+        list.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:5px 14px;font-size:13px;color:var(--c-body,#445262);cursor:' + (c.fixed ? 'default' : 'pointer') },
+          cb, h('span', { text: c.label + (c.fixed ? '(固定)' : '') })));
+      });
+    }
+    refreshList();
+    colPanel.appendChild(h('div', { style: 'padding:6px 14px 8px;font-size:12px;color:var(--c-muted,#8a97a8);border-bottom:1px solid var(--c-border,#c5cdd8)', text: '勾选要显示的列' }));
+    colPanel.appendChild(list);
+    colPanel.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:calc(100% - 28px);margin:8px 14px 0', text: '恢复默认(全部显示)', onclick: function () {
+      hiddenCols = {};
+      try { localStorage.setItem('makeupHiddenCols', '[]'); } catch (e2) { /* 忽略 */ }
+      render(); refreshList();
+    } }));
+    document.body.appendChild(colPanel);
+    document.addEventListener('mousedown', onColDocDown, true);
+  }
+  var colsBtn = h('button', { class: 'btn btn-ghost', text: '列', title: '选择显示/隐藏表格列', onclick: openColPanel });
   var lastRows = [];
 
   function statusBadge(s) {
@@ -10935,24 +11009,17 @@ function makeupView() {
     /* 人员明细表 */
     var show = statusFilter ? lastRows.filter(function (r) { return (r.dayStatus || '在位') === statusFilter; }) : lastRows;
     var tb = h('tbody');
+    var vis = visibleCols();
     if (!show.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 10, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: vis.length, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
     }
     show.forEach(function (r, idx) {
-      tb.appendChild(h('tr', null,
-        h('td', { style: 'color:var(--c-muted,#8a97a8)', text: String(idx + 1) }),
-        h('td', null, h('b', { text: r.name || '' })),
-        h('td', { text: r.rank || '—' }),
-        h('td', { style: 'font-size:12px', text: r.category || '—' }),
-        h('td', { style: 'font-size:12px', text: r.idCard || '—' }),
-        h('td', { text: r.deptName || '—', title: r.deptName || '' }),
-        h('td', { html: statusBadge(r.dayStatus || '在位') }),
-        h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' }),
-        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' }),
-        h('td', { style: 'font-size:12px', text: r.phone || '—' })));
+      tb.appendChild(h('tr', null, vis.map(function (c) { return colCell(c, r, idx); })));
     });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:70px">类别</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th><th style="width:120px">联系电话</th></tr></thead>';
+    table.innerHTML = '<thead><tr>' + vis.map(function (c) {
+      return '<th' + (c.width ? ' style="width:' + c.width + 'px"' : '') + '>' + c.label + '</th>';
+    }).join('') + '</tr></thead>';
     table.appendChild(tb);
     listBox.innerHTML = '';
     listBox.appendChild(table);
@@ -10979,6 +11046,7 @@ function makeupView() {
     endDateLabel,
     rangeBtn,
     deptBtn,
+    colsBtn,
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
   root.appendChild(statusCards);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
