@@ -42,7 +42,7 @@ public class MakeupController {
         if (date == null || date.isEmpty()) { date = java.time.LocalDate.now().toString(); }
         final String d = date;
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, d.name AS dept_name " +
+                "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, p.rank AS rank, d.name AS dept_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id = d.id " +
                 "WHERE " + DataScope.departmentSql("p.department_id") + " " +
                 "ORDER BY p.name");
@@ -56,17 +56,29 @@ public class MakeupController {
             }
             rows = filtered;
         }
-        /* 当日休假名单 */
-        Set<Long> onLeave = new HashSet<Long>();
+        /* 当日休假名单(带类型与区间,展示用) */
+        Map<Long, String> leaveDetail = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT DISTINCT personnel_id FROM leave_record WHERE start_date<=? AND end_date>=? AND personnel_id>0", d, d)) {
-            onLeave.add(((Number) r.get("personnel_id")).longValue());
+                "SELECT personnel_id, leave_type, start_date, end_date FROM leave_record " +
+                "WHERE start_date<=? AND end_date>=? AND personnel_id>0 ORDER BY id", d, d)) {
+            long pid = ((Number) r.get("personnel_id")).longValue();
+            String s = str(r.get("start_date")), e = str(r.get("end_date"));
+            String brief = s.length() >= 10 ? s.substring(5, 10) : s;
+            String briefE = e.length() >= 10 ? e.substring(5, 10) : e;
+            leaveDetail.put(pid, str(r.get("leave_type")) + " " + brief + "~" + briefE);
         }
-        /* 当日在外名单(未归队的 absence_record) */
+        /* 当日在外名单(未归队的 absence_record,带事由与区间) */
         Map<Long, String> absenceReason = new HashMap<Long, String>();
+        Map<Long, String> absenceDetail = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT personnel_id, reason FROM absence_record WHERE leave_date<=? AND (actual_return_date='' OR actual_return_date>=?) AND personnel_id>0", d, d)) {
-            absenceReason.put(((Number) r.get("personnel_id")).longValue(), String.valueOf(r.get("reason")));
+                "SELECT personnel_id, reason, leave_date, expected_return_date FROM absence_record " +
+                "WHERE leave_date<=? AND (actual_return_date='' OR actual_return_date>=?) AND personnel_id>0 ORDER BY id", d, d)) {
+            long pid = ((Number) r.get("personnel_id")).longValue();
+            String s = str(r.get("leave_date")), e = str(r.get("expected_return_date"));
+            String brief = s.length() >= 10 ? s.substring(5, 10) : s;
+            String briefE = e.isEmpty() ? "?" : (e.length() >= 10 ? e.substring(5, 10) : e);
+            absenceReason.put(pid, str(r.get("reason")));
+            absenceDetail.put(pid, brief + "~" + briefE);
         }
         /* 当日已补课名单(personnelId → record id,前端取消用) */
         Map<Long, Long> makeupIds = new HashMap<Long, Long>();
@@ -81,18 +93,23 @@ public class MakeupController {
             item.put("personnelId", pid);
             item.put("name", r.get("name"));
             item.put("idCard", r.get("id_card"));
+            item.put("rank", r.get("rank"));
             item.put("deptName", r.get("dept_name"));
+            item.put("currentStatus", r.get("current_status"));
             String dayStatus;
             String detail = "";
-            if (onLeave.contains(pid)) {
+            if (leaveDetail.containsKey(pid)) {
                 dayStatus = "休假";
+                detail = leaveDetail.get(pid);
             } else if (absenceReason.containsKey(pid)) {
-                dayStatus = String.valueOf(absenceReason.get(pid)); /* 出差/培训/学习/其他 */
+                dayStatus = String.valueOf(absenceReason.get(pid));
+                detail = absenceDetail.get(pid);
             } else {
                 dayStatus = String.valueOf(r.get("current_status"));
                 if (dayStatus == null || dayStatus.isEmpty() || "null".equals(dayStatus)) { dayStatus = "在位"; }
             }
             item.put("dayStatus", dayStatus);
+            item.put("detail", detail);
             item.put("makeupId", makeupIds.get(pid));
             item.put("makeupDone", makeupIds.containsKey(pid));
             result.add(item);

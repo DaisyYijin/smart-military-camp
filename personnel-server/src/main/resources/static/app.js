@@ -10873,37 +10873,77 @@ function makeupView() {
   }
   deptBtn.addEventListener('click', function () { openDeptPanel(false); });
   syncDeptBtn();
-  var onlyAbsent = h('input', { type: 'checkbox', style: 'margin:0 4px 0 0' });
   var listBox = h('div');
-  var statLine = h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin:10px 0 6px' });
+  var statusCards = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:stretch' });
+  var statusFilter = ''; // '' = 全部;点击状态卡片切换筛选,再点取消
   var lastRows = [];
 
   function statusBadge(s) {
-    var color = s === '在位' ? 'var(--c-ok,#4caf50)' : s === '休假' ? 'var(--c-warn,#f0a93c)' : 'var(--pri,#2f6fd6)';
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;color:#fff;background:' + color + '">' + esc(s) + '</span>';
+    var g = groupOf(s);
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;color:#fff;background:' + groupColor(g) + '">' + esc(s) + '</span>';
   }
+  /** 状态归组:在位/休假/出差/培训(含学习)/其他(借调离职等) */
+  function groupOf(s) {
+    if (s === '在位') { return '在位'; }
+    if (s === '休假') { return '休假'; }
+    if (s === '出差') { return '出差'; }
+    if (s === '培训' || s === '学习') { return '培训'; }
+    return '其他';
+  }
+  function groupColor(g) {
+    return g === '在位' ? 'var(--c-ok,#4caf50)' : g === '休假' ? 'var(--c-warn,#f0a93c)' : g === '出差' ? 'var(--pri,#2f6fd6)' : g === '培训' ? '#9c6ade' : 'var(--c-muted,#8a97a8)';
+  }
+  var STATUS_GROUPS = ['在位', '休假', '出差', '培训', '其他'];
 
   function render() {
-    var show = lastRows.filter(function (r) { return !onlyAbsent.checked || r.dayStatus !== '在位'; });
-    var onDuty = 0, onLeave = 0, away = 0, done = 0;
+    /* 状态分组统计 + 在位率 + 已补课 */
+    var counts = {}; var done = 0;
     lastRows.forEach(function (r) {
-      if (r.dayStatus === '在位') onDuty++; else if (r.dayStatus === '休假') onLeave++; else away++;
-      if (r.makeupDone) done++;
+      var g = groupOf(r.dayStatus);
+      counts[g] = (counts[g] || 0) + 1;
+      if (r.makeupDone) { done++; }
     });
-    statLine.textContent = '共 ' + lastRows.length + ' 人:在位 ' + onDuty + ' / 休假 ' + onLeave + ' / 在外 ' + away + (show.length !== lastRows.length ? ' / 筛选显示 ' + show.length : '') + ' / 已补课 ' + done;
+    var dutyRate = lastRows.length ? Math.round((counts['在位'] || 0) / lastRows.length * 100) : 0;
+    statusCards.innerHTML = '';
+    statusCards.appendChild(h('div', { style: 'display:flex;flex-direction:column;justify-content:center;padding:6px 14px;border-radius:8px;background:var(--c-pribg,#e8f0fd);min-width:86px' },
+      h('div', { style: 'font-size:22px;font-weight:bold;color:var(--pri,#2f6fd6);line-height:1.2', text: dutyRate + '%' }),
+      h('div', { style: 'font-size:11px;color:var(--c-sub,#66788c)', text: '在位率 · 共' + lastRows.length + '人' })));
+    STATUS_GROUPS.forEach(function (g) {
+      var n = counts[g] || 0;
+      var active = statusFilter === g;
+      var card = h('div', {
+        style: 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid ' + (active ? 'var(--pri,#2f6fd6)' : 'var(--c-border,#c5cdd8)') + ';background:' + (active ? 'var(--c-pribg,#e8f0fd)' : '#fff') + ';transition:border-color .15s ease, background .15s ease',
+        title: active ? '点击取消筛选' : '点击只看「' + g + '」人员'
+      },
+        h('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + groupColor(g) + ';flex:none' }),
+        h('span', { style: 'font-size:20px;font-weight:bold;color:var(--c-dark,#1d2c40);line-height:1', text: String(n) }),
+        h('span', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: g }));
+      card.addEventListener('click', function () { statusFilter = active ? '' : g; render(); });
+      statusCards.appendChild(card);
+    });
+    statusCards.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;background:var(--c-card,#f6f8fb)' },
+      h('span', { style: 'font-size:20px;font-weight:bold;color:var(--c-ok,#4caf50);line-height:1', text: String(done) }),
+      h('span', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: '已补课' })));
+    /* 人员明细表 */
+    var show = statusFilter ? lastRows.filter(function (r) { return groupOf(r.dayStatus) === statusFilter; }) : lastRows;
     var tb = h('tbody');
     if (!show.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 4, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: 9, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
     }
-    show.forEach(function (r) {
+    show.forEach(function (r, idx) {
       tb.appendChild(h('tr', null,
+        h('td', { style: 'color:var(--c-muted,#8a97a8)', text: String(idx + 1) }),
         h('td', null, h('b', { text: r.name || '' })),
+        h('td', { text: r.rank || '—' }),
+        h('td', { style: 'font-size:12px', text: r.idCard || '—' }),
         h('td', { text: r.deptName || '—' }),
         h('td', { html: statusBadge(r.dayStatus || '在位') }),
+        h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' }),
+        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' }),
         h('td', null, r.makeupDone ? h('span', { style: 'color:var(--c-ok,#4caf50);font-size:12px', text: '✓ 已补课' }) : h('span', { style: 'color:var(--c-muted,#8a97a8);font-size:12px', text: '—' }))));
     });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th style="width:120px">姓名</th><th>单位</th><th style="width:100px">当日状态</th><th style="width:90px">补课</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th><th style="width:80px">补课</th></tr></thead>';
     table.appendChild(tb);
     listBox.innerHTML = '';
     listBox.appendChild(table);
@@ -10927,13 +10967,11 @@ function makeupView() {
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
     deptBtn,
-    h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center' }, onlyAbsent, h('span', { text: '只看不在位' })),
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
-  root.appendChild(statLine);
+  root.appendChild(statusCards);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
     h('div', { class: 'table-wrap' }, listBox)));
   dateField.addEventListener('change', load);
-  onlyAbsent.addEventListener('change', render);
   /* 视图组件契约:返回 { render(container) } 对象,由分发处统一渲染(与 crudView/organizationView 一致) */
   return { render: function (container) { container.appendChild(root); load(); } };
 }
