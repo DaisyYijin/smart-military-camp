@@ -38,9 +38,12 @@ public class MakeupController {
     /** 按日期查全量人员状态 + 已补课标记(管理端主列表) */
     @GetMapping("/status")
     public ApiResponse status(@RequestParam(value = "date", required = false) String date,
+                              @RequestParam(value = "endDate", required = false) String endDate,
                               @RequestParam(value = "departmentId", required = false) Long departmentId) {
         if (date == null || date.isEmpty()) { date = java.time.LocalDate.now().toString(); }
-        final String d = date;
+        final String dStart = date;
+        /* endDate 为空 = 单日模式(与 date 相同);否则区间模式:区间内任一天命中即计入,详情聚合所有命中段 */
+        final String dEnd = (endDate == null || endDate.isEmpty()) ? date : endDate;
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, p.rank AS rank, d.name AS dept_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id = d.id " +
@@ -56,29 +59,35 @@ public class MakeupController {
             }
             rows = filtered;
         }
-        /* 当日休假名单(带类型与区间,展示用) */
+        /* 休假名单(与筛选区间相交即命中;多人多段聚合展示) */
         Map<Long, String> leaveDetail = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT personnel_id, leave_type, start_date, end_date FROM leave_record " +
-                "WHERE start_date<=? AND end_date>=? AND personnel_id>0 ORDER BY id", d, d)) {
+                "WHERE start_date<=? AND end_date>=? AND personnel_id>0 ORDER BY personnel_id, start_date", dEnd, dStart)) {
             long pid = ((Number) r.get("personnel_id")).longValue();
             String s = str(r.get("start_date")), e = str(r.get("end_date"));
             String brief = s.length() >= 10 ? s.substring(5, 10) : s;
             String briefE = e.length() >= 10 ? e.substring(5, 10) : e;
-            leaveDetail.put(pid, str(r.get("leave_type")) + " " + brief + "~" + briefE);
+            String seg = str(r.get("leave_type")) + " " + brief + "~" + briefE;
+            leaveDetail.put(pid, leaveDetail.containsKey(pid) ? leaveDetail.get(pid) + "、" + seg : seg);
         }
-        /* 当日在外名单(未归队的 absence_record,带事由与区间) */
+        /* 在外名单(未归队且与筛选区间相交;多人多段聚合) */
         Map<Long, String> absenceReason = new HashMap<Long, String>();
         Map<Long, String> absenceDetail = new HashMap<Long, String>();
         for (Map<String, Object> r : jdbc.queryForList(
                 "SELECT personnel_id, reason, leave_date, expected_return_date FROM absence_record " +
-                "WHERE leave_date<=? AND (actual_return_date='' OR actual_return_date>=?) AND personnel_id>0 ORDER BY id", d, d)) {
+                "WHERE leave_date<=? AND (actual_return_date='' OR actual_return_date>=?) AND personnel_id>0 ORDER BY personnel_id, leave_date", dEnd, dStart)) {
             long pid = ((Number) r.get("personnel_id")).longValue();
             String s = str(r.get("leave_date")), e = str(r.get("expected_return_date"));
             String brief = s.length() >= 10 ? s.substring(5, 10) : s;
             String briefE = e.isEmpty() ? "?" : (e.length() >= 10 ? e.substring(5, 10) : e);
-            absenceReason.put(pid, str(r.get("reason")));
-            absenceDetail.put(pid, brief + "~" + briefE);
+            String seg = brief + "~" + briefE;
+            if (absenceDetail.containsKey(pid)) {
+                absenceDetail.put(pid, absenceDetail.get(pid) + "、" + seg);
+            } else {
+                absenceReason.put(pid, str(r.get("reason")));
+                absenceDetail.put(pid, seg);
+            }
         }
         /* 当日人员状态组装(纯查看:不再关联补课登记表) */
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();

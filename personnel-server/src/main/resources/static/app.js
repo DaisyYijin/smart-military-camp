@@ -10786,6 +10786,17 @@ function makeupView() {
   /* 日期字段:与其他模块一致的日历组件(手输"年/月/日"或点图标选日期) */
   var dateField = makeDateField();
   dateField.value = new Date().toISOString().slice(0, 10);
+  /* 区间模式:起止日期筛选(单日模式时隐藏结束日期);单日与区间共用同一状态统计 */
+  var endDateField = makeDateField();
+  endDateField.value = new Date().toISOString().slice(0, 10);
+  var rangeMode = false;
+  var endDateLabel = h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:none;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
+  var rangeBtn = h('button', { class: 'btn btn-ghost', text: '区间模式', title: '切换单日/起止日期区间筛选', onclick: function () {
+    rangeMode = !rangeMode;
+    endDateLabel.style.display = rangeMode ? 'flex' : 'none';
+    rangeBtn.textContent = rangeMode ? '单日模式' : '区间模式';
+    load();
+  } });
   /* 单位选择:弹层树——展开/收起层级,点名称直达任意层级;选中后按钮显示路径 */
   var currentDeptId = ''; // '' = 全部单位
   var deptExpanded = {};  // 各节点展开状态(视图内保持)
@@ -10879,49 +10890,50 @@ function makeupView() {
   var lastRows = [];
 
   function statusBadge(s) {
-    var g = groupOf(s);
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;color:#fff;background:' + groupColor(g) + '">' + esc(s) + '</span>';
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;color:#fff;background:' + statusColor(s) + '">' + esc(s) + '</span>';
   }
-  /** 状态归组:在位/休假/出差/培训(含学习)/其他(借调离职等) */
-  function groupOf(s) {
-    if (s === '在位') { return '在位'; }
-    if (s === '休假') { return '休假'; }
-    if (s === '出差') { return '出差'; }
-    if (s === '培训' || s === '学习') { return '培训'; }
-    return '其他';
+  /** 状态着色:常用状态固定色,其余状态按出现顺序轮换色板——状态不合并,各显其值 */
+  var STATUS_PALETTE = ['#2f6fd6', '#f0a93c', '#9c6ade', '#00a2ae', '#e07ba0', '#7d97bd', '#b8860b'];
+  var statusColorMap = { '在位': 'var(--c-ok,#4caf50)', '休假': 'var(--c-warn,#f0a93c)', '出差': 'var(--pri,#2f6fd6)', '培训': '#9c6ade', '学习': '#7b5cd6', '借调': '#00a2ae', '离职': 'var(--c-muted,#8a97a8)' };
+  var extraColorIdx = 0; var extraColors = {};
+  function statusColor(s) {
+    if (statusColorMap[s]) { return statusColorMap[s]; }
+    if (!extraColors[s]) { extraColors[s] = STATUS_PALETTE[extraColorIdx++ % STATUS_PALETTE.length]; }
+    return extraColors[s];
   }
-  function groupColor(g) {
-    return g === '在位' ? 'var(--c-ok,#4caf50)' : g === '休假' ? 'var(--c-warn,#f0a93c)' : g === '出差' ? 'var(--pri,#2f6fd6)' : g === '培训' ? '#9c6ade' : 'var(--c-muted,#8a97a8)';
-  }
-  var STATUS_GROUPS = ['在位', '休假', '出差', '培训', '其他'];
 
   function render() {
-    /* 状态分组统计 + 在位率 + 已补课 */
+    /* 按实际状态独立统计(不合并):在位优先,其余按人数降序生成动态卡片 */
     var counts = {};
     lastRows.forEach(function (r) {
-      var g = groupOf(r.dayStatus);
-      counts[g] = (counts[g] || 0) + 1;
+      var s = r.dayStatus || '在位';
+      counts[s] = (counts[s] || 0) + 1;
     });
     var dutyRate = lastRows.length ? Math.round((counts['在位'] || 0) / lastRows.length * 100) : 0;
     statusCards.innerHTML = '';
     statusCards.appendChild(h('div', { style: 'display:flex;flex-direction:column;justify-content:center;padding:6px 14px;border-radius:8px;background:var(--c-pribg,#e8f0fd);min-width:86px' },
       h('div', { style: 'font-size:22px;font-weight:bold;color:var(--pri,#2f6fd6);line-height:1.2', text: dutyRate + '%' }),
       h('div', { style: 'font-size:11px;color:var(--c-sub,#66788c)', text: '在位率 · 共' + lastRows.length + '人' })));
-    STATUS_GROUPS.forEach(function (g) {
-      var n = counts[g] || 0;
+    var statusKeys = Object.keys(counts).sort(function (a, b) {
+      if (a === '在位') { return -1; }
+      if (b === '在位') { return 1; }
+      return counts[b] - counts[a];
+    });
+    statusKeys.forEach(function (g) {
+      var n = counts[g];
       var active = statusFilter === g;
       var card = h('div', {
         style: 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid ' + (active ? 'var(--pri,#2f6fd6)' : 'var(--c-border,#c5cdd8)') + ';background:' + (active ? 'var(--c-pribg,#e8f0fd)' : '#fff') + ';transition:border-color .15s ease, background .15s ease',
         title: active ? '点击取消筛选' : '点击只看「' + g + '」人员'
       },
-        h('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + groupColor(g) + ';flex:none' }),
+        h('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + statusColor(g) + ';flex:none' }),
         h('span', { style: 'font-size:20px;font-weight:bold;color:var(--c-dark,#1d2c40);line-height:1', text: String(n) }),
         h('span', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: g }));
       card.addEventListener('click', function () { statusFilter = active ? '' : g; render(); });
       statusCards.appendChild(card);
     });
     /* 人员明细表 */
-    var show = statusFilter ? lastRows.filter(function (r) { return groupOf(r.dayStatus) === statusFilter; }) : lastRows;
+    var show = statusFilter ? lastRows.filter(function (r) { return (r.dayStatus || '在位') === statusFilter; }) : lastRows;
     var tb = h('tbody');
     if (!show.length) {
       tb.appendChild(h('tr', null, h('td', { colspan: 8, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
@@ -10949,6 +10961,7 @@ function makeupView() {
     listBox.innerHTML = '';
     listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
     var url = '/api/makeup/status?date=' + encodeURIComponent(dateField.value || '');
+    if (rangeMode && endDateField.value) { url += '&endDate=' + encodeURIComponent(endDateField.value); }
     if (currentDeptId) { url += '&departmentId=' + currentDeptId; }
     GET(url).then(function (rows) {
       lastRows = rows || [];
@@ -10961,12 +10974,15 @@ function makeupView() {
 
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
+    endDateLabel,
+    rangeBtn,
     deptBtn,
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
   root.appendChild(statusCards);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
     h('div', { class: 'table-wrap' }, listBox)));
   dateField.addEventListener('change', load);
+  endDateField.addEventListener('change', load);
   /* 视图组件契约:返回 { render(container) } 对象,由分发处统一渲染(与 crudView/organizationView 一致) */
   return { render: function (container) { container.appendChild(root); load(); } };
 }
