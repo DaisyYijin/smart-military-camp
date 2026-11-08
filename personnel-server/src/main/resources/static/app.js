@@ -10897,11 +10897,10 @@ function makeupView() {
 
   function render() {
     /* 状态分组统计 + 在位率 + 已补课 */
-    var counts = {}; var done = 0;
+    var counts = {};
     lastRows.forEach(function (r) {
       var g = groupOf(r.dayStatus);
       counts[g] = (counts[g] || 0) + 1;
-      if (r.makeupDone) { done++; }
     });
     var dutyRate = lastRows.length ? Math.round((counts['在位'] || 0) / lastRows.length * 100) : 0;
     statusCards.innerHTML = '';
@@ -10921,14 +10920,11 @@ function makeupView() {
       card.addEventListener('click', function () { statusFilter = active ? '' : g; render(); });
       statusCards.appendChild(card);
     });
-    statusCards.appendChild(h('div', { style: 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;background:var(--c-card,#f6f8fb)' },
-      h('span', { style: 'font-size:20px;font-weight:bold;color:var(--c-ok,#4caf50);line-height:1', text: String(done) }),
-      h('span', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: '已补课' })));
     /* 人员明细表 */
     var show = statusFilter ? lastRows.filter(function (r) { return groupOf(r.dayStatus) === statusFilter; }) : lastRows;
     var tb = h('tbody');
     if (!show.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 9, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: 8, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
     }
     show.forEach(function (r, idx) {
       tb.appendChild(h('tr', null,
@@ -10939,11 +10935,10 @@ function makeupView() {
         h('td', { text: r.deptName || '—' }),
         h('td', { html: statusBadge(r.dayStatus || '在位') }),
         h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' }),
-        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' }),
-        h('td', null, r.makeupDone ? h('span', { style: 'color:var(--c-ok,#4caf50);font-size:12px', text: '✓ 已补课' }) : h('span', { style: 'color:var(--c-muted,#8a97a8);font-size:12px', text: '—' }))));
+        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' })));
     });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th><th style="width:80px">补课</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th></tr></thead>';
     table.appendChild(tb);
     listBox.innerHTML = '';
     listBox.appendChild(table);

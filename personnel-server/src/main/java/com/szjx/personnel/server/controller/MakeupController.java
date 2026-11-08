@@ -80,12 +80,7 @@ public class MakeupController {
             absenceReason.put(pid, str(r.get("reason")));
             absenceDetail.put(pid, brief + "~" + briefE);
         }
-        /* 当日已补课名单(personnelId → record id,前端取消用) */
-        Map<Long, Long> makeupIds = new HashMap<Long, Long>();
-        for (Map<String, Object> r : jdbc.queryForList(
-                "SELECT id, personnel_id FROM makeup_record WHERE makeup_date=?", d)) {
-            makeupIds.put(((Number) r.get("personnel_id")).longValue(), ((Number) r.get("id")).longValue());
-        }
+        /* 当日人员状态组装(纯查看:不再关联补课登记表) */
         List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
         for (Map<String, Object> r : rows) {
             Map<String, Object> item = new HashMap<String, Object>();
@@ -110,8 +105,6 @@ public class MakeupController {
             }
             item.put("dayStatus", dayStatus);
             item.put("detail", detail);
-            item.put("makeupId", makeupIds.get(pid));
-            item.put("makeupDone", makeupIds.containsKey(pid));
             result.add(item);
         }
         return ApiResponse.ok(result);
