@@ -1085,7 +1085,8 @@ class BackupRestoreIsolationTest {
         legacyModules.remove("double-excellence");
         legacyModules.remove("annual-appraisal");
         legacyModules.remove("absence");
-        legacyModules.remove("organization"); // 还原双争/年度/在外/组织建设加入前的12模块旧备份
+        legacyModules.remove("organization"); // 还原双争/年度/在外/组织建设/消息审批加入前的12模块旧备份
+        legacyModules.remove("message");
         String backup = (String) service.createBackup(legacyModules, false).get("name");
         byte[] bytes = Files.readAllBytes(service.getBackupFile(backup).toPath());
         insertDoubleExcellence(10, 1);
@@ -1114,12 +1115,12 @@ class BackupRestoreIsolationTest {
         jdbc.execute("CREATE TABLE fitness_standard(id INTEGER PRIMARY KEY, standard_text TEXT)");
         jdbc.update("INSERT INTO fitness_standard(id,standard_text) VALUES(1,'历史标准')");
         List<String> actual = jdbc.queryForList("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name", String.class);
-        assertEquals(40, actual.size());
+        assertEquals(42, actual.size());
         String backup = (String) service.createBackup(BackupService.allModuleKeys(), false).get("name");
         try (ZipFile zip = new ZipFile(service.getBackupFile(backup))) {
             Map<?,?> meta = new com.fasterxml.jackson.databind.ObjectMapper().readValue(zip.getInputStream(zip.getEntry("meta.json")), Map.class);
             Map<?,?> modules = (Map<?,?>) meta.get("modules");
-            assertEquals(16, modules.size());
+            assertEquals(17, modules.size());
             java.util.Set<String> archived = new java.util.HashSet<>();
             for (Map.Entry<?,?> module : modules.entrySet()) {
                 for (Object table : ((Map<?,?>) module.getValue()).keySet()) {
@@ -1142,7 +1143,8 @@ class BackupRestoreIsolationTest {
         oldAll.remove("double-excellence");
         oldAll.remove("annual-appraisal");
         oldAll.remove("absence");
-        oldAll.remove("organization"); // 双争/年度/在外/组织建设加入前的历史默认清单
+        oldAll.remove("organization"); // 双争/年度/在外/组织建设/消息审批加入前的历史默认清单
+        oldAll.remove("message");
         Files.createDirectories(dataRoot);
         com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
         Files.write(dataRoot.resolve("backup-settings.json"), mapper.writeValueAsBytes(row("enabled",true,

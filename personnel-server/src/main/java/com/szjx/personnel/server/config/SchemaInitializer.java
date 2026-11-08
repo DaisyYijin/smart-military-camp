@@ -688,6 +688,8 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 ")");
 
         // 站内信/消息通知(局域网多用户):用户互发+系统通知(审批流联动)
+        /* 机制化提醒:新增业务表必须同步登记 BackupService.MODULE_TABLES(备份生成/上传/恢复共用),
+         * BackupCompletenessTest.schemaInitializerTablesAllRegistered 会自动比对建表与备份清单差集,漏登记将直接测试失败 */
         Db.createTable(jdbc, "CREATE TABLE IF NOT EXISTS message (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 "sender_id INTEGER NOT NULL," +

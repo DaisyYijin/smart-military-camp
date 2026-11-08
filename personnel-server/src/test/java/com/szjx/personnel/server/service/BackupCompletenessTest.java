@@ -22,7 +22,8 @@ public class BackupCompletenessTest {
             "position_history", "reward_punish", "child_info", "family_member",
             "driver_license", "personal_card", "private_vehicle", "housing_info", "delete_undo",
             "double_excellence_record", "annual_appraisal_record", "absence_record",
-            "organization", "organization_member", "organization_column", "transfer_record", "makeup_record"
+            "organization", "organization_member", "organization_column", "transfer_record", "makeup_record",
+            "message", "approval_request"
     };
 
     private Set<String> coveredTables() {
@@ -51,10 +52,32 @@ public class BackupCompletenessTest {
 
     @Test
     public void testModuleCount() {
-        assertEquals(16, BackupService.MODULE_TABLES.size(), "双争/年度/在外/组织建设模块加入后应为16个");
-        assertEquals(16, BackupService.allModuleKeys().size());
-        assertEquals("double-excellence", BackupService.allModuleKeys().get(14));
-        assertEquals("annual-appraisal", BackupService.allModuleKeys().get(15));
+        assertEquals(17, BackupService.MODULE_TABLES.size(), "消息与审批模块加入后应为17个");
+        assertEquals(17, BackupService.allModuleKeys().size());
+        assertTrue(BackupService.allModuleKeys().contains("message"), "消息与审批模块未登记");
+        assertEquals("annual-appraisal", BackupService.allModuleKeys().get(16), "最后一个模块应为年度考评");
+    }
+
+    /** 机制化守护:从 SchemaInitializer 源码提取全部建表,与备份 ALL_TABLES 比对差集为空——新增表漏登记将直接测试失败 */
+    @Test
+    public void schemaInitializerTablesAllRegistered() throws Exception {
+        java.nio.file.Path src = java.nio.file.Paths.get(
+                "src/main/java/com/szjx/personnel/server/config/SchemaInitializer.java");
+        assertTrue(java.nio.file.Files.exists(src), "未找到 SchemaInitializer 源码(工作目录应为模块根): " + src.toAbsolutePath());
+        String content = new String(java.nio.file.Files.readAllBytes(src), java.nio.charset.StandardCharsets.UTF_8);
+        java.util.Set<String> created = new java.util.TreeSet<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("CREATE TABLE IF NOT EXISTS ([a-z_]+)").matcher(content);
+        while (m.find()) { created.add(m.group(1)); }
+        assertTrue(created.size() >= 40, "源码建表提取异常,仅提取到 " + created.size() + " 张表");
+        // account_department 走生成/上传/恢复三处独立的动态链路(BackupService L124 表存在才导出),
+        // 不经 MODULE_TABLES 静态登记——历史合理设计,此处显式豁免;其余新表漏登记仍将直接失败
+        created.remove("account_department");
+        java.util.Set<String> registered = new java.util.TreeSet<>(Arrays.asList(ALL_TABLES));
+        java.util.Set<String> missing = new java.util.TreeSet<>(created);
+        missing.removeAll(registered);
+        assertTrue(missing.isEmpty(),
+                "以下表已在 SchemaInitializer 建表但未登记备份清单(请同步 BackupService.MODULE_TABLES 与本类 ALL_TABLES): " + missing);
     }
 
     @Test

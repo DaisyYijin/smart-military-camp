@@ -46,6 +46,7 @@ public class BackupController {
         List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
         Map<String, String> labels = new HashMap<String, String>();
         labels.put("personnel", "人员管理");
+        labels.put("message", "消息与审批");
         labels.put("department", "单位管理");
         labels.put("dict", "数据字典/系统数据");
         labels.put("dashboard", "仪表盘");

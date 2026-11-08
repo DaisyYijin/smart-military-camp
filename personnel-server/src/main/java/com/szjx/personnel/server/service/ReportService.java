@@ -29,7 +29,8 @@ public class ReportService {
             "leave_record", "leave_plan", "fitness_record", "military_assessment",
             "position_history", "reward_punish",
             "child_info", "family_member", "driver_license", "personal_card",
-            "private_vehicle", "housing_info", "phone_device"));
+            "private_vehicle", "housing_info", "phone_device",
+            "absence_record", "makeup_record"));
 
     public static String safeTable(String t) {
         if (t == null || !SAFE_TABLES.contains(t)) {
@@ -40,7 +41,8 @@ public class ReportService {
 
     public static final String[] SUB_TABLES = {
             "position_history", "reward_punish", "child_info", "family_member",
-            "driver_license", "personal_card", "private_vehicle", "housing_info"};
+            "driver_license", "personal_card", "private_vehicle", "housing_info",
+            "absence_record", "makeup_record"};
 
     /** 导入进度注册表 */
     protected static final java.util.concurrent.ConcurrentHashMap<String, Map<String, Object>> PROGRESS =
@@ -82,7 +84,7 @@ public class ReportService {
                 {"private_vehicle", "私家车"}, {"housing_info", "住房情况"}, {"equipment", "装备"},
                 {"material", "物资"}, {"vehicle", "车辆"}, {"leave_record", "休假"},
                 {"leave_plan", "休假计划"}, {"fitness_record", "体能"}, {"military_assessment", "军事考核"},
-                {"phone_device", "手机"}};
+                {"phone_device", "手机"}, {"absence_record", "在外登记"}, {"makeup_record", "补课登记"}};
         for (String[] z : zh) {
             if (z[0].equals(table)) { return z[1]; }
         }
@@ -226,7 +228,7 @@ public class ReportService {
     private boolean validVersion(String version) {
         if (!version.matches("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")) { return false; }
         try { java.time.LocalDateTime.parse(version, java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss").withResolverStyle(java.time.format.ResolverStyle.STRICT)); return true; }
-        catch (Exception e) { return false; }
+        catch (Exception e) { return false; } // 格式守卫:STRICT 解析器对非法日期抛异常属预期——false 表示版本字段不可信,保留本地数据
     }
 
     private Map<String, Object> persistentRow(String table, Map<String, Object> incoming, String... excluded) {

@@ -84,11 +84,22 @@ public class BackupService {
         MODULE_TABLES.put("leave", new String[]{"leave_record", "leave_plan"});
         MODULE_TABLES.put("absence", new String[]{"absence_record"});
         MODULE_TABLES.put("organization", new String[]{"organization", "organization_member", "organization_column"});
+        MODULE_TABLES.put("message", new String[]{"message", "approval_request"});
         MODULE_TABLES.put("fitness", new String[]{"fitness_record", "fitness_matrix"});
         MODULE_TABLES.put("phone", new String[]{"phone_device"});
         MODULE_TABLES.put("military", new String[]{"military_assessment", "mil_scheme", "mil_scheme_item"});
         MODULE_TABLES.put("double-excellence", new String[]{"double_excellence_record"});
         MODULE_TABLES.put("annual-appraisal", new String[]{"annual_appraisal_record"});
+    }
+
+    /** 后加表豁免判定(三处共用语义源):旧备份缺这些表不算错——上传校验放行、恢复跳过该表。
+     *  新增"后期加入模块的表"时只需在此登记,上传/恢复两侧统一引用,消除三处清单手工漂移。 */
+    static boolean isLaterAddedOptional(String module, String table, int version) {
+        if ("personnel".equals(module)) { return "transfer_record".equals(table) || "makeup_record".equals(table); }
+        if ("vehicle".equals(module)) { return "vehicle_fault_history".equals(table); }
+        if (version <= 2 && "leave".equals(module)) { return "leave_plan".equals(table); }
+        if (version <= 2 && "military".equals(module)) { return "mil_scheme".equals(table) || "mil_scheme_item".equals(table); }
+        return false;
     }
 
     private final JdbcTemplate jdbc;
@@ -438,12 +449,10 @@ public class BackupService {
                 if ("personnel".equals(key) && !(version >= 4 && Boolean.TRUE.equals(meta.get("personnelTrash")))) {
                     required.remove("delete_undo");
                 }
-                // 变动轨迹表/补课登记表是后来加入 personnel 模块的:旧备份没有不算缺表,声明了仍照常校验
-                if ("personnel".equals(key)) { required.remove("transfer_record"); required.remove("makeup_record"); }
-                if ("vehicle".equals(key)) { required.remove("vehicle_fault_history"); }
-                // v1/v2 predate leave plans and military scheme tables; still verify any such declared files.
-                if (version <= 2 && "leave".equals(key)) { required.remove("leave_plan"); }
-                if (version <= 2 && "military".equals(key)) { required.removeAll(Arrays.asList("mil_scheme", "mil_scheme_item")); }
+                // 后加表豁免:统一走 isLaterAddedOptional(公共常量),旧备份缺这些表不算缺表,声明了仍照常校验
+                for (String optTable : new ArrayList<String>(required)) {
+                    if (isLaterAddedOptional(key, optTable, version)) { required.remove(optTable); }
+                }
                 if ("fitness".equals(key)) {
                     tables.addAll(Arrays.asList("sys_setting", "fitness_standard"));
                     if (version >= 2) { required.add("sys_setting"); }
@@ -648,7 +657,7 @@ public class BackupService {
                 }
             }
             for (String module : selected) {
-                if (!(available.get(module) instanceof Map)) { throw new IllegalArgumentException("所选模块不在备份中: " + module); }
+                if (!(available.get(module) instanceof Map)) { throw new IllegalArgumentException("所选模块不在备份中: " + module + "(旧备份可能不含新模块,请按备份内提供的模块勾选)"); }
                 Map<String, Object> declared = (Map<String, Object>) available.get(module);
                 List<String> tables = new ArrayList<String>(Arrays.asList(MODULE_TABLES.get(module)));
                 if ("dict".equals(module)) {
@@ -685,6 +694,19 @@ public class BackupService {
                 if ("vehicle".equals(module) && !declared.containsKey("vehicle_fault_history")) {
                     tables.remove("vehicle_fault_history");
                     warnings.add("旧车辆备份未包含历史故障表,本次仅恢复车辆台账");
+                }
+                /* v1/v2 旧包缺休假计划/军事方案表:跳过恢复(新包正常),与上传豁免(isLaterAddedOptional)对称 */
+                if (version <= 2 && "leave".equals(module) && !declared.containsKey("leave_plan")) {
+                    tables.remove("leave_plan");
+                    warnings.add("旧版备份未包含休假计划表,本次跳过休假计划恢复");
+                }
+                if (version <= 2 && "military".equals(module)) {
+                    for (String optScheme : Arrays.asList("mil_scheme", "mil_scheme_item")) {
+                        if (!declared.containsKey(optScheme)) {
+                            tables.remove(optScheme);
+                            warnings.add("旧版备份未包含军事方案表,本次跳过方案恢复(" + optScheme + ")");
+                        }
+                    }
                 }
                 if ("fitness".equals(module)) {
                     if (version >= 2 || declared.containsKey("sys_setting")) { tables.add("sys_setting"); }
