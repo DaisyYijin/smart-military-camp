@@ -522,17 +522,15 @@ function makeDateField() {
 
   iconBtn.addEventListener('click', function (e) {
     e.stopPropagation();
+    var wasOpen = wrap.classList.contains('open'); // 先记住自身状态:上一行关闭集合会把自己也关掉
     $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
-    if (wrap.classList.contains('open')) {
-      wrap.classList.remove('open');
-    } else {
-      openPanel();
-    }
+    if (!wasOpen) { openPanel(); } // 原本未开才打开;原本开着则本次点击即为关闭
   });
   input.addEventListener('click', function (e) {
     e.stopPropagation();
+    var wasOpenSelf = wrap.classList.contains('open');
     $all('.dd.open, .cal.open').forEach(function (d) { d.classList.remove('open'); });
-    if (!wrap.classList.contains('open')) {
+    if (!wasOpenSelf) {
       openPanel();
     }
   });
@@ -10934,37 +10932,48 @@ function makeupView() {
     }
     return h('td', null);
   }
-  /* 显示列弹窗:复选框即时生效并持久化,openModal 标准模态 */
+  /* 显示列弹窗:花名册同款复选框胶囊网格(紧凑换行,无滚动条),勾选即时生效并持久化 */
   function openColPanel() {
-    var list = h('div');
-    function refreshList() {
-      list.innerHTML = '';
-      COLS.forEach(function (c) {
-        var cb = h('input', { type: 'checkbox' });
-        cb.checked = colVisible(c);
-        cb.disabled = !!c.fixed;
-        cb.addEventListener('change', function () {
-          colOverride[c.key] = cb.checked;
-          try { localStorage.setItem('makeupColOverride', JSON.stringify(colOverride)); } catch (e2) { /* 持久化失败不影响本次 */ }
-          render();
-        });
-        list.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;color:var(--c-body,#445262);cursor:' + (c.fixed ? 'default' : 'pointer') },
-          cb, h('span', { text: c.label + (c.fixed ? '(固定)' : '') })));
+    var grid = h('div', { style: 'display:flex;flex-wrap:wrap;gap:8px' });
+    COLS.forEach(function (c) {
+      var cb = h('input', { type: 'checkbox' });
+      cb.checked = colVisible(c);
+      cb.disabled = !!c.fixed;
+      cb.addEventListener('change', function () {
+        colOverride[c.key] = cb.checked;
+        chip.classList.toggle('on', cb.checked);
+        try { localStorage.setItem('makeupColOverride', JSON.stringify(colOverride)); } catch (e2) { /* 持久化失败不影响本次 */ }
+        render();
       });
-    }
-    refreshList();
-    var m = openModal({
+      var chip = h('label', { class: 'roster-field-check' + (colVisible(c) ? ' on' : '') + (c.fixed ? ' fixed-col' : ''), title: c.fixed ? '固定显示' : '勾选显示/隐藏该列' },
+        cb, h('span', { text: c.label + (c.fixed ? '(固定)' : '') }));
+      /* 点击胶囊文字区域等同勾选(直接点复选框由 change 处理,避免双触发) */
+      chip.addEventListener('click', function (ev) {
+        if (ev.target === cb || c.fixed) { return; }
+        cb.checked = !cb.checked;
+        colOverride[c.key] = cb.checked;
+        chip.classList.toggle('on', cb.checked);
+        try { localStorage.setItem('makeupColOverride', JSON.stringify(colOverride)); } catch (e2) { /* 忽略 */ }
+        render();
+      });
+      grid.appendChild(chip);
+    });
+    openModal({
       title: '选择显示列',
-      body: h('div', { style: 'padding:2px 0;max-height:56vh;overflow:auto' },
-        h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin-bottom:8px', text: '勾选要显示的列,取消勾选即隐藏;选择自动保存' }),
-        list),
+      body: h('div', { style: 'padding:2px 0' },
+        h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin-bottom:10px', text: '勾选要显示的列,取消勾选即隐藏;选择自动保存' }),
+        grid),
       footer: [
-        h('button', { class: 'btn btn-ghost', text: '恢复默认(全部显示)', onclick: function () {
+        h('button', { class: 'btn btn-ghost', text: '恢复默认', onclick: function () {
           colOverride = {};
           try { localStorage.setItem('makeupColOverride', '{}'); } catch (e2) { /* 忽略 */ }
-          render(); refreshList();
+          render();
+          grid.querySelectorAll('input[type=checkbox]').forEach(function (cb2, i) {
+            cb2.checked = colVisible(COLS[i]);
+            cb2.parentElement.classList.toggle('on', cb2.checked);
+          });
         } }),
-        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { if (m) { m.close(true); } } })
+        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { this.closest('.mask') && this.closest('.mask').remove(); } })
       ]
     });
   }
