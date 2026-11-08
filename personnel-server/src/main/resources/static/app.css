@@ -137,9 +137,9 @@ textarea { resize: vertical; }
 }
 .menu-item.group .ga:hover { background: var(--pri, #2f6fd6); color: #fff; }
 .menu-item.group.open .ga { transform: rotate(90deg); }
-/* 单位树面板箭头:平时裸箭头,悬停浮现浅蓝底(动静分明) */
-.dept-tree-arrow { transition: background .15s ease; }
-.dept-tree-arrow:hover { background: var(--c-pribg, #e8f0fd); }
+/* 单位树面板箭头:完全无背景——平时主题蓝裸箭头,悬停仅加深颜色 */
+.dept-tree-arrow { transition: color .15s ease; }
+.dept-tree-arrow:hover { color: var(--pri-dark, #16437e); }
 /* 子菜单高度动画:配合 ext-features.js 的展开/收起控制 */
 .menu-sub {
   height: 0; opacity: 0; overflow: hidden;

@@ -10827,7 +10827,7 @@ function makeupView() {
       text: kids.length ? (isOpen ? '▾' : '▸') : '·',
       class: kids.length ? 'dept-tree-arrow' : '',
       style: 'width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;' +
-        'font-size:15px;font-weight:bold;border-radius:6px;' +
+        'font-size:15px;font-weight:bold;' +
         (kids.length
           ? 'color:var(--pri,#2f6fd6);cursor:pointer;'
           : 'color:var(--c-border,#c5cdd8);cursor:default;')
