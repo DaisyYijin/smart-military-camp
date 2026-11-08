@@ -10825,10 +10825,11 @@ function makeupView() {
     var sel = String(d.id) === String(currentDeptId);
     var arrow = h('span', {
       text: kids.length ? (isOpen ? '▾' : '▸') : '·',
-      style: 'width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;' +
+      class: kids.length ? 'dept-tree-arrow' : '',
+      style: 'width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;' +
         'font-size:15px;font-weight:bold;border-radius:6px;' +
         (kids.length
-          ? 'color:var(--pri,#2f6fd6);background:var(--c-pribg,#e8f0fd);cursor:pointer;'
+          ? 'color:var(--pri,#2f6fd6);cursor:pointer;'
           : 'color:var(--c-border,#c5cdd8);cursor:default;')
     });
     if (kids.length) {
