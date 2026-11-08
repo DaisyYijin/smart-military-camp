@@ -10825,7 +10825,11 @@ function makeupView() {
     var sel = String(d.id) === String(currentDeptId);
     var arrow = h('span', {
       text: kids.length ? (isOpen ? '▾' : '▸') : '·',
-      style: 'width:18px;flex:none;text-align:center;color:var(--c-muted,#8a97a8);cursor:' + (kids.length ? 'pointer' : 'default')
+      style: 'width:24px;height:24px;flex:none;display:inline-flex;align-items:center;justify-content:center;' +
+        'font-size:15px;font-weight:bold;border-radius:6px;' +
+        (kids.length
+          ? 'color:var(--pri,#2f6fd6);background:var(--c-pribg,#e8f0fd);cursor:pointer;'
+          : 'color:var(--c-border,#c5cdd8);cursor:default;')
     });
     if (kids.length) {
       arrow.addEventListener('click', function (e) {
