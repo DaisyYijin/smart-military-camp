@@ -676,6 +676,11 @@ public class BackupService {
                         tables.remove("transfer_record");
                         warnings.add("旧备份未包含变动轨迹表,本次跳过轨迹恢复");
                     }
+                    /* 补课登记表为后期新增:旧备份 manifest 未声明则跳过恢复(恢复后该表为空,数据无损),与上传校验豁免对称 */
+                    if (!declared.containsKey("makeup_record")) {
+                        tables.remove("makeup_record");
+                        warnings.add("旧备份未包含补课登记表,本次跳过补课数据恢复");
+                    }
                 }
                 if ("vehicle".equals(module) && !declared.containsKey("vehicle_fault_history")) {
                     tables.remove("vehicle_fault_history");
