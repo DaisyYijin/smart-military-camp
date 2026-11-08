@@ -10880,9 +10880,9 @@ function makeupView() {
   var listBox = h('div');
   var statusCards = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:stretch' });
   var statusFilter = ''; // '' = 全部;点击状态卡片切换筛选,再点取消
-  /* 列选择器:10列默认全显,可勾选隐藏;#列固定;选择持久化 localStorage(makeupHiddenCols) */
+  /* 列选择器:基础10列默认显示;扩展列默认隐藏(defHide),在「显示列」弹窗勾选启用;#序号列固定;持久化 localStorage(makeupColOverride) */
   var COLS = [
-    { key: 'idx', label: '#', width: 36, fixed: true },
+    { key: 'idx', label: '序号', width: 46, fixed: true },
     { key: 'name', label: '姓名', width: 90 },
     { key: 'rank', label: '军衔', width: 80 },
     { key: 'category', label: '类别', width: 70 },
@@ -10891,13 +10891,26 @@ function makeupView() {
     { key: 'dayStatus', label: '当日状态', width: 90 },
     { key: 'detail', label: '详情', width: 130 },
     { key: 'currentStatus', label: '档案状态', width: 80 },
-    { key: 'phone', label: '联系电话', width: 120 }
+    { key: 'phone', label: '联系电话', width: 120 },
+    /* 可选扩展列:默认隐藏,勾选后显示 */
+    { key: 'gender', label: '性别', width: 50, defHide: true },
+    { key: 'politicalStatus', label: '政治面貌', width: 84, defHide: true },
+    { key: 'post', label: '职务', width: 90, defHide: true },
+    { key: 'nation', label: '民族', width: 60, defHide: true },
+    { key: 'education', label: '学历', width: 70, defHide: true },
+    { key: 'entryDate', label: '入伍时间', width: 90, defHide: true },
+    { key: 'nativePlace', label: '籍贯', width: 90, defHide: true },
+    { key: 'maritalStatus', label: '婚姻状况', width: 80, defHide: true }
   ];
-  var hiddenCols = {};
-  try {
-    (JSON.parse(localStorage.getItem('makeupHiddenCols') || '[]') || []).forEach(function (k) { hiddenCols[k] = true; });
-  } catch (e) { hiddenCols = {}; }
-  function visibleCols() { return COLS.filter(function (c) { return c.fixed || !hiddenCols[c.key]; }); }
+  /* 显隐覆盖表: key→true/false;无记录用默认(defHide?隐藏:显示);序号列恒显 */
+  var colOverride = {};
+  try { colOverride = JSON.parse(localStorage.getItem('makeupColOverride') || '{}') || {}; } catch (e) { colOverride = {}; }
+  function colVisible(c) {
+    if (c.fixed) { return true; }
+    if (Object.prototype.hasOwnProperty.call(colOverride, c.key)) { return !!colOverride[c.key]; }
+    return !c.defHide;
+  }
+  function visibleCols() { return COLS.filter(colVisible); }
   function colCell(c, r, idx) {
     switch (c.key) {
       case 'idx': return h('td', { style: 'color:var(--c-muted,#8a97a8)', text: String(idx + 1) });
@@ -10910,6 +10923,14 @@ function makeupView() {
       case 'detail': return h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' });
       case 'currentStatus': return h('td', { style: 'font-size:12px', text: r.currentStatus || '—' });
       case 'phone': return h('td', { style: 'font-size:12px', text: r.phone || '—' });
+      case 'gender': return h('td', { text: r.gender || '—' });
+      case 'politicalStatus': return h('td', { style: 'font-size:12px', text: r.politicalStatus || '—' });
+      case 'post': return h('td', { style: 'font-size:12px', text: r.post || '—' });
+      case 'nation': return h('td', { text: r.nation || '—' });
+      case 'education': return h('td', { style: 'font-size:12px', text: r.education || '—' });
+      case 'entryDate': return h('td', { style: 'font-size:12px', text: r.entryDate || '—' });
+      case 'nativePlace': return h('td', { style: 'font-size:12px', text: r.nativePlace || '—' });
+      case 'maritalStatus': return h('td', { style: 'font-size:12px', text: r.maritalStatus || '—' });
     }
     return h('td', null);
   }
@@ -10920,11 +10941,11 @@ function makeupView() {
       list.innerHTML = '';
       COLS.forEach(function (c) {
         var cb = h('input', { type: 'checkbox' });
-        cb.checked = c.fixed || !hiddenCols[c.key];
+        cb.checked = colVisible(c);
         cb.disabled = !!c.fixed;
         cb.addEventListener('change', function () {
-          if (cb.checked) { delete hiddenCols[c.key]; } else { hiddenCols[c.key] = true; }
-          try { localStorage.setItem('makeupHiddenCols', JSON.stringify(Object.keys(hiddenCols))); } catch (e2) { /* 持久化失败不影响本次 */ }
+          colOverride[c.key] = cb.checked;
+          try { localStorage.setItem('makeupColOverride', JSON.stringify(colOverride)); } catch (e2) { /* 持久化失败不影响本次 */ }
           render();
         });
         list.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;color:var(--c-body,#445262);cursor:' + (c.fixed ? 'default' : 'pointer') },
@@ -10934,13 +10955,13 @@ function makeupView() {
     refreshList();
     var m = openModal({
       title: '选择显示列',
-      body: h('div', { style: 'padding:2px 0' },
+      body: h('div', { style: 'padding:2px 0;max-height:56vh;overflow:auto' },
         h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin-bottom:8px', text: '勾选要显示的列,取消勾选即隐藏;选择自动保存' }),
         list),
       footer: [
         h('button', { class: 'btn btn-ghost', text: '恢复默认(全部显示)', onclick: function () {
-          hiddenCols = {};
-          try { localStorage.setItem('makeupHiddenCols', '[]'); } catch (e2) { /* 忽略 */ }
+          colOverride = {};
+          try { localStorage.setItem('makeupColOverride', '{}'); } catch (e2) { /* 忽略 */ }
           render(); refreshList();
         } }),
         h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { if (m) { m.close(true); } } })

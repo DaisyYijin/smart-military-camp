@@ -46,7 +46,9 @@ public class MakeupController {
         final String dEnd = (endDate == null || endDate.isEmpty()) ? date : endDate;
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, p.rank AS rank, " +
-                "p.category AS category, p.phone AS phone, d.name AS dept_name " +
+                "p.category AS category, p.phone AS phone, p.gender AS gender, p.political_status AS political_status, " +
+                "p.post AS post, p.nation AS nation, p.education AS education, p.entry_date AS entry_date, " +
+                "p.native_place AS native_place, p.marital_status AS marital_status, d.name AS dept_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id = d.id " +
                 "WHERE " + DataScope.departmentSql("p.department_id") + " " +
                 "ORDER BY p.name");
@@ -109,6 +111,14 @@ public class MakeupController {
             item.put("rank", r.get("rank"));
             item.put("category", r.get("category"));
             item.put("phone", r.get("phone"));
+            item.put("gender", r.get("gender"));
+            item.put("politicalStatus", r.get("political_status"));
+            item.put("post", r.get("post"));
+            item.put("nation", r.get("nation"));
+            item.put("education", r.get("education"));
+            item.put("entryDate", r.get("entry_date"));
+            item.put("nativePlace", r.get("native_place"));
+            item.put("maritalStatus", r.get("marital_status"));
             StringBuilder deptPath = new StringBuilder();
             Long did = r.get("department_id") == null ? null : ((Number) r.get("department_id")).longValue();
             while (did != null && did > 0 && deptNames.containsKey(did)) {
