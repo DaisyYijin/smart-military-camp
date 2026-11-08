@@ -6872,7 +6872,7 @@ function departmentView() {
     var hasKids = node.children && node.children.length;
     var expand = hasKids
       ? h('span', { class: 'tw', text: node._open === false ? '▸' : '▾', onclick: function () { node._open = node._open === false; renderTree(); } })
-      : h('span', { class: 'tw', text: '·' });
+      : h('span', { class: 'tw tw-leaf', text: '·' });
     var nameHtml = kw && node._hit
       ? esc(node.name).split(esc(kw)).join('<b>' + esc(kw) + '</b>')
       : esc(node.name);
