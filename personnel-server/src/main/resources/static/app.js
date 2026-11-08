@@ -10887,8 +10887,8 @@ function makeupView() {
       subjectInput, regBtn, cancelBtn)));
   [dateInput, deptSel].forEach(function (el) { el.addEventListener('change', load); });
   onlyAbsent.addEventListener('change', render);
-  load();
-  return root;
+  /* 视图组件契约:返回 { render(container) } 对象,由分发处统一渲染(与 crudView/organizationView 一致) */
+  return { render: function (container) { container.appendChild(root); load(); } };
 }
 
 function organizationView() {
