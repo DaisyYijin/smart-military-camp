@@ -10786,10 +10786,48 @@ function makeupView() {
   /* 日期字段:与其他模块一致的日历组件(手输"年/月/日"或点图标选日期) */
   var dateField = makeDateField();
   dateField.value = new Date().toISOString().slice(0, 10);
-  var deptSel = h('select', { style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 4px;font-size:13px;color:var(--c-body,#445262);max-width:200px' });
-  deptSel.appendChild(h('option', { value: '', text: '全部单位' }));
-  (Ctx.deptFlat || []).forEach(function (d) {
-    if (!d.parentId) { deptSel.appendChild(h('option', { value: String(d.id), text: d.name })); }
+  var deptSel = h('select', { style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 4px;font-size:13px;color:var(--c-body,#445262);max-width:220px' });
+  /* 单位层级下钻:选中单位后下拉展示其直接下级(└ 缩进),逐级下钻;↑ 返回上级/全部 */
+  var currentDept = null;
+  function deptChildren(pid) {
+    return (Ctx.deptFlat || []).filter(function (d) { return pid ? String(d.parentId) === String(pid) : !d.parentId; });
+  }
+  function deptById(id) {
+    for (var i = 0; i < (Ctx.deptFlat || []).length; i++) {
+      if (String(Ctx.deptFlat[i].id) === String(id)) { return Ctx.deptFlat[i]; }
+    }
+    return null;
+  }
+  function rebuildDeptOptions() {
+    deptSel.innerHTML = '';
+    if (currentDept) {
+      deptSel.appendChild(h('option', { value: String(currentDept.id), text: currentDept.name }));
+      deptChildren(currentDept.id).forEach(function (c) {
+        deptSel.appendChild(h('option', { value: String(c.id), text: '└ ' + c.name }));
+      });
+      var parent = currentDept.parentId ? deptById(currentDept.parentId) : null;
+      deptSel.appendChild(h('option', { value: '__up__', text: parent ? '↑ 返回 ' + parent.name : '↑ 返回全部单位' }));
+      deptSel.value = String(currentDept.id);
+    } else {
+      deptSel.appendChild(h('option', { value: '', text: '全部单位' }));
+      deptChildren(null).forEach(function (d) {
+        deptSel.appendChild(h('option', { value: String(d.id), text: d.name }));
+      });
+      deptSel.value = '';
+    }
+  }
+  rebuildDeptOptions();
+  deptSel.addEventListener('change', function () {
+    var v = deptSel.value;
+    if (v === '__up__') {
+      currentDept = currentDept && currentDept.parentId ? deptById(currentDept.parentId) : null;
+    } else if (v) {
+      currentDept = deptById(v);
+    } else {
+      currentDept = null;
+    }
+    rebuildDeptOptions();
+    load();
   });
   var onlyAbsent = h('input', { type: 'checkbox', style: 'margin:0 4px 0 0' });
   var listBox = h('div');
@@ -10850,7 +10888,7 @@ function makeupView() {
   root.appendChild(statLine);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
     h('div', { class: 'table-wrap' }, listBox)));
-  [dateField, deptSel].forEach(function (el) { el.addEventListener('change', load); });
+  dateField.addEventListener('change', load);
   onlyAbsent.addEventListener('change', render);
   /* 视图组件契约:返回 { render(container) } 对象,由分发处统一渲染(与 crudView/organizationView 一致) */
   return { render: function (container) { container.appendChild(root); load(); } };
