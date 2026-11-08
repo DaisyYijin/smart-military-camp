@@ -10878,6 +10878,7 @@ function makeupView() {
   var listBox = h('div');
   var statusCards = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;align-items:stretch' });
   var statusFilter = ''; // '' = 全部;点击状态卡片切换筛选,再点取消
+  var dataTable = null;  // 表格复用:列不变时仅替换 tbody(表头/列宽稳定),列变化才整表重建
   /* 列选择器:基础10列默认显示;扩展列默认隐藏(defHide),在「显示列」弹窗勾选启用;#序号列固定;持久化 localStorage(makeupColOverride) */
   var COLS = [
     { key: 'idx', label: '序号', width: 46, fixed: true },
@@ -11034,14 +11035,20 @@ function makeupView() {
     show.forEach(function (r, idx) {
       tb.appendChild(h('tr', null, vis.map(function (c) { return colCell(c, r, idx); })));
     });
-    var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr>' + vis.map(function (c) {
-      return '<th' + (c.width ? ' style="width:' + c.width + 'px"' : '') + '>' + c.label + '</th>';
-    }).join('') + '</tr></thead>';
-    table.appendChild(tb);
-    listBox.innerHTML = '';
-    listBox.appendChild(table);
-    attachColumnResize(table, 'makeup');
+    /* 表头复用:切日期/单位/状态筛选只换 tbody(不整表重绘,列宽稳定消除抖动);显示列变化才重建表头 */
+    var headerKey = vis.map(function (c) { return c.key; }).join(',');
+    if (!dataTable || dataTable.__cols !== headerKey) {
+      dataTable = h('table', { class: 'grid' });
+      dataTable.__cols = headerKey;
+      dataTable.innerHTML = '<thead><tr>' + vis.map(function (c) {
+        return '<th' + (c.width ? ' style="width:' + c.width + 'px"' : '') + '>' + c.label + '</th>';
+      }).join('') + '</tr></thead>';
+      listBox.innerHTML = '';
+      listBox.appendChild(dataTable);
+    }
+    var oldTb = dataTable.tBodies[0];
+    if (oldTb) { dataTable.replaceChild(tb, oldTb); } else { dataTable.appendChild(tb); }
+    attachColumnResize(dataTable, 'makeup');
   }
 
   function load() {
