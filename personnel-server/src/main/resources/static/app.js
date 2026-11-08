@@ -10786,17 +10786,10 @@ function makeupView() {
   /* 日期字段:与其他模块一致的日历组件(手输"年/月/日"或点图标选日期) */
   var dateField = makeDateField();
   dateField.value = new Date().toISOString().slice(0, 10);
-  /* 区间模式:起止日期筛选(单日模式时隐藏结束日期);单日与区间共用同一状态统计 */
+  /* 起止日期双输入框:只填开始=单日查询,两个都填=区间查询(结束留空按单日) */
   var endDateField = makeDateField();
-  endDateField.value = new Date().toISOString().slice(0, 10);
-  var rangeMode = false;
-  var endDateLabel = h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:none;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
-  var rangeBtn = h('button', { class: 'btn btn-ghost', text: '区间模式', title: '切换单日/起止日期区间筛选', onclick: function () {
-    rangeMode = !rangeMode;
-    endDateLabel.style.display = rangeMode ? 'flex' : 'none';
-    rangeBtn.textContent = rangeMode ? '单日模式' : '区间模式';
-    load();
-  } });
+  endDateField.value = '';
+  var endDateLabel = h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
   /* 单位选择:弹层树——展开/收起层级,点名称直达任意层级;选中后按钮显示路径 */
   var currentDeptId = ''; // '' = 全部单位
   var deptExpanded = {};  // 各节点展开状态(视图内保持)
@@ -10920,19 +10913,8 @@ function makeupView() {
     }
     return h('td', null);
   }
-  var colPanel = null;
-  function closeColPanel() {
-    if (colPanel && colPanel.parentNode) { colPanel.parentNode.removeChild(colPanel); }
-    colPanel = null;
-    document.removeEventListener('mousedown', onColDocDown, true);
-  }
-  function onColDocDown(e) {
-    if (colPanel && !colPanel.contains(e.target) && e.target !== colsBtn && !colsBtn.contains(e.target)) { closeColPanel(); }
-  }
+  /* 显示列弹窗:复选框即时生效并持久化,openModal 标准模态 */
   function openColPanel() {
-    if (colPanel) { closeColPanel(); return; }
-    var rect = colsBtn.getBoundingClientRect();
-    colPanel = h('div', { style: 'position:fixed;top:' + Math.min(rect.bottom + 4, window.innerHeight - 380) + 'px;left:' + Math.min(rect.left, window.innerWidth - 250) + 'px;width:226px;background:#fff;border:1px solid var(--c-border,#c5cdd8);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:10000;padding:6px 0 10px' });
     var list = h('div');
     function refreshList() {
       list.innerHTML = '';
@@ -10945,22 +10927,27 @@ function makeupView() {
           try { localStorage.setItem('makeupHiddenCols', JSON.stringify(Object.keys(hiddenCols))); } catch (e2) { /* 持久化失败不影响本次 */ }
           render();
         });
-        list.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:5px 14px;font-size:13px;color:var(--c-body,#445262);cursor:' + (c.fixed ? 'default' : 'pointer') },
+        list.appendChild(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;color:var(--c-body,#445262);cursor:' + (c.fixed ? 'default' : 'pointer') },
           cb, h('span', { text: c.label + (c.fixed ? '(固定)' : '') })));
       });
     }
     refreshList();
-    colPanel.appendChild(h('div', { style: 'padding:6px 14px 8px;font-size:12px;color:var(--c-muted,#8a97a8);border-bottom:1px solid var(--c-border,#c5cdd8)', text: '勾选要显示的列' }));
-    colPanel.appendChild(list);
-    colPanel.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:calc(100% - 28px);margin:8px 14px 0', text: '恢复默认(全部显示)', onclick: function () {
-      hiddenCols = {};
-      try { localStorage.setItem('makeupHiddenCols', '[]'); } catch (e2) { /* 忽略 */ }
-      render(); refreshList();
-    } }));
-    document.body.appendChild(colPanel);
-    document.addEventListener('mousedown', onColDocDown, true);
+    var m = openModal({
+      title: '选择显示列',
+      body: h('div', { style: 'padding:2px 0' },
+        h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin-bottom:8px', text: '勾选要显示的列,取消勾选即隐藏;选择自动保存' }),
+        list),
+      footer: [
+        h('button', { class: 'btn btn-ghost', text: '恢复默认(全部显示)', onclick: function () {
+          hiddenCols = {};
+          try { localStorage.setItem('makeupHiddenCols', '[]'); } catch (e2) { /* 忽略 */ }
+          render(); refreshList();
+        } }),
+        h('button', { class: 'btn btn-primary', text: '关闭', onclick: function () { if (m) { m.close(true); } } })
+      ]
+    });
   }
-  var colsBtn = h('button', { class: 'btn btn-ghost', text: '列', title: '选择显示/隐藏表格列', onclick: openColPanel });
+  var colsBtn = h('button', { class: 'btn btn-ghost', text: '显示列', title: '选择显示/隐藏表格列', onclick: openColPanel });
   var lastRows = [];
 
   function statusBadge(s) {
@@ -11030,7 +11017,7 @@ function makeupView() {
     listBox.innerHTML = '';
     listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
     var url = '/api/makeup/status?date=' + encodeURIComponent(dateField.value || '');
-    if (rangeMode && endDateField.value) { url += '&endDate=' + encodeURIComponent(endDateField.value); }
+    if (endDateField.value) { url += '&endDate=' + encodeURIComponent(endDateField.value); }
     if (currentDeptId) { url += '&departmentId=' + currentDeptId; }
     GET(url).then(function (rows) {
       lastRows = rows || [];
@@ -11044,7 +11031,6 @@ function makeupView() {
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
     endDateLabel,
-    rangeBtn,
     deptBtn,
     colsBtn,
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
