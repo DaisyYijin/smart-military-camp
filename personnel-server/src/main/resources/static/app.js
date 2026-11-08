@@ -10777,6 +10777,8 @@ var leavePlanCfg = {
 };
 /* ================= 组织建设视图(tab式组织管理) ================= */
 var organizationCfg = { key: 'organization', title: '组织建设', icon: 'users' };
+/* 补课登记:独立视图(makeupView 渲染);须注册进 MODULES,否则视图解析回退人员档案 */
+var makeupCfg = { key: 'makeup', title: '补课登记', icon: 'calendar', excel: false };
 
 /* ============ 补课登记:按日期查看人员在位情况,对缺席者登记补课 ============ */
 function makeupView() {
@@ -11537,7 +11539,7 @@ function approvalView() {
   return { render: render };
 }
 
-var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg, approvalCfg];
+var MODULES = [personnelCfg, militaryCfg, equipmentCfg, materialCfg, vehicleCfg, leaveCfg, leavePlanCfg, absenceCfg, phoneCfg, fitnessCfg, itemLoanCfg, doubleExcellenceCfg, annualAppraisalCfg, organizationCfg, approvalCfg, makeupCfg];
 var PENDING_MODULES = [];
 
 /** 侧边栏分组定义:children 为模块key,分组子视图(枪支/大型/小型)仅用于导航 */
