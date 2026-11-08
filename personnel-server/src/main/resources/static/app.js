@@ -10783,7 +10783,9 @@ var makeupCfg = { key: 'makeup', title: '补课登记', icon: 'calendar', excel:
 /* ============ 补课登记:按日期查看人员在位情况,对缺席者登记补课 ============ */
 function makeupView() {
   var root = h('div', { class: 'view-in' });
-  var dateInput = h('input', { type: 'date', value: new Date().toISOString().slice(0, 10), style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 8px;font-size:13px;color:var(--c-body,#445262)' });
+  /* 日期字段:与其他模块一致的日历组件(手输"年/月/日"或点图标选日期) */
+  var dateField = makeDateField();
+  dateField.value = new Date().toISOString().slice(0, 10);
   var deptSel = h('select', { style: 'height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 4px;font-size:13px;color:var(--c-body,#445262);max-width:200px' });
   deptSel.appendChild(h('option', { value: '', text: '全部单位' }));
   (Ctx.deptFlat || []).forEach(function (d) {
@@ -10792,20 +10794,11 @@ function makeupView() {
   var onlyAbsent = h('input', { type: 'checkbox', style: 'margin:0 4px 0 0' });
   var listBox = h('div');
   var statLine = h('div', { style: 'font-size:12px;color:var(--c-muted,#8a97a8);margin:10px 0 6px' });
-  var subjectInput = h('input', { type: 'text', placeholder: '补课科目(选填)', style: 'flex:1;min-width:160px;height:28px;border:1px solid var(--c-border,#c5cdd8);border-radius:6px;padding:0 8px;font-size:13px' });
-  var selected = {};
   var lastRows = [];
 
   function statusBadge(s) {
     var color = s === '在位' ? 'var(--c-ok,#4caf50)' : s === '休假' ? 'var(--c-warn,#f0a93c)' : 'var(--pri,#2f6fd6)';
     return '<span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:12px;color:#fff;background:' + color + '">' + esc(s) + '</span>';
-  }
-
-  function syncCount() {
-    var n = Object.keys(selected).filter(function (k) { return selected[k]; }).length;
-    regBtn.textContent = n ? '登记补课(' + n + '人)' : '登记补课';
-    cancelBtn.textContent = '取消所选补课';
-    regBtn.disabled = !n; cancelBtn.disabled = !n;
   }
 
   function render() {
@@ -10818,21 +10811,17 @@ function makeupView() {
     statLine.textContent = '共 ' + lastRows.length + ' 人:在位 ' + onDuty + ' / 休假 ' + onLeave + ' / 在外 ' + away + (show.length !== lastRows.length ? ' / 筛选显示 ' + show.length : '') + ' / 已补课 ' + done;
     var tb = h('tbody');
     if (!show.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 5, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: 4, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
     }
     show.forEach(function (r) {
-      var cb = h('input', { type: 'checkbox' });
-      cb.checked = !!selected[r.personnelId];
-      cb.addEventListener('change', function () { selected[r.personnelId] = cb.checked; syncCount(); });
       tb.appendChild(h('tr', null,
-        h('td', { class: 'cb-cell' }, cb),
         h('td', null, h('b', { text: r.name || '' })),
         h('td', { text: r.deptName || '—' }),
         h('td', { html: statusBadge(r.dayStatus || '在位') }),
         h('td', null, r.makeupDone ? h('span', { style: 'color:var(--c-ok,#4caf50);font-size:12px', text: '✓ 已补课' }) : h('span', { style: 'color:var(--c-muted,#8a97a8);font-size:12px', text: '—' }))));
     });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th class="cb-cell" style="width:36px"></th><th style="width:120px">姓名</th><th>单位</th><th style="width:100px">当日状态</th><th style="width:90px">补课</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th style="width:120px">姓名</th><th>单位</th><th style="width:100px">当日状态</th><th style="width:90px">补课</th></tr></thead>';
     table.appendChild(tb);
     listBox.innerHTML = '';
     listBox.appendChild(table);
@@ -10842,50 +10831,26 @@ function makeupView() {
   function load() {
     listBox.innerHTML = '';
     listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
-    var url = '/api/makeup/status?date=' + encodeURIComponent(dateInput.value || '');
+    var url = '/api/makeup/status?date=' + encodeURIComponent(dateField.value || '');
     if (deptSel.value) { url += '&departmentId=' + deptSel.value; }
     GET(url).then(function (rows) {
-      lastRows = rows || []; selected = {};
-      render(); syncCount();
+      lastRows = rows || [];
+      render();
     }).catch(function (e) {
       listBox.innerHTML = '';
       listBox.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败', style: 'padding:20px;text-align:center;color:var(--c-danger,#d9463e)' }));
     });
   }
 
-  var regBtn = h('button', { class: 'btn', text: '登记补课', onclick: function () {
-    var ids = Object.keys(selected).filter(function (k) { return selected[k]; }).map(Number);
-    if (!ids.length) { toast('请勾选要补课的人员', 'err'); return; }
-    confirmBox('确定为选中的 ' + ids.length + ' 人登记补课(' + (dateInput.value || '今天') + ')?', function () {
-      POST('/api/makeup', { personnelIds: ids, makeupDate: dateInput.value, subject: subjectInput.value, remark: '' })
-        .then(function (r) { toast(r && r.message ? r.message : '登记成功', 'ok'); load(); })
-        .catch(function (e) { toast(e.message || '登记失败', 'err'); });
-    });
-  }});
-  var cancelBtn = h('button', { class: 'btn btn-ghost', text: '取消所选补课', onclick: function () {
-    var ids = lastRows.filter(function (r) { return selected[r.personnelId] && r.makeupId; }).map(function (r) { return r.makeupId; });
-    if (!ids.length) { toast('选中的人中没有已补课记录', 'err'); return; }
-    confirmBox('取消选中 ' + ids.length + ' 人的补课登记?', function () {
-      var chain = Promise.resolve();
-      ids.forEach(function (mid) {
-        chain = chain.then(function () { return DEL('/api/makeup/' + mid); });
-      });
-      chain.then(function () { toast('已取消', 'ok'); load(); })
-        .catch(function (e) { toast(e.message || '取消失败', 'err'); });
-    });
-  }});
-
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
-    h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateInput),
+    h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
     deptSel,
     h('label', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center' }, onlyAbsent, h('span', { text: '只看不在位' })),
     h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
   root.appendChild(statLine);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
-    h('div', { class: 'table-wrap' }, listBox),
-    h('div', { style: 'padding:10px 12px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--c-border,#c5cdd8);flex-wrap:wrap' },
-      subjectInput, regBtn, cancelBtn)));
-  [dateInput, deptSel].forEach(function (el) { el.addEventListener('change', load); });
+    h('div', { class: 'table-wrap' }, listBox)));
+  [dateField, deptSel].forEach(function (el) { el.addEventListener('change', load); });
   onlyAbsent.addEventListener('change', render);
   /* 视图组件契约:返回 { render(container) } 对象,由分发处统一渲染(与 crudView/organizationView 一致) */
   return { render: function (container) { container.appendChild(root); load(); } };
