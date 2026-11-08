@@ -11045,8 +11045,11 @@ function makeupView() {
   }
 
   function load() {
-    listBox.innerHTML = '';
-    listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
+    /* 防闪烁:已有数据时不清屏(切换日期原地更新),仅首次加载显示占位——避免"清空→加载中→重绘"的视觉跳动 */
+    if (!lastRows.length) {
+      listBox.innerHTML = '';
+      listBox.appendChild(h('div', { class: 'empty-row', text: '加载中…', style: 'padding:20px;text-align:center;color:var(--c-muted,#8a97a8)' }));
+    }
     var url = '/api/makeup/status?date=' + encodeURIComponent(dateField.value || '');
     if (endDateField.value) { url += '&endDate=' + encodeURIComponent(endDateField.value); }
     if (currentDeptId) { url += '&departmentId=' + currentDeptId; }
@@ -11054,6 +11057,7 @@ function makeupView() {
       lastRows = rows || [];
       render();
     }).catch(function (e) {
+      if (lastRows.length) { toast(e.message || '刷新失败', 'err'); return; } // 已有数据仅提示,不清屏
       listBox.innerHTML = '';
       listBox.appendChild(h('div', { class: 'empty-row', text: e.message || '加载失败', style: 'padding:20px;text-align:center;color:var(--c-danger,#d9463e)' }));
     });
