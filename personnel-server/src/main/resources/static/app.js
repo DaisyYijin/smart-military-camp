@@ -10788,7 +10788,7 @@ function makeupView() {
   var endDateField = makeDateField();
   endDateField.value = '';
   /* div 而非 label:label 原生会把内部点击转发给 input(合成 click),选完日期后触发 input 的开面板逻辑导致弹层重开 */
-  var endDateLabel = h('div', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '至' }), endDateField);
+  var endDateLabel = h('div', { class: 'mk-field-label' }, h('span', { text: '至' }), endDateField);
   /* 单位选择:弹层树——展开/收起层级,点名称直达任意层级;选中后按钮显示路径 */
   var currentDeptId = ''; // '' = 全部单位
   var deptExpanded = {};  // 各节点展开状态(视图内保持)
@@ -11005,9 +11005,9 @@ function makeupView() {
     });
     var dutyRate = lastRows.length ? Math.round((counts['在位'] || 0) / lastRows.length * 100) : 0;
     statusCards.innerHTML = '';
-    statusCards.appendChild(h('div', { style: 'display:flex;flex-direction:column;justify-content:center;padding:6px 14px;border-radius:8px;background:var(--c-pribg,#e8f0fd);min-width:86px' },
-      h('div', { style: 'font-size:22px;font-weight:bold;color:var(--pri,#2f6fd6);line-height:1.2', text: dutyRate + '%' }),
-      h('div', { style: 'font-size:11px;color:var(--c-sub,#66788c)', text: '在位率 · 共' + lastRows.length + '人' })));
+    statusCards.appendChild(h('div', { class: 'mk-rate-card' },
+      h('div', { class: 'v', text: dutyRate + '%' }),
+      h('div', { class: 'l', text: '在位率 · 共' + lastRows.length + '人' })));
     var statusKeys = Object.keys(counts).sort(function (a, b) {
       if (a === '在位') { return -1; }
       if (b === '在位') { return 1; }
@@ -11017,12 +11017,12 @@ function makeupView() {
       var n = counts[g];
       var active = statusFilter === g;
       var card = h('div', {
-        style: 'display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid ' + (active ? 'var(--pri,#2f6fd6)' : 'var(--c-border,#c5cdd8)') + ';background:' + (active ? 'var(--c-pribg,#e8f0fd)' : '#fff') + ';transition:border-color .15s ease, background .15s ease',
+        class: 'mk-stat-card' + (active ? ' active' : ''),
         title: active ? '点击取消筛选' : '点击只看「' + g + '」人员'
       },
-        h('span', { style: 'width:10px;height:10px;border-radius:50%;background:' + statusColor(g) + ';flex:none' }),
-        h('span', { style: 'font-size:20px;font-weight:bold;color:var(--c-dark,#1d2c40);line-height:1', text: String(n) }),
-        h('span', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: g }));
+        h('span', { class: 'dot', style: 'background:' + statusColor(g) }),
+        h('span', { class: 'n', text: String(n) }),
+        h('span', { class: 't', text: g }));
       card.addEventListener('click', function () { statusFilter = active ? '' : g; render(); });
       statusCards.appendChild(card);
     });
@@ -11073,11 +11073,23 @@ function makeupView() {
 
   root.appendChild(h('div', { class: 'panel', style: 'padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap' },
     /* div 而非 label:同上,防 label 原生转发点击给 input 导致选完日期后弹层自动重开 */
-    h('div', { style: 'font-size:13px;color:var(--c-body,#445262);display:flex;align-items:center;gap:4px' }, h('span', { text: '日期' }), dateField),
+    h('div', { class: 'mk-field-label' }, h('span', { text: '日期' }), dateField),
     endDateLabel,
     deptBtn,
     colsBtn,
-    h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load })));
+    h('button', { class: 'btn btn-ghost', text: '刷新', onclick: load }),
+    h('button', { class: 'btn btn-ghost', text: '导出Excel', title: '按当前日期/单位筛选导出在位情况', onclick: function () {
+      var url = '/api/makeup/export?date=' + encodeURIComponent(dateField.value || '');
+      if (endDateField.value) { url += '&endDate=' + encodeURIComponent(endDateField.value); }
+      if (currentDeptId) { url += '&departmentId=' + currentDeptId; }
+      var pm = showProgressModal('导出 Excel');
+      apiBlobWithProgress(url, function (pct) { pm.setProgress(pct); }).then(function (r2) {
+        pm.setProgress(100);
+        pm.setStatus('下载完成');
+        downloadBlob(r2.blob, r2.filename);
+        setTimeout(function () { pm.close(); }, 400);
+      }).catch(function (e2) { pm.close(); toast(e2.message || '导出失败', 'err'); });
+    } })));
   root.appendChild(statusCards);
   root.appendChild(h('div', { class: 'panel', style: 'padding:0' },
     h('div', { class: 'table-wrap' }, listBox)));

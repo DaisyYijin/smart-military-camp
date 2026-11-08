@@ -193,6 +193,47 @@ public class MakeupController {
                 "SELECT id, makeup_date, subject, remark, created_by, created_at FROM makeup_record WHERE personnel_id=? ORDER BY makeup_date DESC", personnelId));
     }
 
+    /** 按当前筛选导出在位情况 Excel(复用 status 数据组装,10 基础列) */
+    @GetMapping("/export")
+    @SuppressWarnings("unchecked")
+    public org.springframework.http.ResponseEntity<byte[]> export(
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "endDate", required = false) String endDate,
+            @RequestParam(value = "departmentId", required = false) Long departmentId) throws Exception {
+        ApiResponse resp = status(date, endDate, departmentId);
+        Object data = resp == null ? null : resp.getData();
+        List<Map<String, Object>> rows = data instanceof List ? (List<Map<String, Object>>) data : new ArrayList<Map<String, Object>>();
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sh = wb.createSheet("在位情况");
+            String[] heads = {"序号", "姓名", "军衔", "类别", "身份证号", "单位", "当日状态", "详情", "档案状态", "联系电话"};
+            org.apache.poi.ss.usermodel.Row hr = sh.createRow(0);
+            for (int i = 0; i < heads.length; i++) { hr.createCell(i).setCellValue(heads[i]); }
+            int r = 1;
+            for (Map<String, Object> row : rows) {
+                org.apache.poi.ss.usermodel.Row xr = sh.createRow(r++);
+                xr.createCell(0).setCellValue(r - 1);
+                xr.createCell(1).setCellValue(str(row.get("name")));
+                xr.createCell(2).setCellValue(str(row.get("rank")));
+                xr.createCell(3).setCellValue(str(row.get("category")));
+                xr.createCell(4).setCellValue(str(row.get("idCard")));
+                xr.createCell(5).setCellValue(str(row.get("deptName")));
+                xr.createCell(6).setCellValue(str(row.get("dayStatus")));
+                xr.createCell(7).setCellValue(str(row.get("detail")));
+                xr.createCell(8).setCellValue(str(row.get("currentStatus")));
+                xr.createCell(9).setCellValue(str(row.get("phone")));
+            }
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            wb.write(bos);
+            String d = (date == null || date.isEmpty()) ? java.time.LocalDate.now().toString() : date;
+            String label = d + ((endDate != null && !endDate.isEmpty()) ? "至" + endDate : "");
+            String fname = java.net.URLEncoder.encode("在位情况-" + label + ".xlsx", "UTF-8").replace("+", "%20");
+            return org.springframework.http.ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename*=UTF-8''" + fname)
+                    .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .body(bos.toByteArray());
+        }
+    }
+
     private void requireRecord(Long id) {
         Long pid = jdbc.queryForObject("SELECT personnel_id FROM makeup_record WHERE id=?", Long.class, id);
         if (pid == null) { throw new IllegalArgumentException("补课记录不存在"); }
