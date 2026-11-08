@@ -10945,7 +10945,8 @@ function makeupView() {
         try { localStorage.setItem('makeupColOverride', JSON.stringify(colOverride)); } catch (e2) { /* 持久化失败不影响本次 */ }
         render();
       });
-      var chip = h('label', { class: 'roster-field-check' + (colVisible(c) ? ' on' : '') + (c.fixed ? ' fixed-col' : ''), title: c.fixed ? '固定显示' : '勾选显示/隐藏该列' },
+      /* div 而非 label:label 原生会把点击转发给内部 checkbox,与手动翻转叠加相互抵消(表现为点文字无反应) */
+      var chip = h('div', { class: 'roster-field-check' + (colVisible(c) ? ' on' : '') + (c.fixed ? ' fixed-col' : ''), title: c.fixed ? '固定显示' : '勾选显示/隐藏该列' },
         cb, h('span', { text: c.label + (c.fixed ? '(固定)' : '') }));
       /* 点击胶囊文字区域等同勾选(直接点复选框由 change 处理,避免双触发) */
       chip.addEventListener('click', function (ev) {
