@@ -10936,21 +10936,23 @@ function makeupView() {
     var show = statusFilter ? lastRows.filter(function (r) { return (r.dayStatus || '在位') === statusFilter; }) : lastRows;
     var tb = h('tbody');
     if (!show.length) {
-      tb.appendChild(h('tr', null, h('td', { colspan: 8, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
+      tb.appendChild(h('tr', null, h('td', { colspan: 10, class: 'empty-row', text: lastRows.length ? '当前筛选无人员' : '暂无人员' })));
     }
     show.forEach(function (r, idx) {
       tb.appendChild(h('tr', null,
         h('td', { style: 'color:var(--c-muted,#8a97a8)', text: String(idx + 1) }),
         h('td', null, h('b', { text: r.name || '' })),
         h('td', { text: r.rank || '—' }),
+        h('td', { style: 'font-size:12px', text: r.category || '—' }),
         h('td', { style: 'font-size:12px', text: r.idCard || '—' }),
-        h('td', { text: r.deptName || '—' }),
+        h('td', { text: r.deptName || '—', title: r.deptName || '' }),
         h('td', { html: statusBadge(r.dayStatus || '在位') }),
         h('td', { style: 'font-size:12px;color:var(--c-sub,#66788c)', text: r.detail || '' }),
-        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' })));
+        h('td', { style: 'font-size:12px', text: r.currentStatus || '—' }),
+        h('td', { style: 'font-size:12px', text: r.phone || '—' })));
     });
     var table = h('table', { class: 'grid' });
-    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th style="width:36px">#</th><th style="width:90px">姓名</th><th style="width:80px">军衔</th><th style="width:70px">类别</th><th style="width:160px">身份证号</th><th>单位</th><th style="width:90px">当日状态</th><th style="width:130px">详情</th><th style="width:80px">档案状态</th><th style="width:120px">联系电话</th></tr></thead>';
     table.appendChild(tb);
     listBox.innerHTML = '';
     listBox.appendChild(table);

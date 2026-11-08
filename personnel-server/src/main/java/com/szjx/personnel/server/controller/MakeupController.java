@@ -45,10 +45,19 @@ public class MakeupController {
         /* endDate 为空 = 单日模式(与 date 相同);否则区间模式:区间内任一天命中即计入,详情聚合所有命中段 */
         final String dEnd = (endDate == null || endDate.isEmpty()) ? date : endDate;
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, p.rank AS rank, d.name AS dept_name " +
+                "SELECT p.id, p.name, p.id_card, p.department_id, p.status AS current_status, p.rank AS rank, " +
+                "p.category AS category, p.phone AS phone, d.name AS dept_name " +
                 "FROM personnel p LEFT JOIN department d ON p.department_id = d.id " +
                 "WHERE " + DataScope.departmentSql("p.department_id") + " " +
                 "ORDER BY p.name");
+        /* 单位完整层级路径:全表读 Map,沿 parent 链向上拼接(如"一营/一连/一排/一班") */
+        Map<Long, String> deptNames = new HashMap<Long, String>();
+        Map<Long, Long> deptParents = new HashMap<Long, Long>();
+        for (Map<String, Object> r0 : jdbc.queryForList("SELECT id, name, parent_id FROM department")) {
+            deptNames.put(((Number) r0.get("id")).longValue(), String.valueOf(r0.get("name")));
+            Object pid0 = r0.get("parent_id");
+            deptParents.put(((Number) r0.get("id")).longValue(), pid0 == null ? 0L : ((Number) pid0).longValue());
+        }
         if (departmentId != null && departmentId > 0) {
             Set<Long> deptIds = new HashSet<Long>();
             collectDeptIds(departmentId, deptIds);
@@ -98,7 +107,16 @@ public class MakeupController {
             item.put("name", r.get("name"));
             item.put("idCard", r.get("id_card"));
             item.put("rank", r.get("rank"));
-            item.put("deptName", r.get("dept_name"));
+            item.put("category", r.get("category"));
+            item.put("phone", r.get("phone"));
+            StringBuilder deptPath = new StringBuilder();
+            Long did = r.get("department_id") == null ? null : ((Number) r.get("department_id")).longValue();
+            while (did != null && did > 0 && deptNames.containsKey(did)) {
+                if (deptPath.length() > 0) { deptPath.insert(0, "/"); }
+                deptPath.insert(0, deptNames.get(did));
+                did = deptParents.get(did);
+            }
+            item.put("deptName", deptPath.length() > 0 ? deptPath.toString() : String.valueOf(r.get("dept_name") == null ? "" : r.get("dept_name")));
             item.put("currentStatus", r.get("current_status"));
             String dayStatus;
             String detail = "";
