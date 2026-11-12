@@ -456,26 +456,38 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         // 默认方案种子:军事课目综合考核 = 理论30% + 实操70%(射击40%/战术30%/体能30%)
         try {
             if (jdbc.queryForObject("SELECT COUNT(*) FROM mil_scheme", Integer.class) == 0) {
-                jdbc.update("INSERT INTO mil_scheme(name, remark) VALUES(?, ?)",
-                        "军事课目综合考核", "理论+实操加权,百分制");
-                Long sid = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
-                jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,1)", sid, "理论", 30);
-                jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,2)", sid, "实操", 70);
-                Long prac = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
-                String[] names = {"射击", "战术", "体能"};
-                double[] ws = {40, 30, 30};
-                for (int i = 0; i < names.length; i++) {
-                    jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?)",
-                            sid, prac, names[i], ws[i], i + 1);
-                }
+                /* 事务包裹:1 方案 + 4 子项逐条写入(last_insert_rowid 需同事务同连接) */
+                org.springframework.transaction.support.TransactionTemplate msTx =
+                        new org.springframework.transaction.support.TransactionTemplate(
+                                new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+                msTx.executeWithoutResult(status -> {
+                    jdbc.update("INSERT INTO mil_scheme(name, remark) VALUES(?, ?)",
+                            "军事课目综合考核", "理论+实操加权,百分制");
+                    Long sid = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+                    jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,1)", sid, "理论", 30);
+                    jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,0,?,?,2)", sid, "实操", 70);
+                    Long prac = jdbc.queryForObject("SELECT last_insert_rowid()", Long.class);
+                    String[] names = {"射击", "战术", "体能"};
+                    double[] ws = {40, 30, 30};
+                    for (int i = 0; i < names.length; i++) {
+                        jdbc.update("INSERT INTO mil_scheme_item(scheme_id, parent_id, name, weight, sort) VALUES(?,?,?,?,?)",
+                                sid, prac, names[i], ws[i], i + 1);
+                    }
+                });
             }
         } catch (Exception ignore) {
             // 种子失败不影响启动
         }
-        dictSeed.addDict("military_type", new String[]{"理论考核", "射击考核", "战术考核", "共同科目", "专业科目", "其他"});
-        dictSeed.addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
-        dictSeed.addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
-        dictSeed.addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
+        /* 补充字典项同样包事务(与 initDefaultDict 一致),避免首次启动逐条落盘 */
+        org.springframework.transaction.support.TransactionTemplate extraTx =
+                new org.springframework.transaction.support.TransactionTemplate(
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        extraTx.executeWithoutResult(status -> {
+            dictSeed.addDict("military_type", new String[]{"理论考核", "射击考核", "战术考核", "共同科目", "专业科目", "其他"});
+            dictSeed.addDict("personnel_location", new String[]{"机关", "营区", "哨位", "执勤点", "外训点", "其他"});
+            dictSeed.addDict("equipment_category", new String[]{"枪支", "大型装备", "小型装备"});
+            dictSeed.addDict("edu_degree", new String[]{"博士", "硕士", "学士", "无"});
+        });
         dictSeed.addDict("edu_form", new String[]{"普通全日制", "非全日制", "成人高考(函授)", "成人高考(业余)", "自学考试", "网络教育", "开放教育"});
 
         // 体能考核分数
@@ -777,12 +789,18 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 {"55", 10, 9, 8, 7, 6, 5},
             };
             String[] ages = {"24岁以下", "25-27", "28-30", "31-33", "34-36", "37-39"};
-            for (Object[] row : seed) {
-                for (int a = 0; a < ages.length; a++) {
-                    jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value) VALUES(?,?,?,?)",
-                            "引体向上", ages[a], Integer.parseInt((String) row[0]), ((Number) row[a + 1]).doubleValue());
+            /* 事务包裹:60 条逐条 INSERT 在 autoCommit 下各自落盘,慢盘首次启动明显拖慢 */
+            org.springframework.transaction.support.TransactionTemplate fmTx =
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+            fmTx.executeWithoutResult(status -> {
+                for (Object[] row : seed) {
+                    for (int a = 0; a < ages.length; a++) {
+                        jdbc.update("INSERT INTO fitness_matrix(item, age_group, score, value) VALUES(?,?,?,?)",
+                                "引体向上", ages[a], Integer.parseInt((String) row[0]), ((Number) row[a + 1]).doubleValue());
+                    }
                 }
-            }
+            });
             log.info("已初始化体能评分矩阵示例(引体向上)");
         }
 
@@ -817,9 +835,15 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
                 {"2027-02-06", "春节"}, {"2027-02-07", "春节"}, {"2027-02-08", "春节"},
                 {"2027-02-09", "春节"}, {"2027-02-10", "春节"}, {"2027-02-11", "春节"}, {"2027-02-12", "春节"},
             };
-            for (String[] h : holidays) {
-                jdbc.execute("INSERT INTO holiday_calendar(holiday_date, holiday_name) VALUES('" + h[0] + "','" + h[1] + "')");
-            }
+            /* 事务包裹 + 参数化批量:39 天逐条拼接 INSERT 在 autoCommit 下各自落盘 */
+            java.util.List<Object[]> holidayBatch = new java.util.ArrayList<Object[]>();
+            for (String[] h : holidays) { holidayBatch.add(new Object[]{h[0], h[1]}); }
+            org.springframework.transaction.support.TransactionTemplate hTx =
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+            hTx.executeWithoutResult(status -> {
+                jdbc.batchUpdate("INSERT INTO holiday_calendar(holiday_date, holiday_name) VALUES(?,?)", holidayBatch);
+            });
             log.info("已初始化节假日日历 {} 天", holidays.length);
         }
 

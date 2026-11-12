@@ -27,78 +27,85 @@ class DictSchemaSeed {
 
     /** 启动时确保各类默认字典存在(INSERT OR IGNORE 幂等,不覆盖已有自定义项) */
     void initDefaultDict() {
-        addDict("leave_type", new String[]{"事假", "病假", "年假", "探亲假", "婚假", "产假", "陪产假", "其他"});
-        addDict("holiday_type", new String[]{"元旦", "春节", "清明节", "劳动节", "端午节", "中秋节", "国庆节", "其他"});
-        addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "BMI", "其他"});
-        addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
-        addDict("de_rating", new String[]{"好", "中", "一般"});
-        addDict("annual_rating", new String[]{"优秀", "称职", "一般称职", "不称职"});
-        addDict("personnel_status", new String[]{"在位", "出差", "休假", "培训", "借调", "离职", "其他"});
-        addDict("absence_reason", new String[]{"出差", "学习", "其他"});
-        addDict("personnel_category", new String[]{"军官", "军士", "义务兵", "文职人员", "其他"});
-        // 军衔按人员类别挂接(级联下拉)
-        attachDictChildren("personnel_category", "军官", "rank",
-                new String[]{"少尉", "中尉", "上尉", "少校", "中校", "上校", "大校"});
-        attachDictChildren("personnel_category", "军士", "rank",
-                new String[]{"下士", "中士", "二级上士", "一级上士", "三级军士长", "二级军士长", "一级军士长"});
-        attachDictChildren("personnel_category", "义务兵", "rank", new String[]{"列兵", "上等兵"});
-        attachDictChildren("personnel_category", "其他", "rank", new String[]{"无"});
-        addDict("rank", new String[]{"列兵", "上等兵", "下士", "中士", "二级上士", "一级上士",
-                "三级军士长", "二级军士长", "一级军士长", "少尉", "中尉", "上尉", "少校", "中校", "上校", "大校", "无"});
-        addDict("equipment_category", new String[]{"枪械", "防护", "通信", "侦察", "生活", "其他"});
-        addDict("equipment_status", new String[]{"在用", "库存", "维修", "报废"});
-        addDict("equipment_brand", new String[]{"其他"});
-        addDict("equipment_location", new String[]{"枪械库", "弹药库", "器材库", "一号库房", "二号库房", "办公室", "其他"});
-        addDict("material_category", new String[]{"办公", "被装", "食品", "医药", "工具", "其他"});
-        addDict("material_location", new String[]{"一号库房", "二号库房", "器材库", "给养库", "油料库", "弹药库", "车间", "办公室", "其他"});
-        addDict("vehicle_type", new String[]{"轿车", "客车", "卡车", "越野车", "特种车", "其他"});
-        addDict("vehicle_status", new String[]{"可用", "出车", "维修", "停用"});
-        addDict("vehicle_fuel", new String[]{"汽油", "柴油", "电", "混合动力", "其他"});
-        addDict("vehicle_brand", new String[]{"东风", "解放", "陕汽", "中国重汽", "北汽", "猎豹", "长城", "上汽大通",
-                "丰田", "三菱", "日产", "本田", "大众", "别克", "福特", "奔驰", "其他"});
-        // 车辆型号(下级示例):挂在品牌下,表单里选品牌后级联过滤
-        addDictChildren("vehicle_brand", "东风", "vehicle_model", new String[]{"猛士EQ2050", "猛士EQ2081", "东风天锦"});
-        addDictChildren("vehicle_brand", "北汽", "vehicle_model", new String[]{"勇士BJ2022", "BJ80"});
-        addDictChildren("vehicle_brand", "丰田", "vehicle_model", new String[]{"普拉多", "考斯特", "兰德酷路泽"});
-        addDict("blood_type", new String[]{"未知", "A型RH+", "A型RH-", "B型RH+", "B型RH-", "AB型RH+", "AB型RH-", "O型RH+", "O型RH-"});
-        addDict("nation", new String[]{"汉族", "蒙古族", "回族", "藏族", "维吾尔族", "苗族", "彝族", "壮族",
-                "布依族", "朝鲜族", "满族", "侗族", "瑶族", "白族", "土家族", "哈尼族", "哈萨克族", "傣族",
-                "黎族", "傈僳族", "佤族", "畲族", "高山族", "拉祜族", "水族", "东乡族", "纳西族", "景颇族",
-                "柯尔克孜族", "土族", "达斡尔族", "仫佬族", "羌族", "布朗族", "撒拉族", "毛南族", "仡佬族",
-                "锡伯族", "阿昌族", "普米族", "塔吉克族", "怒族", "乌孜别克族", "俄罗斯族", "鄂温克族",
-                "德昂族", "保安族", "裕固族", "京族", "塔塔尔族", "独龙族", "鄂伦春族", "赫哲族", "门巴族",
-                "珞巴族", "基诺族"});
-        addDict("political_status", new String[]{"群众", "共青团员", "中共党员", "其他"});
-        addDict("marital_status", new String[]{"未婚", "已婚", "离异", "丧偶", "其他"});
-        addDict("education", new String[]{"博士", "硕士", "本科", "大专", "职高", "中专", "初中", "小学", "其他"});
-        addDict("only_child", new String[]{"否", "是"});
-        addDict("gender", new String[]{"男", "女"});
-        addDict("reward_punish_kind", new String[]{"奖励", "处分"});
-        // 岗位职务:按部队职务层级排列,管理员可在字典中增删(如专业岗位)
-        addDict("personnel_post", new String[]{"班长", "副班长", "排长", "司务长", "副连长", "连长", "指导员",
-                "副营长", "营长", "教导员", "参谋", "干事", "助理员", "军械员兼文书", "驾驶员", "卫生员", "通信员", "炊事员", "其他"});
-        // 党内职务:党委书记/副书记(党委)与支部书记/副书记/委员(支部)及专业委员
-        addDict("party_post", new String[]{"党委书记", "党委副书记", "党支部书记", "支部副书记", "支部委员",
-                "组织委员", "宣传委员", "纪检委员", "青年委员", "保密委员", "党小组长", "其他"});
-        // 是否随军:婚姻状况配套的简单是/否选项(与随军条件 follow_army_status 互补)
-        addDict("follow_army", new String[]{"是", "否"});
-        // 学制:学历组配套的受教育年限
-        addDict("edu_length", new String[]{"两年制", "三年制", "四年制", "五年制", "其他"});
-        // 奖惩内容:奖励(嘉奖/三等功/二等功/一等功/荣誉称号) + 行政处分(警告~除名) + 党纪处分(党内警告~开除党籍),与部队奖惩体系对应
-        addDict("reward_content", new String[]{"一等功", "二等功", "三等功", "嘉奖", "荣誉称号", "通报表彰",
-                "警告", "严重警告", "记过", "记大过", "降职降衔", "撤职", "除名",
-                "党内警告", "党内严重警告", "撤销党内职务", "留党察看", "开除党籍", "其他"});
-        addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
-        addDict("license_type", new String[]{"军本", "地方本"});
-        addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
-        addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
-        addDict("follow_army_status", new String[]{"符合", "不符合", "未申请"});
-        addDict("license_status", new String[]{"有效", "过期", "吊销"});
-        addDict("card_status", new String[]{"正常", "挂失", "注销"});
-        addDict("vehicle_status_sub", new String[]{"正常", "出售", "报废"});
-        addDict("house_nature", new String[]{"商品房", "房改房", "自建房", "其他"});
-        addDict("has_cert", new String[]{"有", "无"});
-        addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
+        /* 方案A同款事务包裹:40+ 字典 × 共 500+ 条 INSERT 若逐条自动提交,Win7 慢盘首次启动卡 30+ 秒;
+         * 单事务一次提交降至秒级。INSERT...WHERE NOT EXISTS 幂等语义保持不变(已存在项不重复插入)。 */
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> {
+            addDict("leave_type", new String[]{"事假", "病假", "年假", "探亲假", "婚假", "产假", "陪产假", "其他"});
+            addDict("holiday_type", new String[]{"元旦", "春节", "清明节", "劳动节", "端午节", "中秋节", "国庆节", "其他"});
+            addDict("fitness_item", new String[]{"3000米跑", "5000米跑", "100米跑", "引体向上", "俯卧撑", "仰卧起坐", "立定跳远", "BMI", "其他"});
+            addDict("fitness_grade", new String[]{"优秀", "良好", "及格", "不及格"});
+            addDict("de_rating", new String[]{"好", "中", "一般"});
+            addDict("annual_rating", new String[]{"优秀", "称职", "一般称职", "不称职"});
+            addDict("personnel_status", new String[]{"在位", "出差", "休假", "培训", "借调", "离职", "其他"});
+            addDict("absence_reason", new String[]{"出差", "学习", "其他"});
+            addDict("personnel_category", new String[]{"军官", "军士", "义务兵", "文职人员", "其他"});
+            // 军衔按人员类别挂接(级联下拉)
+            attachDictChildren("personnel_category", "军官", "rank",
+                    new String[]{"少尉", "中尉", "上尉", "少校", "中校", "上校", "大校"});
+            attachDictChildren("personnel_category", "军士", "rank",
+                    new String[]{"下士", "中士", "二级上士", "一级上士", "三级军士长", "二级军士长", "一级军士长"});
+            attachDictChildren("personnel_category", "义务兵", "rank", new String[]{"列兵", "上等兵"});
+            attachDictChildren("personnel_category", "其他", "rank", new String[]{"无"});
+            addDict("rank", new String[]{"列兵", "上等兵", "下士", "中士", "二级上士", "一级上士",
+                    "三级军士长", "二级军士长", "一级军士长", "少尉", "中尉", "上尉", "少校", "中校", "上校", "大校", "无"});
+            addDict("equipment_category", new String[]{"枪械", "防护", "通信", "侦察", "生活", "其他"});
+            addDict("equipment_status", new String[]{"在用", "库存", "维修", "报废"});
+            addDict("equipment_brand", new String[]{"其他"});
+            addDict("equipment_location", new String[]{"枪械库", "弹药库", "器材库", "一号库房", "二号库房", "办公室", "其他"});
+            addDict("material_category", new String[]{"办公", "被装", "食品", "医药", "工具", "其他"});
+            addDict("material_location", new String[]{"一号库房", "二号库房", "器材库", "给养库", "油料库", "弹药库", "车间", "办公室", "其他"});
+            addDict("vehicle_type", new String[]{"轿车", "客车", "卡车", "越野车", "特种车", "其他"});
+            addDict("vehicle_status", new String[]{"可用", "出车", "维修", "停用"});
+            addDict("vehicle_fuel", new String[]{"汽油", "柴油", "电", "混合动力", "其他"});
+            addDict("vehicle_brand", new String[]{"东风", "解放", "陕汽", "中国重汽", "北汽", "猎豹", "长城", "上汽大通",
+                    "丰田", "三菱", "日产", "本田", "大众", "别克", "福特", "奔驰", "其他"});
+            // 车辆型号(下级示例):挂在品牌下,表单里选品牌后级联过滤
+            addDictChildren("vehicle_brand", "东风", "vehicle_model", new String[]{"猛士EQ2050", "猛士EQ2081", "东风天锦"});
+            addDictChildren("vehicle_brand", "北汽", "vehicle_model", new String[]{"勇士BJ2022", "BJ80"});
+            addDictChildren("vehicle_brand", "丰田", "vehicle_model", new String[]{"普拉多", "考斯特", "兰德酷路泽"});
+            addDict("blood_type", new String[]{"未知", "A型RH+", "A型RH-", "B型RH+", "B型RH-", "AB型RH+", "AB型RH-", "O型RH+", "O型RH-"});
+            addDict("nation", new String[]{"汉族", "蒙古族", "回族", "藏族", "维吾尔族", "苗族", "彝族", "壮族",
+                    "布依族", "朝鲜族", "满族", "侗族", "瑶族", "白族", "土家族", "哈尼族", "哈萨克族", "傣族",
+                    "黎族", "傈僳族", "佤族", "畲族", "高山族", "拉祜族", "水族", "东乡族", "纳西族", "景颇族",
+                    "柯尔克孜族", "土族", "达斡尔族", "仫佬族", "羌族", "布朗族", "撒拉族", "毛南族", "仡佬族",
+                    "锡伯族", "阿昌族", "普米族", "塔吉克族", "怒族", "乌孜别克族", "俄罗斯族", "鄂温克族",
+                    "德昂族", "保安族", "裕固族", "京族", "塔塔尔族", "独龙族", "鄂伦春族", "赫哲族", "门巴族",
+                    "珞巴族", "基诺族"});
+            addDict("political_status", new String[]{"群众", "共青团员", "中共党员", "其他"});
+            addDict("marital_status", new String[]{"未婚", "已婚", "离异", "丧偶", "其他"});
+            addDict("education", new String[]{"博士", "硕士", "本科", "大专", "职高", "中专", "初中", "小学", "其他"});
+            addDict("only_child", new String[]{"否", "是"});
+            addDict("gender", new String[]{"男", "女"});
+            addDict("reward_punish_kind", new String[]{"奖励", "处分"});
+            // 岗位职务:按部队职务层级排列,管理员可在字典中增删(如专业岗位)
+            addDict("personnel_post", new String[]{"班长", "副班长", "排长", "司务长", "副连长", "连长", "指导员",
+                    "副营长", "营长", "教导员", "参谋", "干事", "助理员", "军械员兼文书", "驾驶员", "卫生员", "通信员", "炊事员", "其他"});
+            // 党内职务:党委书记/副书记(党委)与支部书记/副书记/委员(支部)及专业委员
+            addDict("party_post", new String[]{"党委书记", "党委副书记", "党支部书记", "支部副书记", "支部委员",
+                    "组织委员", "宣传委员", "纪检委员", "青年委员", "保密委员", "党小组长", "其他"});
+            // 是否随军:婚姻状况配套的简单是/否选项(与随军条件 follow_army_status 互补)
+            addDict("follow_army", new String[]{"是", "否"});
+            // 学制:学历组配套的受教育年限
+            addDict("edu_length", new String[]{"两年制", "三年制", "四年制", "五年制", "其他"});
+            // 奖惩内容:奖励(嘉奖/三等功/二等功/一等功/荣誉称号) + 行政处分(警告~除名) + 党纪处分(党内警告~开除党籍),与部队奖惩体系对应
+            addDict("reward_content", new String[]{"一等功", "二等功", "三等功", "嘉奖", "荣誉称号", "通报表彰",
+                    "警告", "严重警告", "记过", "记大过", "降职降衔", "撤职", "除名",
+                    "党内警告", "党内严重警告", "撤销党内职务", "留党察看", "开除党籍", "其他"});
+            addDict("family_relation", new String[]{"配偶", "子女", "父亲", "母亲", "岳父", "岳母", "兄弟", "姐妹", "其他"});
+            addDict("license_type", new String[]{"军本", "地方本"});
+            addDict("card_type", new String[]{"保障卡号", "保障卡银行卡号", "银行卡号", "其他"});
+            addDict("housing_type", new String[]{"自有住房", "按揭住房", "部队公寓", "租房", "其他"});
+            addDict("follow_army_status", new String[]{"符合", "不符合", "未申请"});
+            addDict("license_status", new String[]{"有效", "过期", "吊销"});
+            addDict("card_status", new String[]{"正常", "挂失", "注销"});
+            addDict("vehicle_status_sub", new String[]{"正常", "出售", "报废"});
+            addDict("house_nature", new String[]{"商品房", "房改房", "自建房", "其他"});
+            addDict("has_cert", new String[]{"有", "无"});
+            addDict("loan_status", new String[]{"全款", "按揭中", "已还清"});
+        });
         log.info("已初始化默认数据字典");
     }
 
