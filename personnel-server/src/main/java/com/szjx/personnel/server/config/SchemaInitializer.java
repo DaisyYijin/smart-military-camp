@@ -35,7 +35,17 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
     public void setEnvironment(Environment environment) { this.environment = environment; }
 
     @Override
-    public void afterPropertiesSet() { run(); }
+    public void afterPropertiesSet() {
+        /* 方案C:首次启动的建表+迁移+种子整体包进单一事务。
+         * 原因:41 次 ALTER TABLE 与多个种子事务在 autoCommit 下各自 fsync,Win 机械盘+杀软扫描下单次提交可达秒级;
+         * 合并为一次提交(内部已有 TransactionTemplate 通过 REQUIRED 传播自动加入本事务)。
+         * 语义:任何未捕获异常 -> 整体回滚 + 服务不开放(与既有 migrateXXX 的报错语义一致);
+         *       被 catch 的种子失败(如 mil_scheme)不影响事务继续,行为与改前等价。 */
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(
+                        new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+        tx.executeWithoutResult(status -> run());
+    }
 
     public SchemaInitializer(org.springframework.jdbc.core.JdbcTemplate jdbc, AdminUserDao adminUserDao) {
         this.jdbc = jdbc;
@@ -43,16 +53,34 @@ public class SchemaInitializer implements InitializingBean, EnvironmentAware {
         this.dictSeed = new DictSchemaSeed(jdbc);
     }
 
+    /** 列名缓存(每表只查一次 PRAGMA):首次启动 71 次 ensureColumn 检查合并为每表一次查询,Win 慢盘下显著省时。 */
+    private final java.util.Map<String, java.util.Set<String>> columnCache = new java.util.HashMap<String, java.util.Set<String>>();
+
     /** 旧库迁移:若表缺少某列则补充，返回本次是否新增。 */
     private boolean ensureColumn(String table, String column, String ddl) {
         try {
-            List<Map<String, Object>> cols = Db.columns(jdbc, table);
-            for (Map<String, Object> col : cols) {
-                if (column.equals(String.valueOf(col.get("name")))) {
+            java.util.Set<String> cols = columnCache.get(table);
+            if (cols == null) {
+                cols = new java.util.HashSet<String>();
+                for (Map<String, Object> col : Db.columns(jdbc, table)) {
+                    cols.add(String.valueOf(col.get("name")));
+                }
+                columnCache.put(table, cols);
+            }
+            if (cols.contains(column)) {
+                return false;
+            }
+            try {
+                jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + ddl);
+            } catch (Exception dup) {
+                /* 两种合法场景会走到这里:①同一实例重复调用(缓存只含 PRAGMA 读到的列,不含其后新增列);
+                 * ②上次事务回滚已撤销 DDL 但调用方重试。列已存在按"无需迁移"处理,其余异常照常抛出。 */
+                if (String.valueOf(dup.getMessage()).toLowerCase().contains("duplicate column")) {
+                    log.info("迁移跳过:表 {}.{} 列已存在", table, column);
                     return false;
                 }
+                throw dup;
             }
-            jdbc.execute("ALTER TABLE " + table + " ADD COLUMN " + ddl);
             log.info("迁移:表 {} 新增列 {}", table, column);
             return true;
         } catch (Exception e) {
