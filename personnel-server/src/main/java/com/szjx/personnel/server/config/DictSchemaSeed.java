@@ -366,49 +366,57 @@ class DictSchemaSeed {
                 provs.add(r[0]);
                 cityKeys.add(r[0] + "\t" + r[1]);
             }
-            // 1) 省
-            List<Object[]> provBatch = new java.util.ArrayList<Object[]>();
-            int i = 0;
-            for (String p : provs) { provBatch.add(new Object[]{"region_province", p, i++}); }
-            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',0)", provBatch);
-            // 2) 市(挂省)
-            java.util.Map<String, Long> provIds = new java.util.HashMap<String, Long>();
-            for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label FROM sys_dict WHERE dict_type='region_province'")) {
-                provIds.put(String.valueOf(m.get("dict_label")), ((Number) m.get("id")).longValue());
-            }
-            List<Object[]> cityBatch = new java.util.ArrayList<Object[]>();
-            java.util.Map<String, Long> cityIds = new java.util.HashMap<String, Long>();
-            for (String ck : cityKeys) {
-                int tab = ck.indexOf('\t');
-                String p = ck.substring(0, tab), c = ck.substring(tab + 1);
-                Long pid = provIds.get(p);
-                if (pid == null) { continue; }
-                cityBatch.add(new Object[]{"region_city", c, cityBatch.size(), pid});
-                cityIds.put(ck, pid); // 先占位,插入后回填真实 id
-            }
-            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", cityBatch);
-            for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label, parent_id FROM sys_dict WHERE dict_type='region_city'")) {
-                Long pid = ((Number) m.get("parent_id")).longValue();
-                for (java.util.Map.Entry<String, Long> e : cityIds.entrySet()) {
-                    if (e.getValue().equals(pid) && e.getKey().endsWith("\t" + String.valueOf(m.get("dict_label")))) {
-                        cityIds.put(e.getKey(), ((Number) m.get("id")).longValue());
-                        break;
+            /* 方案A(事务包裹):省/市/区县三段批量插入包进单一事务。
+             * autoCommit 模式下每条 INSERT 独立落盘(3400+ 次磁盘同步),Win7 慢盘首次启动会"假死"数分钟;
+             * 单事务一次提交后首次初始化降到秒级。已初始化库在上方提前 return,不受影响,无需数据迁移。 */
+            org.springframework.transaction.support.TransactionTemplate tx =
+                    new org.springframework.transaction.support.TransactionTemplate(
+                            new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
+            tx.executeWithoutResult(status -> {
+                // 1) 省
+                List<Object[]> provBatch = new java.util.ArrayList<Object[]>();
+                int i = 0;
+                for (String p : provs) { provBatch.add(new Object[]{"region_province", p, i++}); }
+                jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',0)", provBatch);
+                // 2) 市(挂省)
+                java.util.Map<String, Long> provIds = new java.util.HashMap<String, Long>();
+                for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label FROM sys_dict WHERE dict_type='region_province'")) {
+                    provIds.put(String.valueOf(m.get("dict_label")), ((Number) m.get("id")).longValue());
+                }
+                List<Object[]> cityBatch = new java.util.ArrayList<Object[]>();
+                java.util.Map<String, Long> cityIds = new java.util.HashMap<String, Long>();
+                for (String ck : cityKeys) {
+                    int tab = ck.indexOf('\t');
+                    String p = ck.substring(0, tab), c = ck.substring(tab + 1);
+                    Long pid = provIds.get(p);
+                    if (pid == null) { continue; }
+                    cityBatch.add(new Object[]{"region_city", c, cityBatch.size(), pid});
+                    cityIds.put(ck, pid); // 先占位,插入后回填真实 id
+                }
+                jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", cityBatch);
+                for (Map<String, Object> m : jdbc.queryForList("SELECT id, dict_label, parent_id FROM sys_dict WHERE dict_type='region_city'")) {
+                    Long pid = ((Number) m.get("parent_id")).longValue();
+                    for (java.util.Map.Entry<String, Long> e : cityIds.entrySet()) {
+                        if (e.getValue().equals(pid) && e.getKey().endsWith("\t" + String.valueOf(m.get("dict_label")))) {
+                            cityIds.put(e.getKey(), ((Number) m.get("id")).longValue());
+                            break;
+                        }
                     }
                 }
-            }
-            // 3) 区县(挂市)
-            List<Object[]> distBatch = new java.util.ArrayList<Object[]>();
-            java.util.Map<String, Integer> distSort = new java.util.HashMap<String, Integer>();
-            for (String[] r : rows) {
-                Long cid = cityIds.get(r[0] + "\t" + r[1]);
-                if (cid == null) { continue; }
-                String key = r[0] + "\t" + r[1] + "\t" + r[2];
-                int s = distSort.containsKey(key) ? distSort.get(key) : distBatch.size();
-                distSort.put(key, s);
-                distBatch.add(new Object[]{"region_district", r[2], s, cid});
-            }
-            jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", distBatch);
-            log.info("已初始化行政区划字典:省 {} / 市 {} / 区县 {}", provs.size(), cityKeys.size(), distBatch.size());
+                // 3) 区县(挂市)
+                List<Object[]> distBatch = new java.util.ArrayList<Object[]>();
+                java.util.Map<String, Integer> distSort = new java.util.HashMap<String, Integer>();
+                for (String[] r : rows) {
+                    Long cid = cityIds.get(r[0] + "\t" + r[1]);
+                    if (cid == null) { continue; }
+                    String key = r[0] + "\t" + r[1] + "\t" + r[2];
+                    int s = distSort.containsKey(key) ? distSort.get(key) : distBatch.size();
+                    distSort.put(key, s);
+                    distBatch.add(new Object[]{"region_district", r[2], s, cid});
+                }
+                jdbc.batchUpdate("INSERT OR IGNORE INTO sys_dict(dict_type, dict_label, sort, enabled, remark, parent_id) VALUES(?,?,?,1,'',?)", distBatch);
+                log.info("已初始化行政区划字典:省 {} / 市 {} / 区县 {}", provs.size(), cityKeys.size(), distBatch.size());
+            });
         } catch (Exception e) {
             log.warn("行政区划字典初始化失败:{}", e.getMessage());
         }
