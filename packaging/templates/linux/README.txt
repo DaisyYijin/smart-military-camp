@@ -27,6 +27,14 @@
 若本包不含 jre/ 目录,需要系统已安装 Java 8(arm64 麒麟可用
 Temurin/Zulu 的 aarch64 JRE8)。将 JRE 解压到本目录并重命名为 jre 即可内置。
 
+【数据库（可选）】
+默认使用内置 SQLite（单机推荐，零维护）。如需连接单位统一数据库，启动设置页
+「数据库」一节可选择 MySQL/PostgreSQL/人大金仓/达梦，填写地址、库名、账号后
+点「测试连接」，保存后即生效。所选数据库的驱动 jar（如 mysql-connector-j.jar、
+postgresql-42.x.jar、DmJdbcDriver18.jar、kingbase8.jar）请放到程序目录 lib/ 文件夹
+（发行包不含驱动，向网管索取对应版本；SQLite 自带驱动无需此步骤）。切回内置库时
+选「内置 SQLite」保存即可。详见 lib/README.txt。
+
 【防火墙】
 其他电脑无法访问时,请放行所选端口:
   sudo firewall-cmd --add-port=8080/tcp --permanent && sudo firewall-cmd --reload
