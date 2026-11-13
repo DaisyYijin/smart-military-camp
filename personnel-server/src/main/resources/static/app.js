@@ -7092,7 +7092,7 @@ function dictView() {
   var pendingHighlightPid = null; // 点击"N个下级"跳转后,高亮该父项的下级行
   var typeQuery = '';
   var itemQuery = '';
-  var districtExpanded = {}; // 行政区域按市折叠的展开状态
+  var dictScrollHandler = null; // 字典无限滚动的滚动监听(重建列表时替换)
   var itemRenderLimit = 100; // 非分组模式分片渲染条数(大列表兜底)
 
   function dictMatch(item, query) {
@@ -7214,41 +7214,16 @@ function dictView() {
       var key = String(d.parentId || 0);
       groupCounts[key] = (groupCounts[key] || 0) + 1;
     });
-    /* 大列表优化:①region_district 按市折叠(默认只渲染分组标题,点开市才渲染其区县);
-     * ②其他类型或搜索时按 100 条分片渲染,底部「加载更多」兜底。 */
-    var groupMode = currentType === 'region_district' && !query;
-    var rowsForRender = [];
-    var moreLeft = 0;
-    if (groupMode) {
-      var dgroups = {}, dorder = [];
-      ordered.forEach(function (d) {
-        var gl = d._parentLabel || '未指定上级';
-        if (!dgroups[gl]) { dgroups[gl] = []; dorder.push(gl); }
-        dgroups[gl].push(d);
-      });
-      dorder.forEach(function (gl) {
-        rowsForRender.push({ group: gl, count: dgroups[gl].length });
-        if (districtExpanded[gl]) {
-          dgroups[gl].forEach(function (d) { rowsForRender.push({ d: d }); });
-        }
-      });
-    } else {
-      rowsForRender = ordered.slice(0, itemRenderLimit).map(function (d) { return { d: d }; });
-      moreLeft = Math.max(0, ordered.length - itemRenderLimit);
-    }
+    /* 大列表优化(无限滚动):完整平铺,首批渲染 100 条;滚动接近底部自动追加下一批,
+     * 3056 条区县也不再一次性建 DOM。搜索/切类型时重置为 100 条。 */
+    var rowsForRender = ordered.slice(0, itemRenderLimit).map(function (d) { return { d: d }; });
+    var moreLeft = Math.max(0, ordered.length - itemRenderLimit);
     var moreHtml = moreLeft
-      ? '<tr><td colspan="6" style="text-align:center;padding:8px"><button type="button" class="btn btn-ghost dict-more-btn">加载更多（剩余 ' + moreLeft + ' 条）</button></td></tr>'
+      ? '<tr class="dict-more-row"><td colspan="6" style="text-align:center;padding:10px;color:var(--c-muted,#8a97a8)">加载中…</td></tr>'
       : '';
     var table = h('table', { class: 'grid' });
     table.innerHTML = '<thead><tr><th class="dict-drag-col" style="width:32px"></th><th>选项内容</th><th>排序</th><th>状态</th><th>备注</th><th class="action-col" style="width:150px">操作</th></tr></thead><tbody>' +
       (rowsForRender.length ? rowsForRender.map(function (entry) {
-        if (!entry.d) {
-          var gk = entry.group;
-          var gOpen = !!districtExpanded[gk];
-          return '<tr class="dict-group-row" data-dgroup="' + esc(gk) + '" style="cursor:pointer;background:var(--c-card,#f6f8fb)">' +
-            '<td colspan="6" style="font-weight:600;padding:8px 10px"><span style="display:inline-block;width:14px;color:var(--pri,#2f6fd6)">' + (gOpen ? '▾' : '▸') + '</span>' +
-            esc(gk) + ' <span class="badge gray">' + entry.count + '</span></td></tr>';
-        }
         var d = entry.d;
         var isChild = !!d.parentId;
         var childCount = globalChildCount(d);
@@ -7277,6 +7252,23 @@ function dictView() {
           '<button class="btn-link" data-edit="' + d.id + '">编辑</button>' +
           '<button class="btn-link danger" data-del="' + d.id + '">删除</button></td></tr>';
       }).join('') + moreHtml : '<tr><td colspan="6" class="empty-row">' + (itemQuery ? '没有匹配的字典选项' : '该类型暂无选项') + '</td></tr>') + '</tbody>';
+    // 无限滚动:接近表格底部时自动追加下一批(100 条/批)
+    if (dictScrollHandler) { window.removeEventListener('scroll', dictScrollHandler, true); dictScrollHandler = null; }
+    if (moreLeft > 0) {
+      dictScrollHandler = function () {
+        if (!document.body.contains(table)) {
+          window.removeEventListener('scroll', dictScrollHandler, true);
+          dictScrollHandler = null;
+          return;
+        }
+        var rect = table.getBoundingClientRect();
+        if (rect.bottom < window.innerHeight + 200) {
+          itemRenderLimit += 100;
+          renderItems();
+        }
+      };
+      window.addEventListener('scroll', dictScrollHandler, true);
+    }
     pendingHighlightPid = null;
     var dictDragRow = null, dictDropRow = null, dictDropAfter = false, dictDragMoved = false, dictOrderSaving = false;
     // 搜索结果并非完整同级列表，禁止拖动排序以免遗漏未显示的项。
@@ -7354,19 +7346,6 @@ function dictView() {
       tr.addEventListener('dragend', function () { endDictDrag(false); });
     });
     table.addEventListener('click', function (e) {
-      // 行政区域市分组:点击标题展开/收起(只渲染该市区县,避免 3000+ 行一次性渲染卡顿)
-      var gRow = e.target.closest('.dict-group-row');
-      if (gRow) {
-        var gk = gRow.getAttribute('data-dgroup');
-        districtExpanded[gk] = !districtExpanded[gk];
-        renderItems();
-        return;
-      }
-      if (e.target.classList && e.target.classList.contains('dict-more-btn')) {
-        itemRenderLimit += 100;
-        renderItems();
-        return;
-      }
       // 点击"N个下级"徽标 → 跳到下级所在类型并高亮
       var link = e.target.closest('.dict-child-link');
       if (link) {
