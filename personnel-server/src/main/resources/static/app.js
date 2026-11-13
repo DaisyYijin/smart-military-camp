@@ -11153,7 +11153,7 @@ function organizationView() {
         onclick: function () { currentOrg = o; renderTabs(); loadDetail(); }
       },
         h('span', { text: o.name + '(' + (o.memberCount || 0) + ')' }),
-        h('span', { class: 'org-tab-del', text: '❌', title: '删除组织',
+        h('span', { class: 'org-tab-del', text: '✕', title: '删除组织',
           onclick: function (e) {
             if (e && e.stopPropagation) { e.stopPropagation(); } // 阻止冒泡触发 tab 切换
             removeOrg(o);
