@@ -11144,7 +11144,7 @@ function organizationView() {
     tabBox.appendChild(h('button', {
       type: 'button', class: 'btn btn-ghost', text: '＋ 新建组织',
       style: 'border-radius:16px 16px 0 0;border-style:dashed',
-      onclick: openOrgForm
+      onclick: function () { openOrgForm(true); }
     }));
   }
 
@@ -11390,8 +11390,8 @@ function organizationView() {
   }
 
   /* --- 新建/编辑组织 --- */
-  function openOrgForm() {
-    var isNew = !currentOrg;
+  function openOrgForm(forceNew) {
+    var isNew = forceNew === true || !currentOrg; // 工具栏「新建组织」显式传 true:避免 currentOrg 残留(上次选中的组织)导致误走编辑分支覆盖旧组织
     var nameInput = h('input', { type: 'text', class: 'input', value: isNew ? '' : currentOrg.name, placeholder: '如:党支部、团支部、风气监督员', style: 'width:100%' });
     var remarkInput = h('input', { type: 'text', class: 'input', value: isNew ? '' : (currentOrg.remark || ''), placeholder: '备注(选填)', style: 'width:100%' });
     var m = openModal({
