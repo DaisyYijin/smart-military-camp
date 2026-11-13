@@ -11130,16 +11130,35 @@ function organizationView() {
     }).catch(function (e) { toast(e.message || '加载成员失败', 'err'); });
   }
 
+  /** 删除组织(确认后执行,下辖成员一并删除)。TAB 上的 ❌ 与旧详情区按钮共用此逻辑。 */
+  function removeOrg(o) {
+    if (!o) { return; }
+    confirmBox('确定删除组织「' + o.name + '」吗?其下全部成员将一并删除。', true).then(function (yes) {
+      if (!yes) return;
+      DEL('/api/organization/' + o.id).then(function () {
+        toast('已删除');
+        if (currentOrg && currentOrg.id === o.id) { currentOrg = null; }
+        loadOrgs(false);
+      }).catch(function (e) { toast(e.message || '删除失败', 'err'); });
+    });
+  }
+
   function renderTabs() {
     tabBox.innerHTML = '';
     orgs.forEach(function (o) {
       tabBox.appendChild(h('button', {
         type: 'button',
         class: 'btn ' + (currentOrg && currentOrg.id === o.id ? 'btn-primary' : 'btn-ghost'),
-        text: o.name + '(' + (o.memberCount || 0) + ')',
         style: 'border-radius:16px 16px 0 0',
         onclick: function () { currentOrg = o; renderTabs(); loadDetail(); }
-      }));
+      },
+        h('span', { text: o.name + '(' + (o.memberCount || 0) + ')' }),
+        h('span', { class: 'org-tab-del', text: '❌', title: '删除组织',
+          onclick: function (e) {
+            if (e && e.stopPropagation) { e.stopPropagation(); } // 阻止冒泡触发 tab 切换
+            removeOrg(o);
+          } })
+      ));
     });
     tabBox.appendChild(h('button', {
       type: 'button', class: 'btn btn-ghost', text: '＋ 新建组织',
@@ -11195,15 +11214,8 @@ function organizationView() {
       h('button', { class: 'btn btn-primary', text: '新增成员', onclick: function () { openMemberForm(null); } }),
       h('button', { class: 'btn btn-ghost', text: '管理表头', onclick: openColumnManager }),
       h('button', { class: 'btn btn-ghost', text: '下载名册', onclick: downloadRoster }),
-      h('button', { class: 'btn btn-ghost', text: '编辑组织', onclick: openOrgForm }),
-      h('button', { class: 'btn btn-ghost danger', text: '删除组织', onclick: function () {
-        confirmBox('确定删除组织「' + currentOrg.name + '」吗?其下全部成员将一并删除。', true).then(function (yes) {
-          if (!yes) return;
-          DEL('/api/organization/' + currentOrg.id).then(function () {
-            toast('已删除'); currentOrg = null; loadOrgs(false);
-          }).catch(function (e) { toast(e.message || '删除失败', 'err'); });
-        });
-      } }));
+      h('button', { class: 'btn btn-ghost', text: '编辑组织', onclick: openOrgForm })
+    );
 
     var table = h('table', { class: 'grid', style: 'width:100%' });
     var selAll = h('input', { type: 'checkbox', style: 'vertical-align:middle' });
