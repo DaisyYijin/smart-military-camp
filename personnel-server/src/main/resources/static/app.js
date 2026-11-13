@@ -1159,20 +1159,25 @@ function slideFrom(el, deltaX, duration) {
 /* 统计数字入场滚动:从 0 数到目标(仅"纯数字"或"数字+单位后缀"),rAF easeOut ~600ms;
    减动效/非正数/解析失败时直接终值,不阻塞渲染;重入时取消上一轮帧。 */
 function countUp(el, text) {
-  var m = /^(\d+)(.*)$/.exec(String(text == null ? '' : text).trim());
+  var m = /^([\d.]+)(.*)$/.exec(String(text == null ? '' : text).trim());
   if (!el || !m) return;
   var target = Number(m[1]), suffix = m[2];
   if (!isFinite(target) || target <= 0 || prefersReducedMotion()) return;
   if (typeof requestAnimationFrame !== 'function') return; // 无 rAF 环境(单测沙箱)直接终值
   if (el._countFrame) cancelAnimationFrame(el._countFrame);
-  var start = null, dur = 600;
+  var decimals = (m[1].split('.')[1] || '').length;
+  var start = null, dur = 800;
   function frame(ts) {
     if (start === null) start = ts;
     var p = Math.min(1, (ts - start) / dur);
     var eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-    el.textContent = Math.round(target * eased) + suffix;
-    if (p < 1) el._countFrame = requestAnimationFrame(frame);
-    else el._countFrame = null;
+    el.textContent = (decimals ? (target * eased).toFixed(decimals) : String(Math.round(target * eased))) + suffix;
+    if (p < 1) { el._countFrame = requestAnimationFrame(frame); }
+    else {
+      el._countFrame = null;
+      el.textContent = m[1] + suffix; // 终值精确回写
+      el.classList.add('count-pop'); // 滚动结束轻弹一下,强化"数字到位"的感觉
+    }
   }
   el._countFrame = requestAnimationFrame(frame);
 }

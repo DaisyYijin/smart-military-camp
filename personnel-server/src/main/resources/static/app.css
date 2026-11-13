@@ -1608,3 +1608,11 @@ th.col-flash, td.col-flash { animation: colFlash 1.1s ease-out; }
   cursor: pointer; transition: background .15s, transform .15s;
 }
 .org-tab-del:hover { background: var(--c-danger-deep, #c23b34); transform: scale(1.15); }
+
+/* 仪表盘数字滚动结束的轻弹反馈(随全局减动效块一起禁用) */
+.count-pop { display: inline-block; animation: countPop .28s ease-out; }
+@keyframes countPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
